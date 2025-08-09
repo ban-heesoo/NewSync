@@ -1,0 +1,672 @@
+/* ==========================================================================
+   SF PRO FONT DECLARATIONS
+   ========================================================================== */
+
+@font-face {
+    font-family: 'SF Pro Display';
+    src: url('../fonts/SF-Pro-Display-Regular.woff') format('woff');
+    font-weight: 400;
+    font-style: normal;
+    font-display: swap;
+}
+
+@font-face {
+    font-family: 'SF Pro Display';
+    src: url('../fonts/SF-Pro-Display-RegularItalic.woff') format('woff');
+    font-weight: 400;
+    font-style: italic;
+    font-display: swap;
+}
+
+@font-face {
+    font-family: 'SF Pro Display';
+    src: url('../fonts/SF-Pro-Display-Light.woff') format('woff');
+    font-weight: 300;
+    font-style: normal;
+    font-display: swap;
+}
+
+@font-face {
+    font-family: 'SF Pro Display';
+    src: url('../fonts/SF-Pro-Display-Semibold.woff') format('woff');
+    font-weight: 600;
+    font-style: normal;
+    font-display: swap;
+}
+
+@font-face {
+    font-family: 'SF Pro Display';
+    src: url('../fonts/SF-Pro-Display-Bold.woff') format('woff');
+    font-weight: 700;
+    font-style: normal;
+    font-display: swap;
+}
+
+/* --- Material Design 3 Dark Theme Tokens (NewSync Blue Theme) --- */
+:root {
+    --md-sys-color-primary-rgb: 130, 170, 255;
+    --md-sys-color-primary: rgb(var(--md-sys-color-primary-rgb));
+    --md-sys-color-on-primary-rgb: 22, 30, 86;
+    --md-sys-color-on-primary: rgb(var(--md-sys-color-on-primary-rgb));
+    --md-sys-color-primary-container-rgb: 42, 52, 115;
+    --md-sys-color-primary-container: rgb(var(--md-sys-color-primary-container-rgb));
+    --md-sys-color-on-primary-container: rgb(212 218 255);
+
+    --md-sys-color-secondary-rgb: 182, 189, 231;
+    --md-sys-color-secondary: rgb(var(--md-sys-color-secondary-rgb));
+    --md-sys-color-on-secondary-rgb: 37, 41, 68;
+    --md-sys-color-on-secondary: rgb(var(--md-sys-color-on-secondary-rgb));
+    --md-sys-color-secondary-container-rgb: 59, 63, 93;
+    --md-sys-color-secondary-container: rgb(var(--md-sys-color-secondary-container-rgb));
+    --md-sys-color-on-secondary-container: rgb(212 218 255);
+
+    --md-sys-color-tertiary-rgb: 140, 196, 222;
+    --md-sys-color-tertiary: rgb(var(--md-sys-color-tertiary-rgb));
+    --md-sys-color-on-tertiary-rgb: 4, 46, 62;
+    --md-sys-color-on-tertiary: rgb(var(--md-sys-color-on-tertiary-rgb));
+    --md-sys-color-tertiary-container-rgb: 25, 68, 86;
+    --md-sys-color-tertiary-container: rgb(var(--md-sys-color-tertiary-container-rgb));
+    --md-sys-color-on-tertiary-container: rgb(166 223 251);
+
+    --md-sys-color-error-rgb: 255, 180, 171;
+    --md-sys-color-error: rgb(var(--md-sys-color-error-rgb));
+    --md-sys-color-on-error-rgb: 105, 0, 5;
+    --md-sys-color-on-error: rgb(var(--md-sys-color-on-error-rgb));
+    --md-sys-color-error-container-rgb: 147, 0, 10;
+    --md-sys-color-error-container: rgb(var(--md-sys-color-error-container-rgb));
+    --md-sys-color-on-error-container: rgb(255 218 214);
+
+    --md-sys-color-background: rgb(8 9 18);
+    --md-sys-color-on-background: rgb(220 223 241);
+    --md-sys-color-surface: rgb(8 9 18);
+    --md-sys-color-on-surface: rgb(220 223 241);
+    --md-sys-color-surface-variant: rgb(45 47 63);
+    --md-sys-color-on-surface-variant: rgb(190 194 216);
+
+    --md-sys-color-outline: rgb(137 140 160);
+    --md-sys-color-outline-variant: rgb(45 47 63);
+
+    --md-sys-color-inverse-surface: rgb(220 223 241);
+    --md-sys-color-inverse-on-surface: rgb(44 46 57);
+
+    --md-sys-color-surface-container-lowest: rgb(4 5 12);
+    --md-sys-color-surface-container-low: rgb(12 13 20);
+    --md-sys-color-surface-container: rgb(16 17 24);
+    --md-sys-color-surface-container-high: rgb(24 25 32);
+    --md-sys-color-surface-container-highest: rgb(32 33 40);
+
+    --md-ref-typeface-brand: 'SF Pro Display', 'Roboto', 'Segoe UI', system-ui, sans-serif;
+    --md-ref-typeface-plain: 'SF Pro Display', 'Roboto', 'Segoe UI', system-ui, sans-serif;
+
+    --md-sys-elevation-level-0: none;
+    --md-sys-elevation-level-1: 0px 1px 3px 1px rgba(0,0,0,0.15), 0px 1px 2px 0px rgba(0,0,0,0.30);
+    --md-sys-elevation-level-2: 0px 2px 6px 2px rgba(0,0,0,0.15), 0px 1px 2px 0px rgba(0,0,0,0.30);
+    --md-sys-elevation-level-3: 0px 1px 3px 0px rgba(0,0,0,0.30), 0px 4px 8px 3px rgba(0,0,0,0.15);
+
+    --border-radius-small: 4px;
+    --border-radius-medium: 8px;
+    --border-radius-large: 12px;
+    --border-radius-extra-large: 16px;
+    --border-radius-full: 28px; 
+
+    --animation-duration-short: 150ms;
+    --animation-duration-medium: 250ms;
+    --animation-easing-standard: cubic-bezier(0.4, 0.0, 0.2, 1);
+    --animation-easing-emphasized: cubic-bezier(0.2, 0.0, 0.0, 1.0);
+
+
+    /* State layer opacities */
+    --state-layer-hover: 0.08;
+    --state-layer-focus: 0.12;
+    --state-layer-pressed: 0.12;
+}
+
+/* --- Base Styles --- */
+*, *::before, *::after {
+    box-sizing: border-box;
+    margin: 0;
+    padding: 0;
+}
+
+html {
+    font-size: 16px; 
+}
+
+body {
+    width: 360px;
+    min-height: 500px; 
+    background-color: var(--md-sys-color-background);
+    color: var(--md-sys-color-on-background);
+    font-family: var(--md-ref-typeface-plain);
+    line-height: 1.5;
+    overflow-x: hidden; 
+}
+
+.container {
+    padding: 16px;
+    display: flex;
+    flex-direction: column;
+    gap: 16px;
+    height: 100vh; 
+}
+
+/* --- Custom Scrollbar --- */
+* {
+    scrollbar-width: thin;
+    scrollbar-color: var(--md-sys-color-primary) var(--md-sys-color-surface-container-highest);
+}
+
+/* For WebKit browsers */
+*::-webkit-scrollbar {
+    width: 8px;
+    height: 8px;
+}
+
+*::-webkit-scrollbar-track {
+    background: var(--md-sys-color-surface-container-highest);
+    border-radius: var(--border-radius-small);
+}
+
+*::-webkit-scrollbar-thumb {
+    background-color: var(--md-sys-color-primary);
+    border-radius: var(--border-radius-small);
+    border: 2px solid transparent;
+    background-clip: content-box;
+}
+
+*::-webkit-scrollbar-thumb:hover {
+    background-color: var(--md-sys-color-primary-container);
+}
+
+*::-webkit-scrollbar-corner {
+    background: transparent;
+}
+
+
+/* --- Typography & Icons --- */
+h1 {
+    font-size: 1.375rem; 
+    font-weight: 500;
+    color: var(--md-sys-color-on-surface);
+    line-height: 1.2;
+}
+
+.section-title {
+    font-size: 1rem; 
+    font-weight: 500;
+    color: var(--md-sys-color-primary);
+    margin-bottom: 12px;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+/* Material Symbols Outlined styles are now in material3.css */
+
+/* Force Material Symbols to override SF Pro Display */
+.material-symbols-outlined {
+  font-family: 'Material Symbols Outlined', 'Material Icons', monospace !important;
+  font-weight: normal !important;
+  font-style: normal !important;
+}
+
+.section-icon, .tab-icon, .button-icon, .header-icon, .select-arrow {
+    font-size: 1.25em; /* default 20px if base is 16px */
+}
+.header-icon {
+    font-size: 1.75rem; /* 28px */
+    color: var(--md-sys-color-primary);
+}
+
+
+/* --- Header --- */
+.app-header {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding-bottom: 8px; 
+}
+
+/* --- Tabs (Segmented Buttons) --- */
+.tabs {
+    display: flex;
+    background-color: var(--md-sys-color-surface-container);
+    border-radius: var(--border-radius-full);
+    padding: 4px;
+    gap: 4px; 
+}
+
+.tab {
+    flex: 1;
+    padding: 8px 12px;
+    font-size: 0.875rem; 
+    font-weight: 500;
+    color: var(--md-sys-color-on-surface-variant);
+    background-color: transparent;
+    border: none;
+    border-radius: var(--border-radius-full);
+    cursor: pointer;
+    text-align: center;
+    transition: background-color var(--animation-duration-short) var(--animation-easing-standard),
+                color var(--animation-duration-short) var(--animation-easing-standard);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    position: relative;
+    overflow: hidden;
+}
+
+.tab::before { 
+    content: '';
+    position: absolute;
+    top: 0; left: 0; right: 0; bottom: 0;
+    background-color: var(--md-sys-color-on-surface);
+    opacity: 0;
+    transition: opacity var(--animation-duration-short) var(--animation-easing-standard);
+    pointer-events: none;
+    border-radius: inherit; /* Ensure state layer follows tab's border radius */
+}
+.tab:hover::before { opacity: var(--state-layer-hover); }
+.tab:focus-visible { outline: 2px solid var(--md-sys-color-primary); outline-offset: -2px;}
+
+
+.tab.active {
+    background-color: var(--md-sys-color-secondary-container);
+    color: var(--md-sys-color-on-secondary-container);
+}
+.tab.active::before { background-color: var(--md-sys-color-on-secondary-container); }
+.tab.active:hover::before { opacity: var(--state-layer-hover); }
+
+
+/* --- Tab Content --- */
+main {
+    flex-grow: 1; 
+    overflow-y: auto; 
+    padding-right: 4px; 
+}
+.tab-content {
+    display: none;
+    flex-direction: column;
+    gap: 16px;
+}
+.tab-content.active {
+    display: flex;
+}
+
+/* --- Settings Section & Items --- */
+.settings-section {
+    background-color: var(--md-sys-color-surface-container-low);
+    padding: 16px;
+    border-radius: var(--border-radius-large);
+}
+
+.setting-item {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 10px 0;
+    min-height: 48px; 
+}
+.setting-item + .setting-item {
+    border-top: 1px solid var(--md-sys-color-outline-variant);
+}
+
+.setting-label {
+    font-size: 0.875rem; 
+    color: var(--md-sys-color-on-surface-variant);
+    flex-grow: 1;
+    padding-right: 16px;
+    cursor: pointer; /* Make label text also act as a click target */
+}
+
+/* --- M3 Switch --- */
+.m3-switch {
+    position: relative;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center; /* Center thumb within switch dimensions */
+    width: 52px;
+    height: 32px;
+    cursor: pointer;
+    flex-shrink: 0;
+    border-radius: var(--border-radius-full); /* For focus indicator */
+    outline-offset: 2px;
+}
+.m3-switch:focus-visible { /* Focus on the div itself */
+    outline: 2px solid var(--md-sys-color-primary);
+}
+
+
+.m3-switch-input {
+    opacity: 0;
+    width: 0;
+    height: 0;
+    position: absolute;
+}
+
+.m3-switch-track {
+    width: 100%;
+    height: 100%;
+    background-color: var(--md-sys-color-surface-container-highest);
+    border: 2px solid var(--md-sys-color-outline);
+    border-radius: var(--border-radius-full);
+    transition: background-color var(--animation-duration-short) var(--animation-easing-standard),
+                border-color var(--animation-duration-short) var(--animation-easing-standard);
+}
+
+.m3-switch-thumb-container {
+    position: absolute;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 24px; /* Default size including potential icon space if thumb has icon */
+    height: 24px;
+    left: 4px; /* (Track height 32 - Thumb height 24)/2 for centering, then adjust for border */
+    transform: translateX(0);
+    transition: transform var(--animation-duration-medium) var(--animation-easing-emphasized);
+}
+
+.m3-switch-thumb {
+    width: 16px;
+    height: 16px;
+    background-color: var(--md-sys-color-outline);
+    border-radius: 50%;
+    box-shadow: var(--md-sys-elevation-level-1);
+    transition: background-color var(--animation-duration-short) var(--animation-easing-standard),
+                width var(--animation-duration-medium) var(--animation-easing-emphasized),
+                height var(--animation-duration-medium) var(--animation-easing-emphasized);
+}
+
+/* Hover State */
+.m3-switch:hover .m3-switch-thumb {
+    width: 20px;
+    height: 20px;
+}
+.m3-switch:hover .m3-switch-input:checked + .m3-switch-track + .m3-switch-thumb-container .m3-switch-thumb {
+    width: 28px; /* Slightly larger when checked and hovered */
+    height: 28px;
+}
+
+
+/* Checked State */
+.m3-switch-input:checked + .m3-switch-track {
+    background-color: var(--md-sys-color-primary);
+    border-color: var(--md-sys-color-primary);
+}
+
+.m3-switch-input:checked + .m3-switch-track + .m3-switch-thumb-container {
+    transform: translateX(20px); /* (Track width 52 - Thumb container width 24 - (borders+padding)) */
+}
+
+.m3-switch-input:checked + .m3-switch-track + .m3-switch-thumb-container .m3-switch-thumb {
+    background-color: var(--md-sys-color-on-primary);
+    width: 24px;
+    height: 24px;
+}
+
+
+/* --- M3 Textfield --- */
+.m3-textfield {
+    width: 100%;
+    min-height: 40px;
+    padding: 12px 16px;
+    background-color: var(--md-sys-color-surface-container-highest);
+    border: 1px solid var(--md-sys-color-outline);
+    border-radius: 8px;
+    color: var(--md-sys-color-on-surface);
+    font-family: var(--md-ref-typeface-plain);
+    font-size: 0.875rem;
+    line-height: 1.4;
+    resize: vertical;
+    transition: border-color var(--animation-duration-short) var(--animation-easing-standard),
+                background-color var(--animation-duration-short) var(--animation-easing-standard);
+}
+
+.m3-textfield:focus {
+    outline: none;
+    border-color: var(--md-sys-color-primary);
+    background-color: var(--md-sys-color-surface-container);
+}
+
+.m3-textfield::placeholder {
+    color: var(--md-sys-color-on-surface-variant);
+    opacity: 0.7;
+}
+
+.m3-textfield:disabled {
+    background-color: var(--md-sys-color-surface-variant);
+    border-color: var(--md-sys-color-outline-variant);
+    color: var(--md-sys-color-on-surface-variant);
+    cursor: not-allowed;
+}
+
+.setting-description {
+    font-size: 0.75rem;
+    color: var(--md-sys-color-on-surface-variant);
+    margin-top: 6px;
+    margin-bottom: 0;
+    line-height: 1.3;
+}
+
+/* --- M3 Select --- */
+.m3-select-wrapper {
+    position: relative;
+    display: inline-block;
+    min-width: 150px; 
+}
+
+.m3-select {
+    width: 100%;
+    padding: 12px 36px 12px 16px; 
+    font-size: 0.875rem; 
+    color: var(--md-sys-color-on-surface);
+    background-color: var(--md-sys-color-surface-container-high);
+    border: 1px solid var(--md-sys-color-outline);
+    border-radius: var(--border-radius-small);
+    appearance: none;
+    -webkit-appearance: none;
+    -moz-appearance: none;
+    cursor: pointer;
+    transition: border-color var(--animation-duration-short) var(--animation-easing-standard);
+}
+.m3-select:hover {
+    border-color: var(--md-sys-color-on-surface);
+}
+.m3-select:focus {
+    outline: 2px solid var(--md-sys-color-primary);
+    outline-offset: 0px;
+    border-color: var(--md-sys-color-primary); 
+}
+.m3-select option {
+    background-color: var(--md-sys-color-surface-container-highest); /* Dropdown options bg */
+    color: var(--md-sys-color-on-surface);
+}
+
+.select-arrow {
+    position: absolute;
+    top: 50%;
+    right: 12px;
+    transform: translateY(-50%);
+    color: var(--md-sys-color-on-surface-variant);
+    pointer-events: none; 
+    font-size: 1.25rem; /* Match other icons */
+}
+
+/* --- Buttons --- */
+.m3-button {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    padding: 10px 24px; 
+    font-size: 0.875rem; 
+    font-weight: 500;
+    border-radius: var(--border-radius-full);
+    border: none;
+    cursor: pointer;
+    text-decoration: none;
+    text-align: center;
+    transition: background-color var(--animation-duration-short) var(--animation-easing-standard),
+                box-shadow var(--animation-duration-short) var(--animation-easing-standard),
+                border-color var(--animation-duration-short) var(--animation-easing-standard),
+                color var(--animation-duration-short) var(--animation-easing-standard);
+    position: relative;
+    overflow: hidden; 
+    min-height: 40px;
+}
+.m3-button::before { 
+    content: '';
+    position: absolute;
+    top: 0; left: 0; right: 0; bottom: 0;
+    background-color: currentColor; 
+    opacity: 0;
+    transition: opacity var(--animation-duration-short) var(--animation-easing-standard);
+    pointer-events: none;
+    border-radius: inherit;
+}
+.m3-button:hover::before { opacity: var(--state-layer-hover); }
+.m3-button:focus-visible { 
+    outline: 2px solid var(--md-sys-color-primary); 
+    outline-offset: 2px;
+}
+.m3-button:active::before { opacity: var(--state-layer-pressed); }
+.m3-button:disabled {
+    opacity: 0.38; 
+    cursor: default;
+    box-shadow: none;
+}
+.m3-button:disabled::before { display: none; }
+
+
+/* Filled Button */
+.m3-button-filled {
+    background-color: var(--md-sys-color-primary);
+    color: var(--md-sys-color-on-primary);
+    box-shadow: var(--md-sys-elevation-level-0);
+}
+.m3-button-filled:hover { box-shadow: var(--md-sys-elevation-level-1); }
+.m3-button-filled:active { box-shadow: var(--md-sys-elevation-level-0); }
+.m3-button-filled::before { background-color: var(--md-sys-color-on-primary); }
+
+/* Error Filled Button */
+.m3-button-error {
+    background-color: var(--md-sys-color-error);
+    color: var(--md-sys-color-on-error);
+}
+.m3-button-error:hover { box-shadow: var(--md-sys-elevation-level-1); }
+.m3-button-error:active { box-shadow: var(--md-sys-elevation-level-0); }
+.m3-button-error::before { background-color: var(--md-sys-color-on-error); }
+.m3-button-error:focus-visible { outline-color: var(--md-sys-color-error); }
+
+
+/* Tonal Button */
+.m3-button-tonal {
+    background-color: var(--md-sys-color-secondary-container);
+    color: var(--md-sys-color-on-secondary-container);
+}
+.m3-button-tonal::before { background-color: var(--md-sys-color-on-secondary-container); }
+.m3-button-tonal:focus-visible { outline-color: var(--md-sys-color-secondary); }
+
+
+/* Outlined Button */
+.m3-button-outlined {
+    background-color: transparent;
+    color: var(--md-sys-color-primary);
+    border: 1px solid var(--md-sys-color-outline);
+    padding: 10px 23px; 
+}
+.m3-button-outlined:hover {
+    background-color: rgba(var(--md-sys-color-primary-rgb), var(--state-layer-hover));
+}
+.m3-button-outlined::before { background-color: var(--md-sys-color-primary); }
+
+
+/* Text Button */
+.m3-button-text {
+    background-color: transparent;
+    color: var(--md-sys-color-primary);
+    padding: 10px 12px; 
+}
+.m3-button-text:hover {
+    background-color: rgba(var(--md-sys-color-primary-rgb), var(--state-layer-hover));
+}
+.m3-button-text::before { background-color: var(--md-sys-color-primary); }
+
+
+/* --- Cache Info & Controls --- */
+.cache-info {
+    padding: 12px 0;
+    margin-bottom: 12px;
+    font-size: 0.875rem;
+    color: var(--md-sys-color-on-surface-variant);
+}
+.cache-info p { margin-bottom: 4px; }
+.cache-size-value, .cache-count-value {
+    color: var(--md-sys-color-on-surface);
+    font-weight: 500;
+}
+.cache-controls {
+    display: flex;
+    gap: 8px;
+    justify-content: flex-start; 
+}
+
+/* --- Footer --- */
+.app-footer {
+    margin-top: auto; 
+    padding-top: 16px;
+    border-top: 1px solid var(--md-sys-color-outline-variant);
+    display: flex;
+    flex-direction: row;
+    gap: 8px;
+    align-items: center;
+    justify-content: space-between;
+}
+.app-footer .m3-button {
+    flex: 1;
+    min-width: 0; /* Allows flex items to shrink below their content size */
+    font-size: 0.75rem; /* Slightly smaller text for footer buttons */
+}
+
+/* Responsive footer for very small widths */
+@media (max-width: 350px) {
+    .app-footer {
+        flex-direction: column;
+        gap: 8px;
+    }
+    .app-footer .m3-button {
+        width: 100%;
+        font-size: 0.875rem;
+    }
+}
+
+/* --- Snackbar --- */
+.m3-snackbar {
+    position: fixed;
+    bottom: 16px;
+    left: 50%;
+    transform: translate(-50%, calc(100% + 16px)); /* Start off-screen */
+    min-width: 288px;
+    max-width: 344px; 
+    padding: 14px 16px;
+    background-color: var(--md-sys-color-inverse-surface);
+    color: var(--md-sys-color-inverse-on-surface);
+    border-radius: var(--border-radius-small);
+    box-shadow: var(--md-sys-elevation-level-3);
+    font-size: 0.875rem; 
+    transition: transform var(--animation-duration-medium) var(--animation-easing-standard),
+                opacity var(--animation-duration-medium) var(--animation-easing-standard);
+    opacity: 0;
+    z-index: 1000;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+}
+.m3-snackbar.show {
+    transform: translate(-50%, 0);
+    opacity: 1;
+}
+.snackbar-text {
+    flex-grow: 1;
+}
