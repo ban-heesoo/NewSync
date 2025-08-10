@@ -7,9 +7,10 @@
 <details>
 <summary>More Screenshots</summary>
 <p align="center">
-<img src="https://hivicode.github.io/assets/newsync/mainscreen.jpg" alt="Main Screenshot">
+<img src="https://hivicode.github.io/assets/newsync/mainscreen.jpg" alt="Main Screen Screenshot">
+<img src="https://hivicode.github.io/assets/newsync/mainscreen-hurt.jpg" alt="Main Lyrics Screenshot">
 <img src="https://hivicode.github.io/assets/newsync/fullscreened-hurt.jpg" alt="Artwork Fullscreen Screenshot">
-<img src="https://hivicode.github.io/assets/newsync/mainscreen-bubblegum.jpg" alt="Main Lyric Screenshot">
+<img src="https://hivicode.github.io/assets/newsync/mainscreen-bubblegum.jpg" alt="Main Lyrics Screenshot">
 <img src="https://hivicode.github.io/assets/newsync/videofullscreened-bubblegum.jpg" alt="Video Fullscreen Screenshot">
 </p>
 </details>
@@ -22,7 +23,9 @@ This is a customized fork of the original YouLy+ extension, featuring additional
 
 ## 🔧 Modifications & Enhancements
 
-- **Apple Music-Style Interface:** Enhanced visual design inspired by Apple Music's clean and modern lyrics display
+- **Apple Music-Style Interface:** Enhanced visual design inspired by Apple Music's clean and modern lyrics display.
+
+    ```Hover to bottom right corner area while in fullscreen mode, you will see the button.```
 - **Improved Synchronization:** Enhanced lyrics timing algorithms for better accuracy, mimicking Apple Music's precision
 - **Extended Provider Support:** Additional lyrics sources and improved fallback mechanisms  
 - **Performance Optimizations:** Faster loading times and reduced resource usage
