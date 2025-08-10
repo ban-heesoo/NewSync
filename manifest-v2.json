@@ -1,6 +1,6 @@
 {
   "manifest_version": 2,
-  "name": "YouLy+",
+  "name": "NewSync",
   "version": "3.1.5",
   "description": "Enhanced lyrics feature for YouTube Music with line-by-line and word-by-word sync",
   "permissions": [
@@ -17,9 +17,10 @@
       "matches": ["*://*.music.youtube.com/*"],
       "js": [
         "src/lib/sponsorblock.js",
+        "src/lib/polyfill.js",
         "src/localization.js",
         "src/modules/settings.js",
-        "src/modules/songTracker.js",
+
         "src/modules/lyricsManager.js",
         "src/modules/lyricsRenderer.js",
         "src/modules/forceTab.js",
@@ -30,6 +31,7 @@
   ],
   "web_accessible_resources": [
     "src/inject/stylesheet.css",
+    "src/inject/songTracker.js",
     "fonts/*"
   ],
   "background": {

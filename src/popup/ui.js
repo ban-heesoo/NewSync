@@ -247,12 +247,13 @@ document.addEventListener('DOMContentLoaded', () => {
         // Make this non-blocking and optional
         try {
             if (typeof pBrowser !== 'undefined' && pBrowser.tabs && pBrowser.tabs.query) {
-                pBrowser.tabs.query({ url: ["*://*.youtube.com/*", "*://*.music.youtube.com/*"] }, (tabs) => {
+                pBrowser.tabs.query({ url: ["*://*.music.youtube.com/*"] }, (tabs) => {
                     if (pBrowser.runtime.lastError) {
-                        console.warn("YouLy+: Error querying tabs (this is normal if no YouTube tabs are open):", pBrowser.runtime.lastError.message);
+                        console.warn("YouLy+: Error querying tabs (this is normal if no YouTube Music tabs are open):", pBrowser.runtime.lastError.message);
                         return;
                     }
                     if (tabs.length === 0) {
+                        console.log("YouLy+: No YouTube Music tabs found to notify");
                         return;
                     }
                     tabs.forEach(tab => {
@@ -350,7 +351,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 try {
                     const youtubeTabs = await new Promise((resolve, reject) => {
                         pBrowser.tabs.query(
-                            { url: ["*://*.music.youtube.com/*", "*://*.youtube.com/*"] }, 
+                            { url: ["*://*.music.youtube.com/*"] }, 
                             (tabs) => {
                                 if (pBrowser.runtime.lastError) {
                                     reject(pBrowser.runtime.lastError);
@@ -361,7 +362,7 @@ document.addEventListener('DOMContentLoaded', () => {
                         );
                     });
                     
-                    // Reload each YouTube/YouTube Music tab
+                    // Reload each YouTube Music tab
                     const reloadPromises = youtubeTabs.map(tab => {
                         return new Promise((resolve) => {
                             if (tab.id) {
@@ -380,11 +381,11 @@ document.addEventListener('DOMContentLoaded', () => {
                     
                     // Update snackbar with count info
                     if (youtubeTabs.length > 0) {
-                        showSnackbar(`Reloading extension + ${youtubeTabs.length} YouTube tab(s)...`);
+                        showSnackbar(`Reloading extension + ${youtubeTabs.length} YouTube Music tab(s)...`);
                     }
                     
                 } catch (tabError) {
-                    console.warn('YouLy+: Error reloading YouTube tabs:', tabError);
+                    console.warn('YouLy+: Error reloading YouTube Music tabs:', tabError);
                     // Continue with extension reload even if tab reload fails
                 }
             }

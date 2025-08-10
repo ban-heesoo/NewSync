@@ -1,6 +1,6 @@
 {
   "manifest_version": 3,
-  "name": "YouLy+",
+  "name": "NewSync",
   "version": "3.1.5",
   "description": "Enhanced lyrics feature for YouTube Music with line-by-line and word-by-word sync",
   "icons": {
@@ -18,7 +18,8 @@
       "16": "icons/icon16.png",
       "32": "icons/icon32.png",
       "48": "icons/icon48.png",
-      "128": "icons/icon128.png"
+      "128": "icons/icon128.png",
+      "256": "icons/icon256.png"
     }
   },
   "browser_specific_settings": {
