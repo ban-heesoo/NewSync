@@ -1,16 +1,16 @@
 # NewSync
 
 <p align="center">
-<img src="https://hivicode.github.io/assets/newsync/fullscreened-omg.png" alt="Artwork Fullscreen Screenshot">
+<img src="https://hivicode.github.io/assets/newsync/fullscreened-omg.jpg" alt="Artwork Fullscreen Screenshot">
 </p>
 
 <details>
 <summary>More Screenshots</summary>
 <p align="center">
-<img src="https://hivicode.github.io/assets/newsync/mainscreen" alt="Main Screenshot">
-<img src="https://hivicode.github.io/assets/newsync/fullscreened-hurt" alt="Artwork Fullscreen Screenshot">
-<img src="https://hivicode.github.io/assets/newsync/mainscreen-bubblegum" alt="Main Lyric Screenshot">
-<img src="https://hivicode.github.io/assets/newsync/videofullscreened-bubblegum" alt="Video Fullscreen Screenshot">
+<img src="https://hivicode.github.io/assets/newsync/mainscreen.jpg" alt="Main Screenshot">
+<img src="https://hivicode.github.io/assets/newsync/fullscreened-hurt.jpg" alt="Artwork Fullscreen Screenshot">
+<img src="https://hivicode.github.io/assets/newsync/mainscreen-bubblegum.jpg" alt="Main Lyric Screenshot">
+<img src="https://hivicode.github.io/assets/newsync/videofullscreened-bubblegum.jpg" alt="Video Fullscreen Screenshot">
 </p>
 </details>
 
