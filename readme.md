@@ -39,9 +39,47 @@ This modified version builds upon the excellent foundation of YouLy+ by ibratabi
 
 
 ## ⬇️ Instalation
-1.  **Clone the Repository:**
+
+### Install Fonts❗
+**You should install all of these fonts before installing NewSync:**
+    <p>
+    <img width=350 src="https://hivicode.github.io/assets/newsync/font.jpg" alt="Artwork Fullscreen Screenshot">
+    </p>
+[Download Font](http://hivicode.github.io/assets/newsync/SF-Pro-Display.zip), don't worry about the alert, it's just font.
+
+
+### For Chrome (Manifest V3)
+
+1.  **Clone or Download the Repository:**
     ```bash
-    git clone https://github.com/ban-heesoo/newsync
+    git clone https://github.com/ban-heesoo/NewSync
     ```
-2.  **Load the Extension:**
-    Use your browser’s "Load unpacked" feature (as described in the [Installation](#installation) section) to test your changes in real-time.
+2.  Alternatively, you can download the latest release from [Github Releases](https://github.com/ban-heesoo/NewSync/releases/latest).
+3.  **Open Chrome Extensions Page:**
+    Navigate to `chrome://extensions/`.
+4.  **Enable Developer Mode:**
+    Toggle the "Developer mode" switch in the top right corner.
+5.  **Load Unpacked Extension:**
+    Click on "Load unpacked" and select the cloned repository folder.
+
+### For Firefox
+
+1.  **Clone or Download the Repository:**
+    ```bash
+    git clone https://github.com/ban-heesoo/NewSync
+    ```
+2.  Alternatively, you can download the latest release from [Github Releases](https://github.com/bban-heesoo/NewSync/releases/latest).
+3.  **Open Firefox Debugging Page:**
+    Navigate to `about:debugging#/runtime/this-firefox`.
+4.  **Load Temporary Add-on:**
+    Click on "Load Temporary Add-on" and choose the `manifest.json` file from the repository folder.
+
+</details>
+
+## 🚀 Usage
+
+Once installed, simply open [YouTube Music](https://music.youtube.com/) and play any song. The lyrics panel will automatically be enhanced by YouLy+ with custom lyrics, no external API setup required (except for Gemini AI features).
+
+-   **Quick Settings:** Access quick toggles by clicking the YouLy+ icon in your browser's toolbar.
+-   **Full Settings:** For comprehensive customization, click **"More Settings"** from the popup to open the dedicated settings page.
+
