@@ -1,16 +1,12 @@
 const pBrowser = chrome || browser;
 
 
-// Listen for settings updates from the popup
-window.addEventListener('message', function(event) {
-    if (event.source !== window) return;
-    
-    if (event.data.type === 'SETTINGS_UPDATED') {
-        // Update current settings
-        currentSettings = { ...currentSettings, ...event.data.settings };
-        
-        // Apply settings changes
-        applySettings(currentSettings);
+window.addEventListener('message', (event) => {
+    if (event.source !== window || !event.data) return;
+
+    if (event.data.type === 'UPDATE_SETTINGS') {
+        console.log("Received new settings:", event.data.settings);
+        updateSettings(event.data.settings);
     }
 });
 
@@ -20,7 +16,7 @@ let currentSettings = {
     wordByWord: true,
     lightweight: false,
     isEnabled: true,
-    useSponsorBlock: true,
+    useSponsorBlock: false,
     autoHideLyrics: false,
     cacheStrategy: 'aggressive',
     fontSize: 16,
@@ -53,7 +49,7 @@ function loadSettings(callback) {
         lineByLine: true,
         lightweight: false,
         isEnabled: true,
-        useSponsorBlock: true,
+        useSponsorBlock: false,
         autoHideLyrics: false,
         cacheStrategy: 'aggressive',
         fontSize: 16,
@@ -79,6 +75,7 @@ After ensuring the meaning is preserved, try to make the translation sound natur
         overridePaletteColor: '', // Add this to be loaded from storage
     }).then((items) => {
         currentSettings = items;
+        console.log(currentSettings);
         if (callback) callback();
     });
 }
@@ -101,8 +98,4 @@ function applyDynamicPlayerClass() {
     } else {
         layoutElement.classList.remove('dynamic-player');
     }
-}
-
-function logCurrentSettings() {
-    // Settings logged for debugging
 }

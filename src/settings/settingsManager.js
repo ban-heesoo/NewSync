@@ -8,7 +8,7 @@ let currentSettings = {
     wordByWord: true,
     lightweight: false,
     isEnabled: true,
-    useSponsorBlock: true,
+    useSponsorBlock: false,
     autoHideLyrics: false,
     cacheStrategy: 'aggressive',
     fontSize: 16,
@@ -53,35 +53,44 @@ function storageLocalSet(items) {
 
 // Load settings from storage
 export function loadSettings(callback) {
-    pBrowser.storage.local.get(null, (items) => {
-        if (pBrowser.runtime.lastError) {
-            console.error("Error loading settings:", pBrowser.runtime.lastError.message);
-            if (callback) callback();
-            return;
+    storageLocalGet(Object.keys(currentSettings)).then((items) => {
+        console.log("Items retrieved from storage:", items);
+        if (items && Object.keys(items).length > 0) {
+            const validItems = Object.entries(items).reduce((acc, [key, value]) => {
+                if (value !== undefined) {
+                    acc[key] = value;
+                }
+                return acc;
+            }, {});
+            currentSettings = { ...currentSettings, ...validItems };
         }
-        
-        // Merge with defaults
-        currentSettings = { ...currentSettings, ...items };
-        
-        if (callback) callback();
+        console.log("Loaded settings:", currentSettings);
+        if (callback) callback(currentSettings);
+    }).catch(error => {
+        console.error("Error loading settings:", error);
+        if (callback) callback(currentSettings); // Fallback to default settings
     });
 }
 
 // Update settings in storage
 export function saveSettings() {
-    pBrowser.storage.local.set(currentSettings, () => {
-        if (pBrowser.runtime.lastError) {
-            console.error("Error saving settings:", pBrowser.runtime.lastError.message);
-            return;
+    storageLocalSet(currentSettings).then(() => {
+        console.log("Saving settings:", currentSettings);
+        if (typeof window.postMessage === 'function') {
+            window.postMessage({
+                type: 'UPDATE_SETTINGS',
+                settings: currentSettings
+            }, '*');
         }
-        
-        // Settings saved successfully
+    }).catch(error => {
+        console.error("Error saving settings:", error);
     });
 }
 
 // Update settings object with new values
 export function updateSettings(newSettings) {
     currentSettings = { ...currentSettings, ...newSettings };
+    console.log("Updated settings object:", currentSettings);
 }
 
 // Get current settings
@@ -141,6 +150,7 @@ export function setupSettingsMessageListener(callback) {
         window.addEventListener('message', (event) => {
             if (event.source !== window || !event.data || event.data.type !== 'UPDATE_SETTINGS') return;
 
+            console.log("Received settings update via window message:", event.data.settings);
             updateSettings(event.data.settings); // Update internal state
             if (callback) callback(currentSettings); // Notify UI to update
         });
