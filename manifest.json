@@ -24,7 +24,7 @@
   },
   "browser_specific_settings": {
     "gecko": {
-      "id": "{00a6e1f0-4808-45e7-b66d-3a5aa6527a0e}",
+      "id": "newsync-extension@ban-heesoo.com",
       "strict_min_version": "58.0"
     }
   },

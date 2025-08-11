@@ -21,11 +21,14 @@
 
 This is a customized fork of the original YouLy+ extension, featuring additional improvements and modifications to enhance your YouTube Music lyrics experience with a focus on Apple Music-inspired design and functionality. All core YouLy+ functionality remains intact while adding new capabilities and refinements.
 
+<p align="center">
+Supported Browser
+
+</p>
+
 ## 🔧 Modifications & Enhancements
 
 - **Apple Music-Style Interface:** Enhanced visual design inspired by Apple Music's clean and modern lyrics display.
-
-    ```Hover to bottom right corner area while in fullscreen mode, you will see the button.```
 - **Improved Synchronization:** Enhanced lyrics timing algorithms for better accuracy, mimicking Apple Music's precision
 - **Extended Provider Support:** Additional lyrics sources and improved fallback mechanisms  
 - **Performance Optimizations:** Faster loading times and reduced resource usage
@@ -42,14 +45,6 @@ This modified version builds upon the excellent foundation of YouLy+ by ibratabi
 
 
 ## ⬇️ Instalation
-
-### Install Fonts❗
-**You should install all of these fonts before installing NewSync:**
-    <p>
-    <img width=350 src="https://hivicode.github.io/assets/newsync/font.jpg" alt="Artwork Fullscreen Screenshot">
-    </p>
-[Download Font](http://hivicode.github.io/assets/newsync/SF-Pro-Display.zip), don't worry about the alert, it's just font.
-
 
 ### For Chrome (Manifest V3)
 
@@ -83,6 +78,5 @@ This modified version builds upon the excellent foundation of YouLy+ by ibratabi
 
 Once installed, simply open [YouTube Music](https://music.youtube.com/) and play any song. The lyrics panel will automatically be enhanced by YouLy+ with custom lyrics, no external API setup required (except for Gemini AI features).
 
--   **Quick Settings:** Access quick toggles by clicking the YouLy+ icon in your browser's toolbar.
+-   **Quick Settings:** Access quick toggles by clicking the NewSync icon in your browser's toolbar.
 -   **Full Settings:** For comprehensive customization, click **"More Settings"** from the popup to open the dedicated settings page.
-
