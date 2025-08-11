@@ -15,7 +15,6 @@ async function fetchAndDisplayLyrics(currentSong, isNewSong = false, forceReload
 
   // If a request for the same song is already pending or recently completed, debounce it.
   if (lyricsFetchDebounceTimer && lastRequestedSongKey === songKey && !forceReload) {
-    console.log(`Debouncing duplicate fetch request for ${songKey}`);
     return; // Abort this duplicate call
   }
 

@@ -782,6 +782,7 @@ ytmusic-player-page[player-fullscreened] #lyrics-plus-translation-dropdown {
     left: auto !important;
     transform: translateY(-50%) !important;
     border: none !important;
+    z-index: 1001 !important;
 }
 
 #lyrics-plus-translation-dropdown .dropdown-option {

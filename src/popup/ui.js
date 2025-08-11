@@ -253,7 +253,6 @@ document.addEventListener('DOMContentLoaded', () => {
                         return;
                     }
                     if (tabs.length === 0) {
-                        console.log("YouLy+: No YouTube Music tabs found to notify");
                         return;
                     }
                     tabs.forEach(tab => {

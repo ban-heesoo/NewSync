@@ -27,7 +27,6 @@ let blurTextureA = null;
 // --- WebGL Context Management ---
 function handleContextLost(event) {
     event.preventDefault(); // Prevent the default context loss handling
-    console.warn("LYPLUS: WebGL context lost. Attempting to restore...");
     if (globalAnimationId) {
         cancelAnimationFrame(globalAnimationId);
         globalAnimationId = null;
@@ -51,7 +50,6 @@ function handleContextLost(event) {
 }
 
 function handleContextRestored() {
-    console.log("LYPLUS: WebGL context restored. Re-initializing...");
     // Re-initialize everything. LYPLUS_setupBlurEffect handles cleanup of old elements.
     LYPLUS_setupBlurEffect();
     // The IntersectionObserver inside LYPLUS_setupBlurEffect will restart the animation if visible.
@@ -249,7 +247,6 @@ function getDefaultMasterPalette() {
 
 // --- Main Setup Function ---
 function LYPLUS_setupBlurEffect() {
-    console.log("LYPLUS: Setting up WebGL with GPU blur...");
     if (typeof currentSettings !== 'undefined' && currentSettings.dynamicPlayer) {
         document.querySelector('#layout')?.classList.add("dynamic-player");
     }
@@ -347,13 +344,11 @@ function LYPLUS_setupBlurEffect() {
         entries.forEach(entry => {
             if (entry.isIntersecting) {
                 if (!globalAnimationId) {
-                    console.log("LYPLUS: Canvas is visible, starting animation.");
                     lastFrameTime = performance.now(); // Reset time to avoid large deltaTime jump
                     globalAnimationId = requestAnimationFrame(animateWebGLBackground);
                 }
             } else {
                 if (globalAnimationId) {
-                    console.log("LYPLUS: Canvas is not visible, stopping animation.");
                     cancelAnimationFrame(globalAnimationId);
                     globalAnimationId = null;
                 }
@@ -363,7 +358,6 @@ function LYPLUS_setupBlurEffect() {
 
     observer.observe(webglCanvas);
 
-    console.log("LYPLUS: WebGL setup complete with GPU blur pipeline. Animation will start when visible.");
     return blurContainer;
 }
 
@@ -520,7 +514,6 @@ function processNextArtworkFromQueue() {
     isProcessingArtwork = true;
     currentProcessingArtworkIdentifier = pendingArtworkUrl;
     pendingArtworkUrl = null;
-    console.log("LYPLUS: Processing artwork/state:", currentProcessingArtworkIdentifier);
     const previousPaletteForTransition = currentTargetMasterArtworkPalette.length === MASTER_PALETTE_SIZE ?
         currentTargetMasterArtworkPalette.map(c => ({ ...c })) :
         getDefaultMasterPalette();
@@ -536,7 +529,6 @@ function processNextArtworkFromQueue() {
         }
     };
     if (currentProcessingArtworkIdentifier === NO_ARTWORK_IDENTIFIER) {
-        console.log("LYPLUS: No artwork detected. Transitioning to default palette.");
         finishProcessing(getDefaultMasterPalette());
         return;
     }

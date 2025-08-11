@@ -1,6 +1,5 @@
 // Universal Browser API handle
 const pBrowser = chrome || browser;
-console.log('Service Worker is active.');
 
 /* =================== CONSTANTS =================== */
 const CACHE_DB_NAME = "LyricsCacheDB";
@@ -167,7 +166,6 @@ pBrowser.runtime.onMessage.addListener((message, sender, sendResponse) => {
             return true;
 
         default:
-            console.warn("Received unknown message type:", message.type);
             return false;
     }
 });
@@ -406,7 +404,6 @@ async function romanizeWithGemini(originalLyrics, settings) {
         const romanizedLine = romanizedResult[index];
 
         if (!romanizedLine) {
-            console.warn(`No romanized data returned for line index ${index}.`);
             return originalLine;
         }
 
@@ -750,7 +747,6 @@ async function fetchGeminiRomanize(structuredInput, settings) {
         const validationResult = validateRomanizationResponse(lyricsForApi, finalResponse);
 
         if (validationResult.isValid) {
-            console.log(`Gemini romanization succeeded on attempt ${attempt}.`);
             return reconstructRomanizedLyrics(finalResponse.romanized_lyrics, reconstructionPlan);
         } else {
             console.warn(`Attempt ${attempt} failed validation. Errors: ${validationResult.errors.join(', ')}`);
@@ -927,7 +923,6 @@ function getProblematicLines(originalLyricsForApi, response, detailedErrors = []
 
             if (hasIssue) {
                 problematicIndices.add(index);
-                console.log(`Line ${index} flagged as problematic: ${issues.join(', ')}`);
             }
         });
     }
@@ -942,7 +937,6 @@ function getProblematicLines(originalLyricsForApi, response, detailedErrors = []
         }
     });
 
-    console.log(`Found ${problematicLines.length} problematic lines out of ${originalLyricsForApi.length} total lines`);
     return problematicLines;
 }
 
@@ -960,8 +954,6 @@ function mergeSelectiveFixes(lastValidResponse, fixedLines) {
 
     const mergedResponse = JSON.parse(JSON.stringify(lastValidResponse)); // Deep copy
 
-    console.log(`Merging ${fixedLines.length} selective fixes into previous response`);
-
     fixedLines.forEach(fixedLine => {
         const index = fixedLine.original_line_index;
         if (mergedResponse.romanized_lyrics &&
@@ -969,7 +961,6 @@ function mergeSelectiveFixes(lastValidResponse, fixedLines) {
             index >= 0 &&
             index < mergedResponse.romanized_lyrics.length) {
 
-            console.log(`Applying fix for line ${index}`);
             mergedResponse.romanized_lyrics[index] = fixedLine;
         } else {
             console.warn(`Could not apply fix for line ${index}: index out of bounds or invalid structure`);

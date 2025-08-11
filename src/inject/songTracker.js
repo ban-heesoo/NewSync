@@ -277,4 +277,3 @@ function LYPLUS_getDOMSongInfo() {
         videoId
     };
 }
-

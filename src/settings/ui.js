@@ -68,7 +68,6 @@ function setupAutoSaveListeners() {
 // Update UI elements to reflect current settings
 function updateUI(settings) {
     currentSettings = settings; // Update local reference
-    console.log("Updating UI with settings:", currentSettings);
 
     // General settings
     document.getElementById('enabled').checked = currentSettings.isEnabled;

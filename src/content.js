@@ -34,11 +34,9 @@ function initializeLyricsPlus() {
             if (event.data.type === 'LYPLUS_SONG_CHANGED') {
                 const songInfo = event.data.songInfo;
                 const isNewSong = event.data.isNewSong; // Get the new song flag
-                console.log('Song changed (received in extension):', songInfo);
                 
                 // Don't fetch lyrics if title or artist is empty
                 if (!songInfo.title.trim() || !songInfo.artist.trim()) {
-                    console.log('Missing title or artist, skipping lyrics fetch.');
                     return;
                 }
                 

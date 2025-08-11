@@ -55,8 +55,6 @@
     tabElement.setAttribute('aria-selected', 'true');
     tabElement.style.pointerEvents = 'auto';
 
-    console.log('Middle tab forced active');
-
     isUpdating = false;
 
     // Reattach the observer.
@@ -133,13 +131,11 @@
             console.log('Error scrolling to active line:', error);
           }
         }
-        console.log('Showing .lyrics-plus-integrated');
       }
     } else {
       const lyricsElement = document.querySelector('.lyrics-plus-integrated');
       if (lyricsElement) {
         lyricsElement.style.display = 'none';
-        console.log('Hiding .lyrics-plus-integrated');
       }
     }
   }

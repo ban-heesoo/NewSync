@@ -2072,30 +2072,23 @@ function manageUpNextButtons() {
  * Auto-redirect to lyrics tab when entering fullscreen mode
  */
 function autoRedirectToLyricsInFullscreen() {
-  console.log('🔍 Checking fullscreen auto-redirect...');
-  
   const playerPage = document.querySelector('ytmusic-player-page');
   if (!playerPage) {
-    console.log('❌ Player page not found');
     return;
   }
   
   const isFullscreen = playerPage.hasAttribute('player-fullscreened');
-  console.log('📺 Is fullscreen:', isFullscreen);
   if (!isFullscreen) return;
   
   // Check if we're already on lyrics tab
   const tabs = document.querySelectorAll('tp-yt-paper-tab.tab-header.style-scope.ytmusic-player-page');
-  console.log('📑 Found tabs:', tabs.length);
   if (tabs.length < 2) {
-    console.log('❌ Not enough tabs found');
     return;
   }
   
   // Find the active tab
   const activeTab = document.querySelector('tp-yt-paper-tab.tab-header.style-scope.ytmusic-player-page.iron-selected');
   if (!activeTab) {
-    console.log('❌ No active tab found');
     return;
   }
   
@@ -2103,9 +2096,6 @@ function autoRedirectToLyricsInFullscreen() {
   const allTabs = Array.from(activeTab.parentElement.children);
   const tabIndex = allTabs.indexOf(activeTab);
   const allTabTexts = allTabs.map((tab, index) => `${index}: ${tab.textContent.trim()}`);
-  
-  console.log('🎯 Current tab index:', tabIndex, 'Tab text:', activeTab.textContent.trim());
-  console.log('📋 All tabs:', allTabTexts);
   
   // Find lyrics tab by text content (more reliable)
   let lyricsTabIndex = -1;
@@ -2116,15 +2106,10 @@ function autoRedirectToLyricsInFullscreen() {
     }
   });
   
-  console.log('🎵 Lyrics tab found at index:', lyricsTabIndex);
-  
   // If not on lyrics tab, auto-redirect
   if (tabIndex !== lyricsTabIndex && lyricsTabIndex !== -1) {
-    console.log('🎵 Auto-redirecting to lyrics tab in fullscreen');
-    
     // Use the correctly found lyrics tab
     const lyricsTab = allTabs[lyricsTabIndex];
-    console.log('🎵 Clicking lyrics tab text:', lyricsTab.textContent.trim());
     
     // Method 1: Direct click
     lyricsTab.click();
@@ -2135,10 +2120,6 @@ function autoRedirectToLyricsInFullscreen() {
       cancelable: true,
       view: window
     }));
-    
-    console.log('✅ Auto-redirect attempted');
-  } else {
-    console.log('✅ Already on lyrics tab, no redirect needed');
   }
 }
 
@@ -2211,14 +2192,12 @@ setTimeout(setupPlayerPageObserver, 1000); // Retry after delay
 
 // Additional fallback: Listen for fullscreen events
 document.addEventListener('fullscreenchange', () => {
-  console.log('🔄 Fullscreen change detected');
   autoRedirectToLyricsInFullscreen();
 });
 
 // Additional fallback: Listen for keyboard shortcuts (F key for fullscreen)
 document.addEventListener('keydown', (event) => {
   if (event.key === 'f' || event.key === 'F') {
-    console.log('🔄 F key pressed, checking for fullscreen redirect');
     autoRedirectToLyricsInFullscreen();
   }
 });

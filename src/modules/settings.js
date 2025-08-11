@@ -5,7 +5,6 @@ window.addEventListener('message', (event) => {
     if (event.source !== window || !event.data) return;
 
     if (event.data.type === 'UPDATE_SETTINGS') {
-        console.log("Received new settings:", event.data.settings);
         updateSettings(event.data.settings);
     }
 });
@@ -75,7 +74,6 @@ After ensuring the meaning is preserved, try to make the translation sound natur
         overridePaletteColor: '', // Add this to be loaded from storage
     }).then((items) => {
         currentSettings = items;
-        console.log(currentSettings);
         if (callback) callback();
     });
 }
