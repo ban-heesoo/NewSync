@@ -21,10 +21,23 @@
 
 This is a customized fork of the original YouLy+ extension, featuring additional improvements and modifications to enhance your YouTube Music lyrics experience with a focus on Apple Music-inspired design and functionality. All core YouLy+ functionality remains intact while adding new capabilities and refinements.
 
-<p align="center">
-Supported Browser
+<p style="font-weight: bold;" align="center">
+<style>
+    .icon {
+        width: 30px;
+    }
+</style>
+Supported Browser:
+<br>
+<img  class="icon" src="https://cdn-icons-png.flaticon.com/128/6125/6125000.png" alt="Chrome">
+<img  class="icon" src="https://cdn-icons-png.flaticon.com/128/5968/5968890.png" alt="Edge">
+<img  class="icon" src="https://cdn-icons-png.flaticon.com/128/5968/5968827.png" alt="Firefox">
+<img class="icon" src="https://raw.githubusercontent.com/zen-browser/.github/refs/heads/main/profile/logo-black.png" alt="Zen">
+<img class="icon" src="https://upload.wikimedia.org/wikipedia/commons/thumb/e/e4/Vivaldi_web_browser_logo.svg/456px-Vivaldi_web_browser_logo.png" alt="Vivaldi">
+<img class="icon" src="https://cdn-icons-png.flaticon.com/128/6124/6124994.png" alt="Opera">
+<img class="icon" src="https://img.icons8.com/?size=48&id=cM42lftaD9Z3&format=png" alt="Brave">
 
-</p>
+
 
 ## 🔧 Modifications & Enhancements
 
@@ -46,7 +59,7 @@ This modified version builds upon the excellent foundation of YouLy+ by ibratabi
 
 ## ⬇️ Instalation
 
-### For Chrome (Manifest V3)
+### For Chrome, Edge, Vivaldi, Opera, Brave
 
 1.  **Clone or Download the Repository:**
     ```bash
@@ -60,11 +73,11 @@ This modified version builds upon the excellent foundation of YouLy+ by ibratabi
 5.  **Load Unpacked Extension:**
     Click on "Load unpacked" and select the cloned repository folder.
 
-### For Firefox
+### For Firefox and Zen
 
 1.  **Clone or Download the Repository:**
     ```bash
-    git clone https://github.com/ban-heesoo/NewSync
+    git clone https://github.com/ban-heesoo/NewSync.git
     ```
 2.  Alternatively, you can download the latest release from [Github Releases](https://github.com/bban-heesoo/NewSync/releases/latest).
 3.  **Open Firefox Debugging Page:**

@@ -55,6 +55,7 @@
     }
   ],
   "background": {
-    "service_worker": "src/background/lyricsHandler.js"
+    "service_worker": "src/background/lyricsHandler.js",
+    "scripts": ["src/background/lyricsHandler.js"]
   }
 }
