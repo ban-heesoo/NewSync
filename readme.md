@@ -21,8 +21,8 @@
 
 This is a customized fork of the original YouLy+ extension, featuring additional improvements and modifications to enhance your YouTube Music lyrics experience with a focus on Apple Music-inspired design and functionality. All core YouLy+ functionality remains intact while adding new capabilities and refinements.
 
-<p style="font-weight: bold;" align="center">
-Supported Browser:
+<p align="center">
+    <b>Supported Browsers:</b>
 <br>
 <img  width="30px" src="https://cdn-icons-png.flaticon.com/128/6125/6125000.png" alt="Chrome">
 <img  width="30px" src="https://cdn-icons-png.flaticon.com/128/5968/5968890.png" alt="Edge">
@@ -31,8 +31,7 @@ Supported Browser:
 <img  width="30px" src="https://upload.wikimedia.org/wikipedia/commons/thumb/e/e4/Vivaldi_web_browser_logo.svg/456px-Vivaldi_web_browser_logo.png" alt="Vivaldi">
 <img  width="30px" src="https://cdn-icons-png.flaticon.com/128/6124/6124994.png" alt="Opera">
 <img  width="30px" src="https://img.icons8.com/?size=48&id=cM42lftaD9Z3&format=png" alt="Brave">
-
-
+</p>
 
 ## 🔧 Modifications & Enhancements
 
