@@ -79,7 +79,7 @@ document.addEventListener('DOMContentLoaded', () => {
         wordByWord: true,
         lightweight: false,
         isEnabled: true,
-        useSponsorBlock: false,
+        useSponsorBlock: true,
         blurInactive: false,
         dynamicPlayer: false,  // Changed from dynamicBackground to dynamicPlayer to match settings
         overrideGeminiPrompt: false,

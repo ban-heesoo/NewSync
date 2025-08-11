@@ -8,7 +8,7 @@ let currentSettings = {
     wordByWord: true,
     lightweight: false,
     isEnabled: true,
-    useSponsorBlock: false,
+    useSponsorBlock: true,
     autoHideLyrics: false,
     cacheStrategy: 'aggressive',
     fontSize: 16,
