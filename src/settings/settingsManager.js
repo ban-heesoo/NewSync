@@ -12,10 +12,10 @@ let currentSettings = {
     autoHideLyrics: false,
     cacheStrategy: 'aggressive',
     fontSize: 16,
-    hideOffscreen: false, // New compatibility setting
+    hideOffscreen: true, // New compatibility setting
     compabilityWipe: false, // New compatibility setting
-    blurInactive: false,
-    dynamicPlayer: false,
+    blurInactive: true,
+    dynamicPlayer: true,
     customCSS: '',
     translationProvider: 'google', // Default translation provider
     geminiApiKey: '', // Default Gemini API key

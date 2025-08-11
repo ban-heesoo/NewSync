@@ -9,6 +9,7 @@ document.addEventListener('DOMContentLoaded', () => {
     const sponsorBlockSwitchInput = document.getElementById('sponsorblock');
     const blurInactiveSwitchInput = document.getElementById('blurInactive');
     const dynamicBackgroundSwitchInput = document.getElementById('dynamicBackground');
+    const hideOffscreenSwitchInput = document.getElementById('hideOffscreen');
     const overrideGeminiPromptSwitchInput = document.getElementById('overrideGeminiPrompt');
     const customGeminiPromptTextarea = document.getElementById('customGeminiPrompt');
     const customGeminiPromptGroup = document.getElementById('customGeminiPromptGroup');
@@ -16,6 +17,7 @@ document.addEventListener('DOMContentLoaded', () => {
     // Verify critical elements exist (only warn for missing elements)
     if (!blurInactiveSwitchInput) console.warn('YouLy+: blurInactiveSwitchInput not found');
     if (!dynamicBackgroundSwitchInput) console.warn('YouLy+: dynamicBackgroundSwitchInput not found');
+    if (!hideOffscreenSwitchInput) console.warn('YouLy+: hideOffscreenSwitchInput not found');
     if (!overrideGeminiPromptSwitchInput) console.warn('YouLy+: overrideGeminiPromptSwitchInput not found');
 
     const clearCacheButton = document.getElementById('clearCache');
@@ -80,8 +82,9 @@ document.addEventListener('DOMContentLoaded', () => {
         lightweight: false,
         isEnabled: true,
         useSponsorBlock: true,
-        blurInactive: false,
-        dynamicPlayer: false,  // Changed from dynamicBackground to dynamicPlayer to match settings
+        blurInactive: true,
+        dynamicPlayer: true,
+        hideOffscreen: true,
         overrideGeminiPrompt: false,
         customGeminiPrompt: '',
     };
@@ -132,16 +135,25 @@ document.addEventListener('DOMContentLoaded', () => {
 
     // --- Load Settings ---
     function loadSettingsUI() {
+        console.log("YouLy+: Loading UI with settings:", currentSettings);
+        
         lyricsProviderSelect.value = currentSettings.lyricsProvider;
         wordByWordSwitchInput.checked = currentSettings.wordByWord;
         lightweightSwitchInput.checked = currentSettings.lightweight;
         lyEnabledSwitchInput.checked = currentSettings.isEnabled;
         sponsorBlockSwitchInput.checked = currentSettings.useSponsorBlock;
+        
         if (blurInactiveSwitchInput) {
             blurInactiveSwitchInput.checked = currentSettings.blurInactive;
+            console.log("YouLy+: Set blurInactive to:", currentSettings.blurInactive);
         }
         if (dynamicBackgroundSwitchInput) {
             dynamicBackgroundSwitchInput.checked = currentSettings.dynamicPlayer;
+            console.log("YouLy+: Set dynamicPlayer to:", currentSettings.dynamicPlayer);
+        }
+        if (hideOffscreenSwitchInput) {
+            hideOffscreenSwitchInput.checked = currentSettings.hideOffscreen;
+            console.log("YouLy+: Set hideOffscreen to:", currentSettings.hideOffscreen);
         }
         if (overrideGeminiPromptSwitchInput) {
             overrideGeminiPromptSwitchInput.checked = currentSettings.overrideGeminiPrompt;
@@ -156,10 +168,24 @@ document.addEventListener('DOMContentLoaded', () => {
 
     async function fetchAndLoadSettings() {
         try {
-            // Provide defaults to storage.local.get if items might not exist
-            const defaults = { ...currentSettings };
-            const items = await storageLocalGet(defaults);
-            currentSettings = items; // items will contain fetched values or defaults if not found
+            // Get all settings from storage, with proper defaults
+            const defaultSettings = {
+                lyricsProvider: 'kpoe',
+                wordByWord: true,
+                lightweight: false,
+                isEnabled: true,
+                useSponsorBlock: true,
+                blurInactive: true,
+                dynamicPlayer: true,
+                hideOffscreen: true,
+                overrideGeminiPrompt: false,
+                customGeminiPrompt: '',
+            };
+            
+            const items = await storageLocalGet(defaultSettings);
+            console.log("YouLy+: Fetched settings from storage:", items);
+            currentSettings = { ...defaultSettings, ...items }; // Merge defaults with stored values
+            console.log("YouLy+: Final currentSettings after merge:", currentSettings);
             loadSettingsUI();
         } catch (error) {
             console.error("YouLy+: Error loading settings:", error);
@@ -177,6 +203,7 @@ document.addEventListener('DOMContentLoaded', () => {
             useSponsorBlock: sponsorBlockSwitchInput.checked,
             blurInactive: blurInactiveSwitchInput ? blurInactiveSwitchInput.checked : false,
             dynamicPlayer: dynamicBackgroundSwitchInput ? dynamicBackgroundSwitchInput.checked : false,
+            hideOffscreen: hideOffscreenSwitchInput ? hideOffscreenSwitchInput.checked : false,
             overrideGeminiPrompt: overrideGeminiPromptSwitchInput ? overrideGeminiPromptSwitchInput.checked : false,
             customGeminiPrompt: customGeminiPromptTextarea ? customGeminiPromptTextarea.value : '',
         };
@@ -213,7 +240,7 @@ document.addEventListener('DOMContentLoaded', () => {
     }
     
     // For switches, the 'change' event is dispatched manually by the .m3-switch click handler
-    [wordByWordSwitchInput, lightweightSwitchInput, lyEnabledSwitchInput, sponsorBlockSwitchInput, blurInactiveSwitchInput, dynamicBackgroundSwitchInput, overrideGeminiPromptSwitchInput].forEach(input => {
+    [wordByWordSwitchInput, lightweightSwitchInput, lyEnabledSwitchInput, sponsorBlockSwitchInput, blurInactiveSwitchInput, dynamicBackgroundSwitchInput, hideOffscreenSwitchInput, overrideGeminiPromptSwitchInput].forEach(input => {
         if (input) {
             input.addEventListener('change', (e) => {
                 // Handle special case for overrideGeminiPrompt to toggle textbox visibility

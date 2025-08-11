@@ -20,10 +20,10 @@ let currentSettings = {
     autoHideLyrics: false,
     cacheStrategy: 'aggressive',
     fontSize: 16,
-    hideOffscreen: false, // New compatibility setting
+    hideOffscreen: true, // New compatibility setting
     compabilityWipe: false, // New compatibility setting
-    blurInactive: false,
-    dynamicPlayer: false,
+    blurInactive: true,
+    dynamicPlayer: true,
     customCSS: '',
     // Translation settings
     translationProvider: 'google', // 'google' or 'gemini'
@@ -53,10 +53,10 @@ function loadSettings(callback) {
         autoHideLyrics: false,
         cacheStrategy: 'aggressive',
         fontSize: 16,
-        hideOffscreen: false, // New compatibility setting
+        hideOffscreen: true, // New compatibility setting
         compabilityWipe: false, // New compatibility setting
-        blurInactive: false,
-        dynamicPlayer: false,
+        blurInactive: true,
+        dynamicPlayer: true,
         // Translation settings
         translationProvider: 'google',
         geminiApiKey: '',

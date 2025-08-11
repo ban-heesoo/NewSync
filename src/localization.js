@@ -30,7 +30,10 @@ const translations = {
         showTranslation: "Tampilkan Terjemahan",
         hideTranslation: "Sembunyikan Terjemahan",
         showPronunciation: "Tampilkan Pelafalan",
-        hidePronunciation: "Sembunyikan Pelafalan"
+        hidePronunciation: "Sembunyikan Pelafalan",
+        showTranslationOptions: "Opsi Terjemahan",
+        reloadLyrics: "Muat Ulang Lirik",
+        lyricsButton: "Lirik"
     },
     'ms-MY': {
         loading: "Memuatkan lirik",
@@ -122,7 +125,8 @@ const translations = {
         showPronunciation: "Show Pronunciation",
         hidePronunciation: "Hide Pronunciation",
         showTranslationOptions: "Translation Options",
-        reloadLyrics: "Reload Lyrics"
+        reloadLyrics: "Reload Lyrics",
+        lyricsButton: "Lyrics"
     },
     'en-GB': {
         loading: "Loading lyrics",
@@ -135,7 +139,8 @@ const translations = {
         showPronunciation: "Show Pronunciation",
         hidePronunciation: "Hide Pronunciation",
         showTranslationOptions: "Translation Options",
-        reloadLyrics: "Reload Lyrics"
+        reloadLyrics: "Reload Lyrics",
+        lyricsButton: "Lyrics"
     },
     'en-US': {
         loading: "Loading lyrics",
@@ -148,7 +153,8 @@ const translations = {
         showPronunciation: "Show Pronunciation",
         hidePronunciation: "Hide Pronunciation",
         showTranslationOptions: "Translation Options",
-        reloadLyrics: "Reload Lyrics"
+        reloadLyrics: "Reload Lyrics",
+        lyricsButton: "Lyrics"
     },
     'es-ES': {
         loading: "Cargando letras",
@@ -885,7 +891,10 @@ const translations = {
         showTranslation: "显示翻译",
         hideTranslation: "隐藏翻译",
         showPronunciation: "显示发音",
-        hidePronunciation: "隐藏发音"
+        hidePronunciation: "隐藏发音",
+        showTranslationOptions: "翻译选项",
+        reloadLyrics: "重新加载歌词",
+        lyricsButton: "歌词"
     },
     'zh-TW': {
         loading: "載入歌詞",
@@ -896,7 +905,10 @@ const translations = {
         showTranslation: "顯示翻譯",
         hideTranslation: "隱藏翻譯",
         showPronunciation: "顯示發音",
-        hidePronunciation: "隱藏發音"
+        hidePronunciation: "隱藏發音",
+        showTranslationOptions: "翻譯選項",
+        reloadLyrics: "重新載入歌詞",
+        lyricsButton: "歌詞"
     },
     'zh-HK': {
         loading: "載入歌詞",
@@ -907,7 +919,10 @@ const translations = {
         showTranslation: "顯示翻譯",
         hideTranslation: "隱藏翻譯",
         showPronunciation: "顯示發音",
-        hidePronunciation: "隱藏發音"
+        hidePronunciation: "隱藏發音",
+        showTranslationOptions: "翻譯選項",
+        reloadLyrics: "重新載入歌詞",
+        lyricsButton: "歌詞"
     },
     'ja-JP': {
         loading: "歌詞を読み込んでいます",
@@ -918,7 +933,10 @@ const translations = {
         showTranslation: "翻訳を表示",
         hideTranslation: "翻訳を非表示",
         showPronunciation: "発音を表示",
-        hidePronunciation: "発音を非表示"
+        hidePronunciation: "発音を非表示",
+        showTranslationOptions: "翻訳オプション",
+        reloadLyrics: "歌詞を再読み込み",
+        lyricsButton: "歌詞"
     },
     'ko-KR': {
         loading: "가사 불러오는 중",
@@ -929,7 +947,10 @@ const translations = {
         showTranslation: "번역 보기",
         hideTranslation: "번역 숨기기",
         showPronunciation: "발음 보기",
-        hidePronunciation: "발음 숨기기"
+        hidePronunciation: "발음 숨기기",
+        showTranslationOptions: "번역 옵션",
+        reloadLyrics: "가사 다시 불러오기",
+        lyricsButton: "가사"
     }
 };
 
