@@ -64,48 +64,44 @@ function setupAutoSaveListeners() {
     });
 }
 
-
-// Update UI elements to reflect current settings
-function updateUI(settings) {
-    currentSettings = settings; // Update local reference
-
+function updateFormElements(settings) {
     // General settings
-    document.getElementById('enabled').checked = currentSettings.isEnabled;
-    document.getElementById('default-provider').value = currentSettings.lyricsProvider;
-    document.getElementById('sponsor-block').checked = currentSettings.useSponsorBlock;
-    document.getElementById('lightweight').checked = currentSettings.lightweight;
-    document.getElementById('wordByWord').checked = currentSettings.wordByWord;
-    document.getElementById('hide-offscreen').checked = currentSettings.hideOffscreen;
-    document.getElementById('compability-wipe').checked = currentSettings.compabilityWipe;
-    document.getElementById('blur-inactive').checked = currentSettings.blurInactive;
-    document.getElementById('dynamic-player').checked = currentSettings.dynamicPlayer;
-    document.getElementById('useSongPaletteFullscreen').checked = currentSettings.useSongPaletteFullscreen;
-    document.getElementById('useSongPaletteAllModes').checked = currentSettings.useSongPaletteAllModes;
-    document.getElementById('overridePaletteColor').value = currentSettings.overridePaletteColor;
+    document.getElementById('enabled').checked = settings.isEnabled;
+    document.getElementById('default-provider').value = settings.lyricsProvider;
+    document.getElementById('sponsor-block').checked = settings.useSponsorBlock;
+    document.getElementById('lightweight').checked = settings.lightweight;
+    document.getElementById('wordByWord').checked = settings.wordByWord;
+    document.getElementById('hide-offscreen').checked = settings.hideOffscreen;
+    document.getElementById('compability-wipe').checked = settings.compabilityWipe;
+    document.getElementById('blur-inactive').checked = settings.blurInactive;
+    document.getElementById('dynamic-player').checked = settings.dynamicPlayer;
+    document.getElementById('useSongPaletteFullscreen').checked = settings.useSongPaletteFullscreen;
+    document.getElementById('useSongPaletteAllModes').checked = settings.useSongPaletteAllModes;
+    document.getElementById('overridePaletteColor').value = settings.overridePaletteColor;
 
     // Custom KPoe Server URL
     const customKpoeUrlInput = document.getElementById('custom-kpoe-url');
     if (customKpoeUrlInput) {
-        customKpoeUrlInput.value = currentSettings.customKpoeUrl || '';
+        customKpoeUrlInput.value = settings.customKpoeUrl || '';
     }
 
     // Romanization settings
-    document.getElementById('romanization-provider').value = currentSettings.romanizationProvider;
-    document.getElementById('gemini-romanization-model').value = currentSettings.geminiRomanizationModel || 'gemini-1.5-pro-latest';
+    document.getElementById('romanization-provider').value = settings.romanizationProvider;
+    document.getElementById('gemini-romanization-model').value = settings.geminiRomanizationModel || 'gemini-1.5-pro-latest';
 
     // Translation settings
-    document.getElementById('translation-provider').value = currentSettings.translationProvider;
+    document.getElementById('translation-provider').value = settings.translationProvider;
     const geminiApiKeyInput = document.getElementById('gemini-api-key');
-    geminiApiKeyInput.value = currentSettings.geminiApiKey || '';
+    geminiApiKeyInput.value = settings.geminiApiKey || '';
     geminiApiKeyInput.type = 'password'; // Ensure it's hidden by default
 
-    document.getElementById('gemini-model').value = currentSettings.geminiModel || 'gemini-2.5-flash'; // Default to gemini-2.5-flash
-    document.getElementById('override-translate-target').checked = currentSettings.overrideTranslateTarget;
-    document.getElementById('custom-translate-target').value = currentSettings.customTranslateTarget || '';
-    document.getElementById('override-gemini-prompt').checked = currentSettings.overrideGeminiPrompt;
-    document.getElementById('custom-gemini-prompt').value = currentSettings.customGeminiPrompt || '';
-    document.getElementById('override-gemini-romanize-prompt').checked = currentSettings.overrideGeminiRomanizePrompt; // Update UI for new setting
-    document.getElementById('custom-gemini-romanize-prompt').value = currentSettings.customGeminiRomanizePrompt || ''; // Update UI for new setting
+    document.getElementById('gemini-model').value = settings.geminiModel || 'gemini-2.5-flash'; // Default to gemini-2.5-flash
+    document.getElementById('override-translate-target').checked = settings.overrideTranslateTarget;
+    document.getElementById('custom-translate-target').value = settings.customTranslateTarget || '';
+    document.getElementById('override-gemini-prompt').checked = settings.overrideGeminiPrompt;
+    document.getElementById('custom-gemini-prompt').value = settings.customGeminiPrompt || '';
+    document.getElementById('override-gemini-romanize-prompt').checked = settings.overrideGeminiRomanizePrompt; // Update UI for new setting
+    document.getElementById('custom-gemini-romanize-prompt').value = settings.customGeminiRomanizePrompt || ''; // Update UI for new setting
     toggleGeminiSettingsVisibility();
     toggleKpoeSourcesVisibility();
     toggleTranslateTargetVisibility();
@@ -118,11 +114,22 @@ function updateUI(settings) {
     populateDraggableSources();
 
     // Appearance settings
-    document.getElementById('custom-css').value = currentSettings.customCSS;
+    document.getElementById('custom-css').value = settings.customCSS;
 
     // Cache settings
-    document.getElementById('cache-strategy').value = currentSettings.cacheStrategy;
+    document.getElementById('cache-strategy').value = settings.cacheStrategy;
     updateCacheSize(); // This function is now in settingsManager.js
+}
+
+// Update UI elements to reflect current settings
+function updateUI(settings) {
+    currentSettings = settings; // Update local reference
+    
+    // Update all form elements
+    updateFormElements(settings);
+    
+    // Update version display
+    updateVersionDisplay();
 }
 
 // Tab navigation

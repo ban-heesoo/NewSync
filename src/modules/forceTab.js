@@ -128,7 +128,7 @@
               scrollActiveLine(videoElement.currentTime, true);
             }
           } catch (error) {
-            console.log('Error scrolling to active line:', error);
+            // Error scrolling to active line
           }
         }
       }

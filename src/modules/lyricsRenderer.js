@@ -2095,7 +2095,6 @@ function autoRedirectToLyricsInFullscreen() {
   // Get tab index and all tab texts for debugging
   const allTabs = Array.from(activeTab.parentElement.children);
   const tabIndex = allTabs.indexOf(activeTab);
-  const allTabTexts = allTabs.map((tab, index) => `${index}: ${tab.textContent.trim()}`);
   
   // Find lyrics tab by text content (more reliable)
   let lyricsTabIndex = -1;

@@ -3,7 +3,6 @@ let LYPLUS_currentSong = {};
 
 // Initialize when the script is loaded
 (function() {
-    console.log('LYPLUS: DOM script injected successfully');
     LYPLUS_setupMutationObserver();
     //LYPLUS_setupBlurEffect();
 })();
@@ -93,7 +92,6 @@ function LYPLUS_checkForSongChange() {
 
     // Do nothing if title or artist is an empty string
     if (!newSongInfo.title.trim() || !newSongInfo.artist.trim()) {
-        console.log('LYPLUS: Missing title or artist, skipping notification.');
         return;
     }
 
@@ -122,7 +120,6 @@ function LYPLUS_getSongInfo() {
         try {
             // Wait until the video is fully loaded: check if getDuration exists and returns a nonzero value
             if (!player.getDuration || typeof player.getDuration !== 'function' || player.getDuration() === 0) {
-                console.log('LYPLUS: Duration not available yet, waiting for video to load.');
                 return null;
             }
       
@@ -223,7 +220,6 @@ function LYPLUS_getDOMSongInfo() {
 
     // If the video duration is still 0, then the video may not be loaded fully yet
     if (!videoElement.duration || videoElement.duration === 0) {
-        console.log('LYPLUS: Video element duration not available yet.');
         return null;
     }
 
@@ -277,3 +273,5 @@ function LYPLUS_getDOMSongInfo() {
         videoId
     };
 }
+
+

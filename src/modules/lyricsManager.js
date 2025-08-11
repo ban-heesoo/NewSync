@@ -65,8 +65,8 @@ async function fetchAndDisplayLyrics(currentSong, isNewSong = false, forceReload
           songInfo: currentSong,
           targetLang: htmlLang
         });
-        if (currentFetchVideoId !== localCurrentFetchVideoId) {
-          console.warn("Song changed during TRANSLATE_LYRICS (translate). Aborting display.", currentSong);
+        // Check if song changed during translation
+        if (currentSong.videoId !== localCurrentFetchVideoId) {
           return;
         }
       }
@@ -78,8 +78,8 @@ async function fetchAndDisplayLyrics(currentSong, isNewSong = false, forceReload
           songInfo: currentSong,
           targetLang: htmlLang
         });
-        if (currentFetchVideoId !== localCurrentFetchVideoId) {
-          console.warn("Song changed during TRANSLATE_LYRICS (romanize). Aborting display.", currentSong);
+        // Check if song changed during romanization
+        if (currentSong.videoId !== localCurrentFetchVideoId) {
           return;
         }
       }
@@ -119,7 +119,6 @@ async function fetchAndDisplayLyrics(currentSong, isNewSong = false, forceReload
         lyricsObjectToDisplay = romanizationResponse.translatedLyrics;
         finalDisplayModeForRenderer = 'romanize';
       } else {
-        console.warn(`Translation/Romanization failed. Falling back to original lyrics.`);
         // Fallback to fetching original lyrics
         const originalLyricsResponse = await pBrowser.runtime.sendMessage({
           type: 'FETCH_LYRICS',
@@ -127,8 +126,8 @@ async function fetchAndDisplayLyrics(currentSong, isNewSong = false, forceReload
           forceReload: forceReload // Pass forceReload to background script
         });
 
-        if (currentFetchVideoId !== localCurrentFetchVideoId) {
-          console.warn("Song changed during FETCH_LYRICS (fallback). Aborting display.", currentSong);
+        // Check if song changed during fallback
+        if (currentSong.videoId !== localCurrentFetchVideoId) {
           return;
         }
 
@@ -136,7 +135,6 @@ async function fetchAndDisplayLyrics(currentSong, isNewSong = false, forceReload
           lyricsObjectToDisplay = originalLyricsResponse.lyrics;
           // finalDisplayModeForRenderer remains 'none'
         } else {
-          console.warn('Failed to fetch original lyrics after translation/romanization fallback:', originalLyricsResponse.error);
           if (LyricsPlusAPI.displaySongNotFound) LyricsPlusAPI.displaySongNotFound();
           currentDisplayMode = 'none'; // Reset mode
           return;
@@ -150,8 +148,8 @@ async function fetchAndDisplayLyrics(currentSong, isNewSong = false, forceReload
         forceReload: forceReload // Pass forceReload to background script
       });
 
-      if (currentFetchVideoId !== localCurrentFetchVideoId) {
-        console.warn("Song changed during FETCH_LYRICS. Aborting display.", currentSong);
+      // Check if song changed during lyrics fetch
+      if (currentSong.videoId !== localCurrentFetchVideoId) {
         return;
       }
 
@@ -159,16 +157,14 @@ async function fetchAndDisplayLyrics(currentSong, isNewSong = false, forceReload
         lyricsObjectToDisplay = originalLyricsResponse.lyrics;
         // finalDisplayModeForRenderer remains 'none'
       } else {
-        console.warn('Failed to fetch lyrics:', originalLyricsResponse.error);
         if (LyricsPlusAPI.displaySongNotFound) LyricsPlusAPI.displaySongNotFound();
         currentDisplayMode = 'none'; // Reset mode
         return;
       }
     }
 
-    // If the videoId changed at any point during async operations, abort.
-    if (currentFetchVideoId !== localCurrentFetchVideoId) {
-      console.warn("Song changed while fetching lyrics. Aborting display.", currentSong);
+    // Check if song changed during lyrics fetch
+    if (currentSong.videoId !== localCurrentFetchVideoId) {
       return;
     }
 
@@ -179,16 +175,15 @@ async function fetchAndDisplayLyrics(currentSong, isNewSong = false, forceReload
 
     if (currentSong.isVideo && currentSong.videoId && currentSettings.useSponsorBlock && !lyricsObjectToDisplay.ignoreSponsorblock && !lyricsObjectToDisplay.metadata.ignoreSponsorblock) {
       const segments = await fetchSponsorSegments(currentSong.videoId);
-      if (currentFetchVideoId !== localCurrentFetchVideoId) { // Check again after await
-          console.warn("Song changed during SponsorBlock fetch. Aborting display.", currentSong);
+      // Check if song changed during SponsorBlock fetch
+      if (currentSong.videoId !== localCurrentFetchVideoId) {
           return;
       }
       lyricsObjectToDisplay.data = adjustLyricTiming(lyricsObjectToDisplay.data, segments, lyricsObjectToDisplay.type === "Line" ? "s" : "s");
     }
 
-    // Ensure the videoId is still the same before displaying lyrics
-    if (currentFetchVideoId !== localCurrentFetchVideoId) {
-      console.warn("Song changed just before displaying lyrics. Aborting display.", currentSong);
+    // Check if song changed just before displaying
+    if (currentSong.videoId !== localCurrentFetchVideoId) {
       return;
     }
     

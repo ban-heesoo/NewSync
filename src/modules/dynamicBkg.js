@@ -27,6 +27,7 @@ let blurTextureA = null;
 // --- WebGL Context Management ---
 function handleContextLost(event) {
     event.preventDefault(); // Prevent the default context loss handling
+    console.warn("LYPLUS: WebGL context lost. Attempting to restore...");
     if (globalAnimationId) {
         cancelAnimationFrame(globalAnimationId);
         globalAnimationId = null;
@@ -344,7 +345,6 @@ function LYPLUS_setupBlurEffect() {
         entries.forEach(entry => {
             if (entry.isIntersecting) {
                 if (!globalAnimationId) {
-                    lastFrameTime = performance.now(); // Reset time to avoid large deltaTime jump
                     globalAnimationId = requestAnimationFrame(animateWebGLBackground);
                 }
             } else {
@@ -358,6 +358,10 @@ function LYPLUS_setupBlurEffect() {
 
     observer.observe(webglCanvas);
 
+    // WebGL setup complete
+    if (gl) {
+        // Animation will start when visible
+    }
     return blurContainer;
 }
 
@@ -501,8 +505,16 @@ function LYPLUS_requestProcessNewArtwork(artworkUrlFromEvent) {
     if (artworkIdentifierToProcess === null) {
         artworkIdentifierToProcess = NO_ARTWORK_IDENTIFIER;
     }
-    if (artworkIdentifierToProcess === lastAppliedArtworkIdentifier && songPaletteTransitionProgress >= 1.0) return;
-    if (artworkIdentifierToProcess === currentProcessingArtworkIdentifier || artworkIdentifierToProcess === pendingArtworkUrl) return;
+    // Check if we're already processing this artwork
+    if (isProcessingArtwork && currentProcessingArtworkIdentifier === artworkIdentifierToProcess) {
+        return;
+    }
+
+    // Check if this artwork was already processed
+    if (lastAppliedArtworkIdentifier === artworkIdentifierToProcess) {
+        return;
+    }
+
     pendingArtworkUrl = artworkIdentifierToProcess;
     if (!isProcessingArtwork) {
         processNextArtworkFromQueue();

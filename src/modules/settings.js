@@ -1,11 +1,16 @@
 const pBrowser = chrome || browser;
 
 
-window.addEventListener('message', (event) => {
-    if (event.source !== window || !event.data) return;
-
-    if (event.data.type === 'UPDATE_SETTINGS') {
-        updateSettings(event.data.settings);
+// Listen for settings updates from the popup
+window.addEventListener('message', function(event) {
+    if (event.source !== window) return;
+    
+    if (event.data.type === 'SETTINGS_UPDATED') {
+        // Update current settings
+        currentSettings = { ...currentSettings, ...event.data.settings };
+        
+        // Apply settings changes
+        applySettings(currentSettings);
     }
 });
 
@@ -96,4 +101,8 @@ function applyDynamicPlayerClass() {
     } else {
         layoutElement.classList.remove('dynamic-player');
     }
+}
+
+function logCurrentSettings() {
+    // Settings logged for debugging
 }

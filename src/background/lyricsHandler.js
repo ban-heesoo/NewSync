@@ -166,6 +166,7 @@ pBrowser.runtime.onMessage.addListener((message, sender, sendResponse) => {
             return true;
 
         default:
+            console.warn("Received unknown message type:", message.type);
             return false;
     }
 });
@@ -404,6 +405,7 @@ async function romanizeWithGemini(originalLyrics, settings) {
         const romanizedLine = romanizedResult[index];
 
         if (!romanizedLine) {
+            console.warn(`No romanized data returned for line index ${index}.`);
             return originalLine;
         }
 

@@ -53,33 +53,29 @@ function storageLocalSet(items) {
 
 // Load settings from storage
 export function loadSettings(callback) {
-    storageLocalGet(Object.keys(currentSettings)).then((items) => {
-        if (items && Object.keys(items).length > 0) {
-            const validItems = Object.entries(items).reduce((acc, [key, value]) => {
-                if (value !== undefined) {
-                    acc[key] = value;
-                }
-                return acc;
-            }, {});
-            currentSettings = { ...currentSettings, ...validItems };
+    pBrowser.storage.local.get(null, (items) => {
+        if (pBrowser.runtime.lastError) {
+            console.error("Error loading settings:", pBrowser.runtime.lastError.message);
+            if (callback) callback();
+            return;
         }
-        if (callback) callback(currentSettings);
-    }).catch(error => {
-        if (callback) callback(currentSettings); // Fallback to default settings
+        
+        // Merge with defaults
+        currentSettings = { ...currentSettings, ...items };
+        
+        if (callback) callback();
     });
 }
 
 // Update settings in storage
 export function saveSettings() {
-    storageLocalSet(currentSettings).then(() => {
-        if (typeof window.postMessage === 'function') {
-            window.postMessage({
-                type: 'UPDATE_SETTINGS',
-                settings: currentSettings
-            }, '*');
+    pBrowser.storage.local.set(currentSettings, () => {
+        if (pBrowser.runtime.lastError) {
+            console.error("Error saving settings:", pBrowser.runtime.lastError.message);
+            return;
         }
-    }).catch(error => {
-        console.error("Error saving settings:", error);
+        
+        // Settings saved successfully
     });
 }
 
