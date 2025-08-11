@@ -73,7 +73,7 @@ This modified version builds upon the excellent foundation of YouLy+ by ibratabi
     ```bash
     git clone https://github.com/ban-heesoo/NewSync
     ```
-2.  Alternatively, you can download the latest release from [Github Releases](https://github.com/bban-heesoo/NewSync/releases/latest) and extract the zip file.
+2.  Alternatively, you can download the latest release from [Github Releases](https://github.com/ban-heesoo/NewSync/releases/latest) and extract the zip file.
 3.  **Open Firefox Debugging Page:**
     Navigate to `about:debugging#/runtime/this-firefox`
 4.  **Load Temporary Add-on:**
