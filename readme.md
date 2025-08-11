@@ -60,9 +60,9 @@ This modified version builds upon the excellent foundation of YouLy+ by ibratabi
     ```bash
     git clone https://github.com/ban-heesoo/NewSync
     ```
-2.  Alternatively, you can download the latest release from [Github Releases](https://github.com/ban-heesoo/NewSync/releases/latest).
-3.  **Open Chrome Extensions Page:**
-    Navigate to `chrome://extensions/`.
+2.  Alternatively, you can download the latest release from [Github Releases](https://github.com/ban-heesoo/NewSync/releases/latest) and extract the zip file.
+3.  **Open Extensions Page:**
+    Navigate to `chrome://extensions/` (same for Edge, Vivaldi, Opera, Brave)
 4.  **Enable Developer Mode:**
     Toggle the "Developer mode" switch in the top right corner.
 5.  **Load Unpacked Extension:**
@@ -72,11 +72,11 @@ This modified version builds upon the excellent foundation of YouLy+ by ibratabi
 
 1.  **Clone or Download the Repository:**
     ```bash
-    git clone https://github.com/ban-heesoo/NewSync.git
+    git clone https://github.com/ban-heesoo/NewSync
     ```
-2.  Alternatively, you can download the latest release from [Github Releases](https://github.com/bban-heesoo/NewSync/releases/latest).
+2.  Alternatively, you can download the latest release from [Github Releases](https://github.com/bban-heesoo/NewSync/releases/latest) and extract the zip file.
 3.  **Open Firefox Debugging Page:**
-    Navigate to `about:debugging#/runtime/this-firefox`.
+    Navigate to `about:debugging#/runtime/this-firefox`
 4.  **Load Temporary Add-on:**
     Click on "Load Temporary Add-on" and choose the `manifest.json` file from the repository folder.
 
@@ -84,7 +84,7 @@ This modified version builds upon the excellent foundation of YouLy+ by ibratabi
 
 ## 🚀 Usage
 
-Once installed, simply open [YouTube Music](https://music.youtube.com/) and play any song. The lyrics panel will automatically be enhanced by YouLy+ with custom lyrics, no external API setup required (except for Gemini AI features).
+Once installed, simply open [YouTube Music](https://music.youtube.com/) and play any song. The lyrics panel will automatically be enhanced by NewSync with custom lyrics, no external API setup required (except for Gemini AI features).
 
 -   **Quick Settings:** Access quick toggles by clicking the NewSync icon in your browser's toolbar.
 -   **Full Settings:** For comprehensive customization, click **"More Settings"** from the popup to open the dedicated settings page.
