@@ -28,7 +28,7 @@ let currentSettings = {
     // Translation settings
     translationProvider: 'google', // 'google' or 'gemini'
     geminiApiKey: '',
-    geminiModel: 'gemini-2.5-flash', // Default Gemini model updated
+    geminiModel: 'gemini-2.5-flash', // NewSync enhancement - updated default model
     overrideTranslateTarget: false,
     customTranslateTarget: '',
     overrideGeminiPrompt: false,

@@ -10,7 +10,8 @@ const MESSAGE_TYPES = {
     FETCH_LYRICS: 'FETCH_LYRICS',
     RESET_CACHE: 'RESET_CACHE',
     GET_CACHED_SIZE: 'GET_CACHED_SIZE',
-    TRANSLATE_LYRICS: 'TRANSLATE_LYRICS'
+    TRANSLATE_LYRICS: 'TRANSLATE_LYRICS',
+    FETCH_SPONSOR_SEGMENTS: 'FETCH_SPONSOR_SEGMENTS'
 };
 
 const CACHE_STRATEGIES = {
@@ -165,6 +166,10 @@ pBrowser.runtime.onMessage.addListener((message, sender, sendResponse) => {
             handleTranslateLyrics(message, sendResponse);
             return true;
 
+        case MESSAGE_TYPES.FETCH_SPONSOR_SEGMENTS:
+            handleFetchSponsorSegments(message.videoId, sendResponse);
+            return true;
+
         default:
             console.warn("Received unknown message type:", message.type);
             return false;
@@ -219,7 +224,15 @@ async function handleTranslateLyrics({ songInfo, action, targetLang, forceReload
     }
 }
 
-
+async function handleFetchSponsorSegments(videoId, sendResponse) {
+    try {
+        const segments = await fetchSponsorSegments(videoId);
+        sendResponse({ success: true, segments });
+    } catch (error) {
+        console.error(`Failed to fetch SponsorBlock segments for videoId "${videoId}":`, error);
+        sendResponse({ success: false, error: error.message });
+    }
+}       
 /* =================== CORE LYRICS LOGIC =================== */
 
 async function getOrFetchLyrics(songInfo, forceReload = false) {
@@ -1272,4 +1285,27 @@ function levenshteinDistance(s1, s2) {
         }
     }
     return track[s2.length][s1.length];
+}
+
+// SponsorBlock fetching and timing adjustment functions moved from lyricsManager.js
+async function fetchSponsorSegments(videoId) {
+    const SPONSORBLOCK_API = "https://sponsor.ajay.app/api/skipSegments";
+    const categories = ["sponsor", "selfpromo", "interaction", "intro", "outro", "preview", "filler", "music_offtopic"];
+    const url = `${SPONSORBLOCK_API}?videoID=${videoId}&categories=[${categories.map(c => `"${c}"`).join(',')}]`;
+
+    try {
+        const response = await fetch(url);
+        if (!response.ok) {
+            if (response.status === 404) {
+                console.log(`SponsorBlock segments not found for videoId: ${videoId}`);
+                return [];
+            }
+            throw new Error(`SponsorBlock API error: ${response.statusText}`);
+        }
+        const segments = await response.json();
+        return segments;
+    } catch (error) {
+        console.error("Error fetching SponsorBlock segments:", error);
+        return [];
+    }
 }

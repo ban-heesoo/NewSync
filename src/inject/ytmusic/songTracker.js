@@ -3,6 +3,7 @@ let LYPLUS_currentSong = {};
 
 // Initialize when the script is loaded
 (function() {
+    console.log('LYPLUS: DOM script injected successfully');
     LYPLUS_setupMutationObserver();
     //LYPLUS_setupBlurEffect();
 })();
@@ -92,6 +93,7 @@ function LYPLUS_checkForSongChange() {
 
     // Do nothing if title or artist is an empty string
     if (!newSongInfo.title.trim() || !newSongInfo.artist.trim()) {
+        console.log('LYPLUS: Missing title or artist, skipping notification.');
         return;
     }
 

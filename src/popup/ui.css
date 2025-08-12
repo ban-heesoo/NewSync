@@ -1,4 +1,48 @@
-/* Font declarations imported from main stylesheet */
+/* ==========================================================================
+   PRODUCT SANS FONT DECLARATIONS - ONLINE CDN
+   ========================================================================== */
+@import url('https://fonts.googleapis.com/css2?family=Product+Sans:wght@300;400;500;600;700&display=swap');
+
+/* Fallback font declarations using CDN */
+@font-face {
+    font-family: 'Product Sans';
+    src: url('https://fonts.gstatic.com/s/productsans/v5/HYvgU2fE2nRJvZ5JFAumwegdm0LZdjqr5-oayXSOefg.woff2') format('woff2');
+    font-weight: 400;
+    font-style: normal;
+    font-display: swap;
+}
+
+@font-face {
+    font-family: 'Product Sans';
+    src: url('https://fonts.gstatic.com/s/productsans/v5/HYvgU2fE2nRJvZ5JFAumwegdm0LZdjqr5-oayXSOefg.woff2') format('woff2');
+    font-weight: 300;
+    font-style: normal;
+    font-display: swap;
+}
+
+@font-face {
+    font-family: 'Product Sans';
+    src: url('https://fonts.gstatic.com/s/productsans/v5/HYvgU2fE2nRJvZ5JFAumwegdm0LZdjqr5-oayXSOefg.woff2') format('woff2');
+    font-weight: 500;
+    font-style: normal;
+    font-display: swap;
+}
+
+@font-face {
+    font-family: 'Product Sans';
+    src: url('https://fonts.gstatic.com/s/productsans/v5/HYvgU2fE2nRJvZ5JFAumwegdm0LZdjqr5-oayXSOefg.woff2') format('woff2');
+    font-weight: 600;
+    font-style: normal;
+    font-display: swap;
+}
+
+@font-face {
+    font-family: 'Product Sans';
+    src: url('https://fonts.gstatic.com/s/productsans/v5/HYvgU2fE2nRJvZ5JFAumwegdm0LZdjqr5-oayXSOefg.woff2') format('woff2');
+    font-weight: 700;
+    font-style: normal;
+    font-display: swap;
+}
 
 /* --- Material Design 3 Dark Theme Tokens (NewSync Blue Theme) --- */
 :root {
@@ -53,8 +97,8 @@
     --md-sys-color-surface-container-high: rgb(24 25 32);
     --md-sys-color-surface-container-highest: rgb(32 33 40);
 
-    --md-ref-typeface-brand: 'SF Pro Display', 'Roboto', 'Segoe UI', system-ui, sans-serif;
-    --md-ref-typeface-plain: 'SF Pro Display', 'Roboto', 'Segoe UI', system-ui, sans-serif;
+    --md-ref-typeface-brand: 'Product Sans', 'Roboto', 'Segoe UI', system-ui, sans-serif;
+    --md-ref-typeface-plain: 'Product Sans', 'Roboto', 'Segoe UI', system-ui, sans-serif;
 
     --md-sys-elevation-level-0: none;
     --md-sys-elevation-level-1: 0px 1px 3px 1px rgba(0,0,0,0.15), 0px 1px 2px 0px rgba(0,0,0,0.30);

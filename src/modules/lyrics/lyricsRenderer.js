@@ -631,6 +631,8 @@ class LyricsPlusRenderer {
           wordSpan.appendChild(sylSpan);
         });
 
+
+
         if (shouldEmphasize) {
           wordSpan._cachedChars = characterData.map(cd => cd.charSpan);
         }
@@ -638,16 +640,18 @@ class LyricsPlusRenderer {
         syllableElements.forEach((syllable, index) => {
           if (index < syllableElements.length - 1) {
             const nextSyllable = syllableElements[index + 1];
-            // Use the direct _durationMs property we just cached
-            const currentDuration = syllable._durationMs;
-            const charCount = syllable._cachedCharSpans?.length || syllable.textContent.length;
 
-            let charBasedDelay = (charCount > 1) ?
-              ((charCount - 1) / charCount) + (1 / charCount / 2) : 0.25;
-            const delayPercent = charBasedDelay + 0.07;
+            const currentDuration = syllable._durationMs;
+            const syllableWidth = this._getTextWidth(syllable.textContent, referenceFont);
+            const emWidth = this._getTextWidth('m', referenceFont);
+            const syllableWidthEm = syllableWidth / emWidth; // convert px → em
+            const totalTravelEm = syllableWidthEm + 0.25; // block 0.5em size
+            const travelUntilEdgeEm = syllableWidthEm; // when touching edge
+            const delayFraction = travelUntilEdgeEm / totalTravelEm;
+            const delayPercent = Math.min(1, Math.max(0, delayFraction));
             const timingFunction = `cubic-bezier(${delayPercent.toFixed(3)}, 0, 1, 1)`;
 
-            // Cache all required properties on the CURRENT syllable for the animation loop
+
             syllable._nextSyllableInWord = nextSyllable;
             syllable._preHighlightDurationMs = currentDuration;
             syllable._preHighlightTimingFunction = timingFunction;

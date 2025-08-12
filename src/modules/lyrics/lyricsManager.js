@@ -174,12 +174,21 @@ async function fetchAndDisplayLyrics(currentSong, isNewSong = false, forceReload
     }
 
     if (currentSong.isVideo && currentSong.videoId && currentSettings.useSponsorBlock && !lyricsObjectToDisplay.ignoreSponsorblock && !lyricsObjectToDisplay.metadata.ignoreSponsorblock) {
-      const segments = await fetchSponsorSegments(currentSong.videoId);
+      const sponsorBlockResponse = await pBrowser.runtime.sendMessage({
+        type: 'FETCH_SPONSOR_SEGMENTS',
+        videoId: currentSong.videoId
+      });
+
       // Check if song changed during SponsorBlock fetch
       if (currentSong.videoId !== localCurrentFetchVideoId) {
           return;
       }
-      lyricsObjectToDisplay.data = adjustLyricTiming(lyricsObjectToDisplay.data, segments, lyricsObjectToDisplay.type === "Line" ? "s" : "s");
+      
+      if (sponsorBlockResponse.success) {
+        lyricsObjectToDisplay.data = adjustLyricTiming(lyricsObjectToDisplay.data, sponsorBlockResponse.segments, lyricsObjectToDisplay.type === "Line" ? "s" : "s");
+      } else {
+        console.warn('Failed to fetch SponsorBlock segments:', sponsorBlockResponse.error);
+      }
     }
 
     // Check if song changed just before displaying
@@ -203,6 +212,8 @@ async function fetchAndDisplayLyrics(currentSong, isNewSong = false, forceReload
             fetchAndDisplayLyrics, // Pass the function itself
             setCurrentDisplayModeAndRender // Pass the function itself (renamed)
         );
+        
+
     } else {
         console.error("displayLyrics is not available.");
     }

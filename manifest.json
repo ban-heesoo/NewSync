@@ -7,24 +7,22 @@
     "16": "icons/icon16.png",
     "32": "icons/icon32.png",
     "48": "icons/icon48.png",
-    "128": "icons/icon128.png",
-    "256": "icons/icon256.png"
+    "128": "icons/icon128.png"
   },
   "permissions": ["activeTab", "storage", "scripting", "tabs"],
-  "host_permissions": ["*://*.music.youtube.com/*"],
+  "host_permissions": ["*://*.music.youtube.com/*", "*://*.tidal.com/*"],
   "action": {
     "default_popup": "src/popup/ui.html",
     "default_icon": {
       "16": "icons/icon16.png",
       "32": "icons/icon32.png",
       "48": "icons/icon48.png",
-      "128": "icons/icon128.png",
-      "256": "icons/icon256.png"
+      "128": "icons/icon128.png"
     }
   },
   "browser_specific_settings": {
     "gecko": {
-      "id": "newsync-extension@ban-heesoo.com",
+      "id": "{00a6e1f0-4808-45e7-b66d-3a5aa6527a0e}",
       "strict_min_version": "58.0"
     }
   },
@@ -35,11 +33,25 @@
         "src/lib/sponsorblock.js",
         "src/lib/polyfill.js",
         "src/localization.js",
-        "src/modules/settings.js",
-        "src/modules/lyricsManager.js",
-        "src/modules/lyricsRenderer.js",
-        "src/modules/forceTab.js",
-        "src/modules/dynamicBkg.js",
+        "src/modules/lyrics/settings.js",
+        "src/modules/lyrics/lyricsManager.js",
+        "src/modules/lyrics/lyricsRenderer.js",
+        "src/modules/ytmusic/forceTab.js",
+        "src/modules/lyrics/dynamicBkg.js",
+        "src/modules/ytmusic/index.js",
+        "src/content.js"
+      ]
+    },
+    {
+      "matches": ["*://*.tidal.com/*"],
+      "js": [
+        "src/lib/polyfill.js",
+        "src/localization.js",
+        "src/modules/lyrics/settings.js",
+        "src/modules/lyrics/lyricsManager.js",
+        "src/modules/lyrics/lyricsRenderer.js",
+        "src/modules/lyrics/dynamicBkg.js",
+        "src/modules/tidal/index.js",
         "src/content.js"
       ]
     }
@@ -47,11 +59,18 @@
   "web_accessible_resources": [
     {
       "resources": [
-        "src/inject/stylesheet.css",
-        "src/inject/songTracker.js",
-        "fonts/*"
+        "src/modules/lyrics/lyrics.css",
+        "src/modules/ytmusic/style.css",
+        "src/inject/ytmusic/songTracker.js"
       ],
       "matches": ["*://*.music.youtube.com/*"]
+    },
+    {
+      "resources": [
+        "src/modules/lyrics/lyrics.css",
+        "src/modules/tidal/style.css"
+      ],
+      "matches": ["*://*.tidal.com/*"]
     }
   ],
   "background": {

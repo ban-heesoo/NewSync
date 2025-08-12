@@ -150,7 +150,8 @@ async function fetchSponsorSegments(videoID, customOptions = {}) {
         const response = await fetch(url, {
             method: 'GET',
             headers: {
-                'Accept': 'application/json'
+                'Accept': 'application/json',
+                'User-Agent': 'SponsorBlock-Client/1.0'
             }
         });
 

@@ -19,7 +19,7 @@ let currentSettings = {
     customCSS: '',
     translationProvider: 'google', // Default translation provider
     geminiApiKey: '', // Default Gemini API key
-    geminiModel: 'gemini-pro', // Default Gemini model
+    geminiModel: 'gemini-2.5-flash', // Default Gemini model (NewSync enhancement)
     overrideTranslateTarget: false, // New setting for overriding translation target
     customTranslateTarget: '', // New setting for custom translation target
     overrideGeminiPrompt: false, // New setting for overriding Gemini prompt
@@ -27,7 +27,7 @@ let currentSettings = {
     overrideGeminiRomanizePrompt: false, // New setting for overriding Gemini romanization prompt
     customGeminiRomanizePrompt: '', // New setting for custom Gemini romanization prompt
     romanizationProvider: 'google',
-    geminiRomanizationModel: 'gemini-2.0-flash',
+    geminiRomanizationModel: 'gemini-2.5-flash', // NewSync enhancement
     useSongPaletteFullscreen: false,
     useSongPaletteAllModes: false,
     overridePaletteColor: '',

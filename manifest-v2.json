@@ -31,8 +31,7 @@
   ],
   "web_accessible_resources": [
     "src/inject/stylesheet.css",
-    "src/inject/songTracker.js",
-    "fonts/*"
+    "src/inject/songTracker.js"
   ],
   "background": {
     "scripts": ["src/background/lyricsHandler.js"],
