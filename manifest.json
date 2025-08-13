@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "NewSync",
-  "version": "1.0.3",
+  "version": "1.0.4",
   "description": "Enhanced lyrics feature for YouTube Music with line-by-line and word-by-word sync",
   "icons": {
     "16": "icons/icon16.png",
@@ -22,7 +22,7 @@
   },
   "browser_specific_settings": {
     "gecko": {
-      "id": "{00a6e1f0-4808-45e7-b66d-3a5aa6527a0e}",
+      "id": "@newsync-zen",
       "strict_min_version": "58.0"
     }
   },
