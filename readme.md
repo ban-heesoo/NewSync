@@ -51,7 +51,7 @@ This modified version builds upon the excellent foundation of YouLy+ by ibratabi
 *For the original YouLy+ project, visit: [github.com/ibratabian17/YouLyPlus](https://github.com/ibratabian17/YouLyPlus)*
 
 
-## ⬇️ Instalation
+## ⬇️ Installation
 
 ### For Chrome, Edge, Vivaldi, Opera, Brave
 

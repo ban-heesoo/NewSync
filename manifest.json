@@ -10,7 +10,7 @@
     "128": "icons/icon128.png"
   },
   "permissions": ["activeTab", "storage", "scripting", "tabs"],
-  "host_permissions": ["*://*.music.youtube.com/*", "*://*.tidal.com/*"],
+  "host_permissions": ["*://*.music.youtube.com/*"],
   "action": {
     "default_popup": "src/popup/ui.html",
     "default_icon": {
@@ -41,19 +41,6 @@
         "src/modules/ytmusic/index.js",
         "src/content.js"
       ]
-    },
-    {
-      "matches": ["*://*.tidal.com/*"],
-      "js": [
-        "src/lib/polyfill.js",
-        "src/localization.js",
-        "src/modules/lyrics/settings.js",
-        "src/modules/lyrics/lyricsManager.js",
-        "src/modules/lyrics/lyricsRenderer.js",
-        "src/modules/lyrics/dynamicBkg.js",
-        "src/modules/tidal/index.js",
-        "src/content.js"
-      ]
     }
   ],
   "web_accessible_resources": [
@@ -64,13 +51,6 @@
         "src/inject/ytmusic/songTracker.js"
       ],
       "matches": ["*://*.music.youtube.com/*"]
-    },
-    {
-      "resources": [
-        "src/modules/lyrics/lyrics.css",
-        "src/modules/tidal/style.css"
-      ],
-      "matches": ["*://*.tidal.com/*"]
     }
   ],
   "background": {

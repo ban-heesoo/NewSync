@@ -36,18 +36,38 @@ let currentSettings = {
 
 // Storage helper function (using pBrowser.storage.local directly)
 function storageLocalGet(keys) {
-    return new Promise(resolve => pBrowser.storage.local.get(keys, resolve));
+    return new Promise((resolve, reject) => {
+        try {
+            pBrowser.storage.local.get(keys, (items) => {
+                if (pBrowser.runtime.lastError) {
+                    console.error("Storage get error:", pBrowser.runtime.lastError);
+                    reject(pBrowser.runtime.lastError);
+                } else {
+                    resolve(items);
+                }
+            });
+        } catch (error) {
+            console.error("Storage get exception:", error);
+            reject(error);
+        }
+    });
 }
 
 function storageLocalSet(items) {
     return new Promise((resolve, reject) => {
-        pBrowser.storage.local.set(items, () => {
-            if (pBrowser.runtime.lastError) {
-                reject(pBrowser.runtime.lastError);
-            } else {
-                resolve();
-            }
-        });
+        try {
+            pBrowser.storage.local.set(items, () => {
+                if (pBrowser.runtime.lastError) {
+                    console.error("Storage set error:", pBrowser.runtime.lastError);
+                    reject(pBrowser.runtime.lastError);
+                } else {
+                    resolve();
+                }
+            });
+        } catch (error) {
+            console.error("Storage set exception:", error);
+            reject(error);
+        }
     });
 }
 
@@ -104,40 +124,57 @@ export function updateCacheSize() {
         pBrowser.runtime.sendMessage({ type: 'GET_CACHED_SIZE' }, (response) => {
             if (pBrowser.runtime.lastError) {
                 console.error("Error getting cache size:", pBrowser.runtime.lastError.message);
-                document.getElementById('cache-size').textContent = `Error loading cache size.`;
+                const cacheElement = document.getElementById('cache-size');
+                if (cacheElement) {
+                    cacheElement.textContent = `Error loading cache size.`;
+                }
                 return;
             }
             if (response && response.success) {
                 const sizeMB = (response.sizeKB / 1024).toFixed(2);
-                document.getElementById('cache-size').textContent = `${sizeMB} MB used (${response.cacheCount} songs cached)`;
+                const cacheElement = document.getElementById('cache-size');
+                if (cacheElement) {
+                    cacheElement.textContent = `${sizeMB} MB used (${response.cacheCount} songs cached)`;
+                }
             } else {
                 console.error("Error getting cache size from response:", response ? response.error : "No response");
-                document.getElementById('cache-size').textContent = `Could not retrieve cache size.`;
+                const cacheElement = document.getElementById('cache-size');
+                if (cacheElement) {
+                    cacheElement.textContent = `Could not retrieve cache size.`;
+                }
             }
         });
     } else {
         console.warn("pBrowser.runtime.sendMessage is not available. Skipping cache size update.");
-        document.getElementById('cache-size').textContent = `Cache info unavailable.`;
+        const cacheElement = document.getElementById('cache-size');
+        if (cacheElement) {
+            cacheElement.textContent = `Cache info unavailable.`;
+        }
     }
 }
 
 // Clear cache button logic
 export function clearCache() {
     if (pBrowser && pBrowser.runtime && typeof pBrowser.runtime.sendMessage === 'function') {
-        pBrowser.runtime.sendMessage({ type: 'RESET_CACHE' }, (response) => {
-            if (pBrowser.runtime.lastError) {
-                console.error("Error resetting cache:", pBrowser.runtime.lastError.message);
-                alert('Error clearing cache: ' + pBrowser.runtime.lastError.message);
-                return;
-            }
-            if (response && response.success) {
-                updateCacheSize();
-                alert('Cache cleared successfully!');
-            } else {
-                console.error("Error resetting cache from response:", response ? response.error : "No response");
-                alert('Error clearing cache: ' + (response ? response.error : 'Unknown error'));
-            }
-        });
+        try {
+            pBrowser.runtime.sendMessage({ type: 'RESET_CACHE' }, (response) => {
+                if (pBrowser.runtime.lastError) {
+                    console.error("Error resetting cache:", pBrowser.runtime.lastError.message);
+                    alert('Error clearing cache: ' + pBrowser.runtime.lastError.message);
+                    return;
+                }
+                if (response && response.success) {
+                    updateCacheSize();
+                    alert('Cache cleared successfully!');
+                } else {
+                    console.error("Error resetting cache from response:", response ? response.error : "No response");
+                    alert('Error clearing cache: ' + (response ? response.error : 'Unknown error'));
+                }
+            });
+        } catch (error) {
+            console.error("Exception while clearing cache:", error);
+            alert('Error clearing cache: ' + error.message);
+        }
     } else {
         console.warn("pBrowser.runtime.sendMessage is not available. Skipping cache clear.");
         alert('Cache clearing feature is unavailable in this context.');

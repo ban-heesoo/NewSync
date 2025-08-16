@@ -559,11 +559,21 @@ document.getElementById('toggle-gemini-api-key-visibility').addEventListener('cl
 });
 function setAppVersion() {
     try {
-        const manifest = chrome.runtime.getManifest();
-        const version = manifest.version;
-        const versionElement = document.querySelector('.version');
-        if (versionElement) {
-            versionElement.textContent = `Version ${version}`;
+        // Use pBrowser for better compatibility
+        const browser = window.chrome || window.browser;
+        if (browser && browser.runtime && browser.runtime.getManifest) {
+            const manifest = browser.runtime.getManifest();
+            const version = manifest.version;
+            const versionElement = document.querySelector('.version');
+            if (versionElement) {
+                versionElement.textContent = `Version ${version}`;
+            }
+        } else {
+            console.warn("Browser runtime API not available");
+            const versionElement = document.querySelector('.version');
+            if (versionElement) {
+                versionElement.textContent = 'Version unavailable';
+            }
         }
     } catch (e) {
         console.error("Could not retrieve extension version from manifest:", e);
@@ -600,21 +610,42 @@ document.addEventListener('DOMContentLoaded', () => {
     const reloadButton = document.getElementById('reload-button');
     if (reloadButton) {
         reloadButton.addEventListener('click', () => {
-            // Find the YouTube Music tab and reload it
-            chrome.tabs.query({ url: "*://music.youtube.com/*" }, (tabs) => {
-                if (tabs.length > 0) {
-                    const ytmTab = tabs[0];
-                    chrome.tabs.reload(ytmTab.id, () => {
-                        // After reloading, hide the notification and maybe show a success message
-                        hideReloadNotification();
-                        // Optionally, show a temporary success message
-                        showStatusMessage('YouTube Music tab reloaded!', false, 'save-general');
+            try {
+                // Use pBrowser for better compatibility
+                const browser = window.chrome || window.browser;
+                if (browser && browser.tabs && browser.tabs.query) {
+                    // Find the YouTube Music tab and reload it
+                    browser.tabs.query({ url: "*://music.youtube.com/*" }, (tabs) => {
+                        if (browser.runtime.lastError) {
+                            console.error("Error querying tabs:", browser.runtime.lastError);
+                            alert("Error finding YouTube Music tab: " + browser.runtime.lastError.message);
+                            return;
+                        }
+                        if (tabs && tabs.length > 0) {
+                            const ytmTab = tabs[0];
+                            browser.tabs.reload(ytmTab.id, () => {
+                                if (browser.runtime.lastError) {
+                                    console.error("Error reloading tab:", browser.runtime.lastError);
+                                    alert("Error reloading tab: " + browser.runtime.lastError.message);
+                                } else {
+                                    // After reloading, hide the notification and show success message
+                                    hideReloadNotification();
+                                    showStatusMessage('YouTube Music tab reloaded!', false, 'save-general');
+                                }
+                            });
+                        } else {
+                            // Handle case where no YTM tab is open
+                            alert("No YouTube Music tab found. Please open one and try again.");
+                        }
                     });
                 } else {
-                    // Handle case where no YTM tab is open
-                    alert("No YouTube Music tab found. Please open one and try again.");
+                    console.warn("Browser tabs API not available");
+                    alert("Tab reload feature is not available in this context.");
                 }
-            });
+            } catch (error) {
+                console.error("Exception while reloading tab:", error);
+                alert("Error reloading tab: " + error.message);
+            }
         });
     }
 });
