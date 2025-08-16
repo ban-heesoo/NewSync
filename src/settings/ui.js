@@ -1,7 +1,7 @@
 import { loadSettings, saveSettings, updateSettings, getSettings, updateCacheSize, clearCache, setupSettingsMessageListener } from './settingsManager.js';
 import { startFullPreviewSync } from './previewManager.js';
 
-let currentSettings = getSettings(); // Initialize with default settings
+let currentSettings = {}; // Will be initialized when loaded from storage
 
 // Shows a notification bar telling the user to reload their YTM tab
 function showReloadNotification() {
@@ -56,9 +56,27 @@ function setupAutoSaveListeners() {
                 const value = control.type === 'checkbox' ? e.target.checked : e.target.value;
                 const newSetting = { [control.key]: value };
 
+                // Update both the global settings and local reference
                 updateSettings(newSetting);
+                currentSettings = { ...currentSettings, ...newSetting };
                 saveSettings();
                 showReloadNotification();
+
+                // Handle UI visibility toggles for specific controls
+                if (control.id === 'default-provider') {
+                    toggleKpoeSourcesVisibility();
+                    toggleCustomKpoeUrlVisibility();
+                } else if (control.id === 'translation-provider') {
+                    toggleGeminiSettingsVisibility();
+                } else if (control.id === 'romanization-provider') {
+                    toggleRomanizationModelVisibility();
+                } else if (control.id === 'override-translate-target') {
+                    toggleTranslateTargetVisibility();
+                } else if (control.id === 'override-gemini-prompt') {
+                    toggleGeminiPromptVisibility();
+                } else if (control.id === 'override-gemini-romanize-prompt') {
+                    toggleGeminiRomanizePromptVisibility();
+                }
             });
         }
     });
@@ -123,13 +141,12 @@ function updateFormElements(settings) {
 
 // Update UI elements to reflect current settings
 function updateUI(settings) {
-    currentSettings = settings; // Update local reference
+    currentSettings = { ...settings }; // Create a proper copy of settings
     
     // Update all form elements
     updateFormElements(settings);
     
-    // Update version display
-    updateVersionDisplay();
+    // Version display is handled in DOMContentLoaded
 }
 
 // Tab navigation
@@ -421,13 +438,7 @@ function toggleKpoeSourcesVisibility() {
     }
 }
 
-// Event listener for default-provider change
-document.getElementById('default-provider').addEventListener('change', (e) => {
-    currentSettings.lyricsProvider = e.target.value; // Update setting immediately for visibility toggle
-    toggleKpoeSourcesVisibility();
-    toggleCustomKpoeUrlVisibility(); // Toggle custom KPoe URL visibility
-    // actual saving happens automatically via setupAutoSaveListeners
-});
+// Event listener for default-provider change is now handled in setupAutoSaveListeners
 
 // Function to toggle Custom KPoe URL visibility
 function toggleCustomKpoeUrlVisibility() {
@@ -441,23 +452,11 @@ function toggleCustomKpoeUrlVisibility() {
     }
 }
 
-// Event listener for override-translate-target change
-document.getElementById('override-translate-target').addEventListener('change', (e) => {
-    currentSettings.overrideTranslateTarget = e.target.checked;
-    toggleTranslateTargetVisibility();
-});
+// Event listener for override-translate-target change is now handled in setupAutoSaveListeners
 
-// Event listener for override-gemini-prompt change
-document.getElementById('override-gemini-prompt').addEventListener('change', (e) => {
-    currentSettings.overrideGeminiPrompt = e.target.checked;
-    toggleGeminiPromptVisibility();
-});
+// Event listener for override-gemini-prompt change is now handled in setupAutoSaveListeners
 
-// Event listener for override-gemini-romanize-prompt change
-document.getElementById('override-gemini-romanize-prompt').addEventListener('change', (e) => {
-    currentSettings.overrideGeminiRomanizePrompt = e.target.checked;
-    toggleGeminiRomanizePromptVisibility();
-});
+// Event listener for override-gemini-romanize-prompt change is now handled in setupAutoSaveListeners
 
 // Function to toggle Gemini settings visibility (API key, model, prompt override)
 function toggleGeminiSettingsVisibility() {
@@ -538,19 +537,9 @@ function toggleGeminiRomanizePromptVisibility() {
     }
 }
 
-// Event listener for romanization-provider change
-document.getElementById('romanization-provider').addEventListener('change', (e) => {
-    // currentSettings.romanizationProvider is updated via auto-save listener
-    toggleRomanizationModelVisibility(); // Call the new function
-    // actual saving happens automatically via setupAutoSaveListeners
-});
+// Event listener for romanization-provider change is now handled in setupAutoSaveListeners
 
-// Event listener for translation-provider change
-document.getElementById('translation-provider').addEventListener('change', (e) => {
-    currentSettings.translationProvider = e.target.value; // Update setting immediately
-    toggleGeminiSettingsVisibility(); // Call the renamed function
-    // actual saving happens automatically via setupAutoSaveListeners
-});
+// Event listener for translation-provider change is now handled in setupAutoSaveListeners
 
 document.getElementById('play-example').addEventListener('click', () => {
     startFullPreviewSync(currentSettings);
@@ -587,10 +576,13 @@ function setAppVersion() {
 
 // Initial load
 document.addEventListener('DOMContentLoaded', () => {
+    // Setup auto-save listeners first, but don't trigger them
+    setupAutoSaveListeners();
+
     loadSettings((settings) => {
-        currentSettings = settings; // Ensure currentSettings is updated after load
+        // Update both local and global settings
+        currentSettings = { ...settings };
         updateUI(currentSettings);
-        setupAutoSaveListeners(); // Setup auto-saving for switches and selects
 
         const firstNavItem = document.querySelector('.navigation-drawer .nav-item');
         const activeSectionId = firstNavItem ? firstNavItem.getAttribute('data-section') : 'general';
