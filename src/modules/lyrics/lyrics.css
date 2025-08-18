@@ -156,7 +156,7 @@ ytmusic-app-layout[is-mweb-modernization-enabled] #lyrics-plus-container[style*=
     opacity: 0.7;
     color: #ffffff85;
     font-size: 25px;
-    line-height: 1.4;
+    line-height: 1.4em;
     cursor: pointer;
     transform-origin: left;
     transform: translateY(var(--lyrics-scroll-offset, 0px)) translateZ(1px);
@@ -290,10 +290,6 @@ ytmusic-player-page:not([player-fullscreened]) .lyrics-plus-integrated.blur-inac
     transition: color 0.7s, background-color 0.7s;
 }
 
-.lyrics-syllable.rtl-text {
-    line-height: 1.5em; /* Specific adjustment for RTL scripts */
-}
-
 /* --- Syllable States (Finished, Highlight, etc.) --- */
 .lyrics-line .lyrics-syllable.finished {
     background-color: var(--lyplus-lyrics-pallete, #fff);
@@ -342,7 +338,8 @@ ytmusic-player-page:not([player-fullscreened]) .lyrics-plus-integrated.blur-inac
 .lyrics-syllable.pre-highlight {
     animation-name: pre-wipe-universal;
     animation-duration: var(--pre-wipe-duration);
-    animation-timing-function: var(--pre-wipe-timing-function);
+    animation-delay: var(--pre-wipe-delay);
+    animation-timing-function: linear;
     animation-fill-mode: forwards;
 }
 .lyrics-syllable.pre-highlight.rtl-text {

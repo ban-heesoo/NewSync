@@ -77,6 +77,23 @@
             <div class="tab-content" id="appearance-tab">
                 <section class="settings-section">
                     <h2 class="section-title">
+                        <span class="material-symbols-outlined section-icon">text_fields</span>Text Display
+                    </h2>
+                    <div class="setting-item">
+                        <label for="largerTextMode" class="setting-label">Larger Text:</label>
+                        <div class="m3-select-wrapper">
+                            <select id="largerTextMode" class="m3-select">
+                                <option value="lyrics">Lyrics</option>
+                                <option value="romanization">Pronunciation</option>
+                            </select>
+                            <span class="material-symbols-outlined select-arrow">expand_more</span>
+                        </div>
+                    </div>
+                    <p class="setting-description">Choose whether lyrics or pronunciation appears larger when both are displayed.</p>
+                </section>
+                
+                <section class="settings-section">
+                    <h2 class="section-title">
                         <span class="material-symbols-outlined section-icon">palette</span>Appearance
                     </h2>
                     <div class="setting-item">
@@ -96,25 +113,9 @@
                         </div>
                     </div>
                     <div class="setting-item">
-                        <label for="blurInactive" class="setting-label">Blur Inactive Lyrics</label>
-                        <div class="m3-switch" role="switch" aria-labelledby="blurInactive">
-                            <input type="checkbox" id="blurInactive" class="m3-switch-input">
-                            <span class="m3-switch-track"></span>
-                            <span class="m3-switch-thumb-container"><span class="m3-switch-thumb"></span></span>
-                        </div>
-                    </div>
-                    <div class="setting-item">
                         <label for="dynamicBackground" class="setting-label">Enable Dynamic Background (Player View)</label>
                         <div class="m3-switch" role="switch" aria-labelledby="dynamicBackground">
                             <input type="checkbox" id="dynamicBackground" class="m3-switch-input">
-                            <span class="m3-switch-track"></span>
-                            <span class="m3-switch-thumb-container"><span class="m3-switch-thumb"></span></span>
-                        </div>
-                    </div>
-                    <div class="setting-item">
-                        <label for="hideOffscreen" class="setting-label">Hide Off-Screen Lyrics Lines</label>
-                        <div class="m3-switch" role="switch" aria-labelledby="hideOffscreen">
-                            <input type="checkbox" id="hideOffscreen" class="m3-switch-input">
                             <span class="m3-switch-track"></span>
                             <span class="m3-switch-thumb-container"><span class="m3-switch-thumb"></span></span>
                         </div>

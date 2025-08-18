@@ -63,6 +63,29 @@ class LyricsPlusRenderer {
     };
   }
 
+  _getDataText(normal, isOriginal = true) {
+    if (!normal) return ''; // Handle null/undefined 'normal' object
+    console.debug(this.largerTextMode, normal)
+
+    if (this.largerTextMode === "romanization") {
+      if (isOriginal) {
+        // Main/background container in romanization mode: show romanized
+        return normal.romanizedText || normal.text || '';
+      } else {
+        // Romanization container in romanization mode: show original
+        return normal.text || '';
+      }
+    } else {
+      if (isOriginal) {
+        // Main/background container in normal mode: show original
+        return normal.text || '';
+      } else {
+        // Romanization container in normal mode: show romanized (if available)
+        return normal.romanizedText || normal.text || '';
+      }
+    }
+  }
+
   /**
    * Handles the actual logic for container resize, debounced by _debouncedResizeHandler.
    * @param {HTMLElement} container - The lyrics container element.
@@ -509,6 +532,41 @@ class LyricsPlusRenderer {
       return font;
     };
 
+    /**
+     * Calculate pre-highlight delay based on exact wipe effect positioning
+     * - Works in em units to match CSS animations
+     * - Uses explicit total travel and trigger distances
+     * - Clamps the fraction to [0, 1] for robustness
+     * @param {HTMLElement} syllable - The current syllable element
+     * @param {string} font - The computed font string
+     * @param {number} currentDuration - Duration of current syllable in ms
+     * @returns {number} Delay in milliseconds (0..currentDuration)
+     */
+    const calculatePreHighlightDelay = (syllable, font, currentDuration) => {
+      const syllableWidthPx = this._getTextWidth(syllable.textContent, font);
+      const emWidthPx = this._getTextWidth('M', font);
+      const syllableWidthEm = emWidthPx > 0 ? (syllableWidthPx / emWidthPx) : 0;
+
+      const gradientWidthEm = 0.5; // width of the wipe block
+      const edgeOffsetEm = 0.25; // when to trigger relative to syllable end
+
+      const initialPositionEm = -0.25; // starting leading-edge position
+      const finalPositionEm = syllableWidthEm + gradientWidthEm;
+      const triggerPositionEm = syllableWidthEm - edgeOffsetEm;
+
+      const totalTravelEm = finalPositionEm - initialPositionEm;
+      const travelUntilTriggerEm = triggerPositionEm - initialPositionEm;
+
+      let delayFraction = 0;
+      if (totalTravelEm > 0) {
+        delayFraction = travelUntilTriggerEm / totalTravelEm;
+      }
+      delayFraction = Math.min(1, Math.max(0, delayFraction));
+
+      const delayMs = Math.round(delayFraction * currentDuration);
+      return delayMs;
+    };
+
     lyrics.data.forEach((line) => {
       let currentLine = elementPool.lines.pop() || document.createElement('div');
       currentLine.innerHTML = '';
@@ -534,6 +592,10 @@ class LyricsPlusRenderer {
       let wordBuffer = [];
       let currentWordStartTime = null;
       let currentWordEndTime = null;
+
+      // Variables to hold the last syllable of the previous word to link across words
+      let pendingSyllable = null;
+      let pendingSyllableFont = null;
 
       const flushWordBuffer = () => {
         if (!wordBuffer.length) return;
@@ -602,12 +664,12 @@ class LyricsPlusRenderer {
           const charSpansForSyllable = [];
 
           if (s.isBackground) {
-            sylSpan.textContent = s.text.replace(/[()]/g, '');
+            sylSpan.textContent = this._getDataText(s, false).replace(/[()]/g, '')
           } else {
             if (shouldEmphasize) {
               wordSpan.classList.add('growable');
               let charIndex = 0;
-              s.text.split('').forEach(char => {
+              this._getDataText(s).split('').forEach(char => {
                 if (char === ' ') {
                   sylSpan.appendChild(document.createTextNode(' '));
                 } else {
@@ -622,7 +684,7 @@ class LyricsPlusRenderer {
                 }
               });
             } else {
-              sylSpan.textContent = s.text;
+              sylSpan.textContent = this._getDataText(s);
             }
           }
           if (charSpansForSyllable.length > 0) {
@@ -637,24 +699,29 @@ class LyricsPlusRenderer {
           wordSpan._cachedChars = characterData.map(cd => cd.charSpan);
         }
 
+        // Handle pending syllable from previous word (cross-word linking)
+        if (pendingSyllable && syllableElements.length > 0) {
+          const nextSyllable = syllableElements[0];
+          const currentDuration = pendingSyllable._durationMs;
+
+          const delayMs = calculatePreHighlightDelay(pendingSyllable, pendingSyllableFont, currentDuration);
+
+          pendingSyllable._nextSyllableInWord = nextSyllable;
+          pendingSyllable._preHighlightDurationMs = Math.max(0, currentDuration - delayMs);
+          pendingSyllable._preHighlightDelayMs = Math.max(0, delayMs);
+        }
+
+        // Handle syllables within the same word (intra-word linking)
         syllableElements.forEach((syllable, index) => {
           if (index < syllableElements.length - 1) {
             const nextSyllable = syllableElements[index + 1];
-
             const currentDuration = syllable._durationMs;
-            const syllableWidth = this._getTextWidth(syllable.textContent, referenceFont);
-            const emWidth = this._getTextWidth('m', referenceFont);
-            const syllableWidthEm = syllableWidth / emWidth; // convert px → em
-            const totalTravelEm = syllableWidthEm + 0.25; // block 0.5em size
-            const travelUntilEdgeEm = syllableWidthEm; // when touching edge
-            const delayFraction = travelUntilEdgeEm / totalTravelEm;
-            const delayPercent = Math.min(1, Math.max(0, delayFraction));
-            const timingFunction = `cubic-bezier(${delayPercent.toFixed(3)}, 0, 1, 1)`;
 
+            const delayMs = calculatePreHighlightDelay(syllable, referenceFont, currentDuration);
 
             syllable._nextSyllableInWord = nextSyllable;
-            syllable._preHighlightDurationMs = currentDuration;
-            syllable._preHighlightTimingFunction = timingFunction;
+            syllable._preHighlightDurationMs = Math.max(0, currentDuration - delayMs);
+            syllable._preHighlightDelayMs = Math.max(0, delayMs);
           }
         });
 
@@ -673,6 +740,11 @@ class LyricsPlusRenderer {
 
         const targetContainer = isCurrentWordBackground ? (backgroundContainer || (backgroundContainer = document.createElement('div'), backgroundContainer.className = 'background-vocal-container', currentLine.appendChild(backgroundContainer))) : mainContainer;
         targetContainer.appendChild(wordSpan);
+
+        // Save the last syllable of the current word to be connected to the next word
+        pendingSyllable = syllableElements.length > 0 ? syllableElements[syllableElements.length - 1] : null;
+        pendingSyllableFont = referenceFont;
+
         wordBuffer = [];
         currentWordStartTime = null;
         currentWordEndTime = null;
@@ -692,7 +764,7 @@ class LyricsPlusRenderer {
           }
         });
       } else {
-        mainContainer.textContent = line.text;
+        mainContainer.textContent = this._getDataText(line);
       }
       fragment.appendChild(currentLine);
     });
@@ -719,7 +791,7 @@ class LyricsPlusRenderer {
       }
       const mainContainer = document.createElement('div');
       mainContainer.className = 'main-vocal-container';
-      mainContainer.textContent = line.text;
+      mainContainer.textContent = this._getDataText(line);
       lineDiv.appendChild(mainContainer);
       // Use the new helper for translation container
       this._renderTranslationContainer(lineDiv, line, displayMode);
@@ -757,11 +829,10 @@ class LyricsPlusRenderer {
           const romanizationContainer = document.createElement('div');
           romanizationContainer.classList.add('lyrics-romanization-container');
           lineData.syllabus.forEach(syllable => {
-            const romanizedText = syllable.romanizedText || syllable.text;
-            if (romanizedText) {
+            if (this._getDataText(syllable, false)) {
               const sylSpan = document.createElement('span');
               sylSpan.className = 'lyrics-syllable'; // Use lyrics-syllable class for highlighting
-              sylSpan.textContent = romanizedText;
+              sylSpan.textContent = this._getDataText(syllable, false);
               // Copy timing data for highlighting
               sylSpan.dataset.startTime = syllable.time;
               sylSpan.dataset.duration = syllable.duration;
@@ -956,7 +1027,7 @@ class LyricsPlusRenderer {
       const firstStartTime = parseFloat(firstLine.dataset.startTime);
       if (firstStartTime >= 7.0) {
         const classesToInherit = [...firstLine.classList].filter(c => ['rtl-text', 'singer-left', 'singer-right'].includes(c));
-        container.insertBefore(createGapLine(0, firstStartTime - 0.85, classesToInherit), firstLine);
+        container.insertBefore(createGapLine(0, firstStartTime - 0.66, classesToInherit), firstLine);
       }
     }
     const gapLinesToInsert = [];
@@ -965,7 +1036,7 @@ class LyricsPlusRenderer {
         const nextLine = originalLines[index + 1];
         if (parseFloat(nextLine.dataset.startTime) - parseFloat(line.dataset.endTime) >= 7.0) {
           const classesToInherit = [...nextLine.classList].filter(c => ['rtl-text', 'singer-left', 'singer-right'].includes(c));
-          gapLinesToInsert.push({ gapLine: createGapLine(parseFloat(line.dataset.endTime) + 0.4, parseFloat(nextLine.dataset.startTime) - 0.85, classesToInherit), nextLine });
+          gapLinesToInsert.push({ gapLine: createGapLine(parseFloat(line.dataset.endTime) + 0.4, parseFloat(nextLine.dataset.startTime) - 0.66, classesToInherit), nextLine });
         }
       }
     });
@@ -1050,11 +1121,12 @@ class LyricsPlusRenderer {
    * @param {Function} fetchAndDisplayLyricsFn - The function to fetch and display lyrics.
    * @param {Function} setCurrentDisplayModeAndRefetchFn - The function to set display mode and refetch.
    */
-  displayLyrics(lyrics, source = "Unknown", type = "Line", lightweight = false, songWriters, songInfo, displayMode = 'none', currentSettings = {}, fetchAndDisplayLyricsFn, setCurrentDisplayModeAndRefetchFn) {
+  displayLyrics(lyrics, source = "Unknown", type = "Line", lightweight = false, songWriters, songInfo, displayMode = 'none', currentSettings = {}, fetchAndDisplayLyricsFn, setCurrentDisplayModeAndRefetchFn, largerTextMode = "lyrics") {
     this.lastKnownSongInfo = songInfo;
     this.fetchAndDisplayLyricsFn = fetchAndDisplayLyricsFn;
     this.setCurrentDisplayModeAndRefetchFn = setCurrentDisplayModeAndRefetchFn;
-
+    this.largerTextMode = largerTextMode;
+    
     const container = this._getContainer();
     if (!container) return;
 
@@ -1444,11 +1516,11 @@ class LyricsPlusRenderer {
     const nextSyllable = syllable._nextSyllableInWord;
     if (nextSyllable) {
       const preHighlightDuration = syllable._preHighlightDurationMs;
-      const timingFunction = syllable._preHighlightTimingFunction;
+      const preHighlightDelay = syllable._preHighlightDelayMs;
 
       const nextCharSpan = nextSyllable._cachedCharSpans?.[0];
       if (nextCharSpan) {
-        const preWipeAnim = `pre-wipe-char ${preHighlightDuration}ms ${timingFunction} forwards`;
+        const preWipeAnim = `pre-wipe-char ${preHighlightDuration}ms ${preHighlightDelay}ms forwards`;
         const currentAnim = nextCharSpan.style.animation;
 
         // More efficient string concatenation check
@@ -1460,7 +1532,7 @@ class LyricsPlusRenderer {
       // Batch style updates for next syllable
       const nextSyllableStyle = nextSyllable.style;
       nextSyllableStyle.setProperty('--pre-wipe-duration', `${preHighlightDuration}ms`);
-      nextSyllableStyle.setProperty('--pre-wipe-timing-function', timingFunction);
+      nextSyllableStyle.setProperty('--pre-wipe-delay', `${preHighlightDelay}ms`);
       nextSyllable.classList.add('pre-highlight');
     }
   }
@@ -1474,7 +1546,7 @@ class LyricsPlusRenderer {
     }
     syllable.classList.remove('highlight', 'finished', 'pre-highlight');
     syllable.style.removeProperty('--pre-wipe-duration');
-    syllable.style.removeProperty('--pre-wipe-timing-function');
+    syllable.style.removeProperty('--pre-wipe-delay');
     syllable.querySelectorAll('span.char').forEach(span => { span.style.animation = ''; });
   }
 
@@ -1791,7 +1863,7 @@ class LyricsPlusRenderer {
     
     options.push(translationOptionDiv);
 
-    // Always add Pronunciation option second (Show or Hide)
+    // Always add Pronunciation/Original option second (Show or Hide)
     const pronunciationOptionDiv = document.createElement('div');
     pronunciationOptionDiv.className = 'dropdown-option';
     
@@ -1801,7 +1873,7 @@ class LyricsPlusRenderer {
         <path d="M4.42071 14.8679C4.77605 14.8679 5.02011 14.6817 5.44699 14.2961L7.9329 12.0903H12.5463C14.6844 12.0903 15.838 10.9031 15.838 8.79859V3.29169C15.838 1.18717 14.6844 0 12.5463 0H3.29169C1.15361 0 0 1.18408 0 3.29169V8.79859C0 10.9062 1.15361 12.0903 3.29169 12.0903H3.63069V13.9574C3.63069 14.5141 3.91596 14.8679 4.42071 14.8679ZM4.71496 13.5548V11.4742C4.71496 11.0808 4.5685 10.9343 4.17503 10.9343H3.29478C1.83838 10.9343 1.15596 10.197 1.15596 8.79549V3.29478C1.15596 1.89932 1.83838 1.16362 3.29478 1.16362H12.5432C13.9933 1.16362 14.6819 1.89932 14.6819 3.29478V8.79549C14.6819 10.197 13.9933 10.9343 12.5432 10.9343H7.88595C7.49071 10.9343 7.28478 10.9938 7.01305 11.2761L4.71496 13.5548Z" fill="white"/>
         <path d="M3 4.74C3 4.33 3.32 4 3.7 4H8.09C8.48 4 8.79 4.33 8.79 4.73C8.79 5.13 8.48 5.47 8.09 5.47H3.71C3.61544 5.46741 3.52231 5.44621 3.43595 5.40761C3.34958 5.36902 3.27167 5.31378 3.20666 5.24505C3.14165 5.17633 3.09082 5.09547 3.05708 5.0071C3.02333 4.91872 3.00734 4.82456 3.01 4.73L3 4.74ZM3.7 6.2C3.32 6.2 3 6.54 3 6.94C3 7.34 3.32 7.68 3.7 7.68H5.2C5.58 7.68 5.9 7.35 5.9 6.94C5.9 6.54 5.58 6.2 5.2 6.2H3.7ZM10.24 4.73C10.24 4.33 10.56 4 10.94 4H12.44C12.82 4 13.14 4.33 13.14 4.73C13.14 5.13 12.82 5.47 12.44 5.47H10.94C10.8454 5.46741 10.7523 5.44621 10.6659 5.40761C10.5796 5.36902 10.5017 5.31378 10.4367 5.24505C10.3716 5.17633 10.3208 5.09547 10.2871 5.0071C10.2533 4.91872 10.2373 4.82456 10.24 4.73ZM8.05 6.21C7.66 6.21 7.35 6.55 7.35 6.95C7.35 7.35 7.66 7.69 8.05 7.69H10.26C10.65 7.69 10.96 7.36 10.96 6.95C10.96 6.55 10.65 6.21 10.26 6.21H8.07H8.05Z" fill="white"/>
       </svg>`;
-      pronunciationOptionDiv.innerHTML = `<span>${t('showPronunciation')}</span>${showPronunciationsSVG}`;
+      pronunciationOptionDiv.innerHTML = `<span>${this.largerTextMode == "romanization" ? t('showOriginal') : t('showPronunciation')}</span>${showPronunciationsSVG}`;
       pronunciationOptionDiv.addEventListener('click', () => {
         this.dropdownMenu.classList.add('hidden');
         let newMode = 'romanize';
@@ -1824,7 +1896,7 @@ class LyricsPlusRenderer {
           </clipPath>
         </defs>
       </svg>`;
-      pronunciationOptionDiv.innerHTML = `<span>${t('hidePronunciation')}</span>${hidePronunciationsSVG}`;
+      pronunciationOptionDiv.innerHTML = `<span>${this.largerTextMode == "romanization" ? t('hideOriginal') : t('hidePronunciation')}</span>${hidePronunciationsSVG}`;
       pronunciationOptionDiv.addEventListener('click', () => {
         this.dropdownMenu.classList.add('hidden');
         let newMode = 'none';
@@ -1838,7 +1910,7 @@ class LyricsPlusRenderer {
     }
     
     options.push(pronunciationOptionDiv);
-
+    
     // Add all options to dropdown in fixed order
     options.forEach(option => {
       this.dropdownMenu.appendChild(option);

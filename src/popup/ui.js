@@ -7,17 +7,14 @@ document.addEventListener('DOMContentLoaded', () => {
     const lightweightSwitchInput = document.getElementById('lightweight');
     const lyEnabledSwitchInput = document.getElementById('lyEnabled');
     const sponsorBlockSwitchInput = document.getElementById('sponsorblock');
-    const blurInactiveSwitchInput = document.getElementById('blurInactive');
+    const largerTextModeSelect = document.getElementById('largerTextMode');
     const dynamicBackgroundSwitchInput = document.getElementById('dynamicBackground');
-    const hideOffscreenSwitchInput = document.getElementById('hideOffscreen');
     const overrideGeminiPromptSwitchInput = document.getElementById('overrideGeminiPrompt');
     const customGeminiPromptTextarea = document.getElementById('customGeminiPrompt');
     const customGeminiPromptGroup = document.getElementById('customGeminiPromptGroup');
     
     // Verify critical elements exist (only warn for missing elements)
-    if (!blurInactiveSwitchInput) console.warn('YouLy+: blurInactiveSwitchInput not found');
     if (!dynamicBackgroundSwitchInput) console.warn('YouLy+: dynamicBackgroundSwitchInput not found');
-    if (!hideOffscreenSwitchInput) console.warn('YouLy+: hideOffscreenSwitchInput not found');
     if (!overrideGeminiPromptSwitchInput) console.warn('YouLy+: overrideGeminiPromptSwitchInput not found');
 
     const clearCacheButton = document.getElementById('clearCache');
@@ -82,9 +79,8 @@ document.addEventListener('DOMContentLoaded', () => {
         lightweight: false,
         isEnabled: true,
         useSponsorBlock: true,
-        blurInactive: true,
+        largerTextMode: 'lyrics',
         dynamicPlayer: true,
-        hideOffscreen: true,
         overrideGeminiPrompt: false,
         customGeminiPrompt: '',
     };
@@ -143,17 +139,13 @@ document.addEventListener('DOMContentLoaded', () => {
         lyEnabledSwitchInput.checked = currentSettings.isEnabled;
         sponsorBlockSwitchInput.checked = currentSettings.useSponsorBlock;
         
-        if (blurInactiveSwitchInput) {
-            blurInactiveSwitchInput.checked = currentSettings.blurInactive;
-            console.log("YouLy+: Set blurInactive to:", currentSettings.blurInactive);
+        if (largerTextModeSelect) {
+            largerTextModeSelect.value = currentSettings.largerTextMode;
+            console.log("YouLy+: Set largerTextMode to:", currentSettings.largerTextMode);
         }
         if (dynamicBackgroundSwitchInput) {
             dynamicBackgroundSwitchInput.checked = currentSettings.dynamicPlayer;
             console.log("YouLy+: Set dynamicPlayer to:", currentSettings.dynamicPlayer);
-        }
-        if (hideOffscreenSwitchInput) {
-            hideOffscreenSwitchInput.checked = currentSettings.hideOffscreen;
-            console.log("YouLy+: Set hideOffscreen to:", currentSettings.hideOffscreen);
         }
         if (overrideGeminiPromptSwitchInput) {
             overrideGeminiPromptSwitchInput.checked = currentSettings.overrideGeminiPrompt;
@@ -175,9 +167,8 @@ document.addEventListener('DOMContentLoaded', () => {
                 lightweight: false,
                 isEnabled: true,
                 useSponsorBlock: true,
-                blurInactive: true,
+                largerTextMode: 'lyrics',
                 dynamicPlayer: true,
-                hideOffscreen: true,
                 overrideGeminiPrompt: false,
                 customGeminiPrompt: '',
             };
@@ -201,9 +192,8 @@ document.addEventListener('DOMContentLoaded', () => {
             lightweight: lightweightSwitchInput.checked,
             isEnabled: lyEnabledSwitchInput.checked,
             useSponsorBlock: sponsorBlockSwitchInput.checked,
-            blurInactive: blurInactiveSwitchInput ? blurInactiveSwitchInput.checked : false,
+            largerTextMode: largerTextModeSelect ? largerTextModeSelect.value : 'lyrics',
             dynamicPlayer: dynamicBackgroundSwitchInput ? dynamicBackgroundSwitchInput.checked : false,
-            hideOffscreen: hideOffscreenSwitchInput ? hideOffscreenSwitchInput.checked : false,
             overrideGeminiPrompt: overrideGeminiPromptSwitchInput ? overrideGeminiPromptSwitchInput.checked : false,
             customGeminiPrompt: customGeminiPromptTextarea ? customGeminiPromptTextarea.value : '',
         };
@@ -233,6 +223,9 @@ document.addEventListener('DOMContentLoaded', () => {
 
     // --- Event Listeners for Settings (now on inputs) ---
     lyricsProviderSelect.addEventListener('change', saveAndApplySettings);
+    if (largerTextModeSelect) {
+        largerTextModeSelect.addEventListener('change', saveAndApplySettings);
+    }
     
     // Textbox event listener
     if (customGeminiPromptTextarea) {
@@ -240,7 +233,7 @@ document.addEventListener('DOMContentLoaded', () => {
     }
     
     // For switches, the 'change' event is dispatched manually by the .m3-switch click handler
-    [wordByWordSwitchInput, lightweightSwitchInput, lyEnabledSwitchInput, sponsorBlockSwitchInput, blurInactiveSwitchInput, dynamicBackgroundSwitchInput, hideOffscreenSwitchInput, overrideGeminiPromptSwitchInput].forEach(input => {
+    [wordByWordSwitchInput, lightweightSwitchInput, lyEnabledSwitchInput, sponsorBlockSwitchInput, dynamicBackgroundSwitchInput, overrideGeminiPromptSwitchInput].forEach(input => {
         if (input) {
             input.addEventListener('change', (e) => {
                 // Handle special case for overrideGeminiPrompt to toggle textbox visibility

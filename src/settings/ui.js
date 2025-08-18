@@ -37,6 +37,7 @@ function setupAutoSaveListeners() {
         { id: 'useSongPaletteFullscreen', key: 'useSongPaletteFullscreen', type: 'checkbox' },
         { id: 'useSongPaletteAllModes', key: 'useSongPaletteAllModes', type: 'checkbox' },
         { id: 'overridePaletteColor', key: 'overridePaletteColor', type: 'value' },
+        { id: 'larger-text-mode', key: 'largerTextMode', type: 'value' },
         // Translation
         { id: 'translation-provider', key: 'translationProvider', type: 'value' },
         { id: 'gemini-model', key: 'geminiModel', type: 'value' },
@@ -96,7 +97,8 @@ function updateFormElements(settings) {
     document.getElementById('useSongPaletteFullscreen').checked = settings.useSongPaletteFullscreen;
     document.getElementById('useSongPaletteAllModes').checked = settings.useSongPaletteAllModes;
     document.getElementById('overridePaletteColor').value = settings.overridePaletteColor;
-
+    document.getElementById('larger-text-mode').value = settings.largerTextMode;
+    
     // Custom KPoe Server URL
     const customKpoeUrlInput = document.getElementById('custom-kpoe-url');
     if (customKpoeUrlInput) {

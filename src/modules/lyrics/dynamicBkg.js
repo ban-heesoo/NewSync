@@ -52,6 +52,7 @@ function handleContextLost(event) {
 }
 
 function handleContextRestored() {
+    console.log("LYPLUS: WebGL context restored. Re-initializing...");
     // Re-initialize everything. LYPLUS_setupBlurEffect handles cleanup of old elements.
     LYPLUS_setupBlurEffect();
     // The IntersectionObserver inside LYPLUS_setupBlurEffect will restart the animation if visible.
@@ -249,6 +250,7 @@ function getDefaultMasterPalette() {
 
 // --- Main Setup Function ---
 function LYPLUS_setupBlurEffect() {
+    console.log("LYPLUS: Setting up WebGL with GPU blur...");
     if (typeof currentSettings !== 'undefined' && currentSettings.dynamicPlayer) {
         document.querySelector('#layout')?.classList.add("dynamic-player");
     }
@@ -346,10 +348,13 @@ function LYPLUS_setupBlurEffect() {
         entries.forEach(entry => {
             if (entry.isIntersecting) {
                 if (!globalAnimationId) {
+                    console.log("LYPLUS: Canvas is visible, starting animation.");
+                    lastFrameTime = performance.now(); // Reset time to avoid large deltaTime jump
                     globalAnimationId = requestAnimationFrame(animateWebGLBackground);
                 }
             } else {
                 if (globalAnimationId) {
+                    console.log("LYPLUS: Canvas is not visible, stopping animation.");
                     cancelAnimationFrame(globalAnimationId);
                     globalAnimationId = null;
                 }
@@ -359,10 +364,7 @@ function LYPLUS_setupBlurEffect() {
 
     observer.observe(webglCanvas);
 
-    // WebGL setup complete
-    if (gl) {
-        // Animation will start when visible
-    }
+    console.log("LYPLUS: WebGL setup complete with GPU blur pipeline. Animation will start when visible.");
     return blurContainer;
 }
 
@@ -506,16 +508,8 @@ function LYPLUS_requestProcessNewArtwork(artworkUrlFromEvent) {
     if (artworkIdentifierToProcess === null) {
         artworkIdentifierToProcess = NO_ARTWORK_IDENTIFIER;
     }
-    // Check if we're already processing this artwork
-    if (isProcessingArtwork && currentProcessingArtworkIdentifier === artworkIdentifierToProcess) {
-        return;
-    }
-
-    // Check if this artwork was already processed
-    if (lastAppliedArtworkIdentifier === artworkIdentifierToProcess) {
-        return;
-    }
-
+    if (artworkIdentifierToProcess === lastAppliedArtworkIdentifier && songPaletteTransitionProgress >= 1.0) return;
+    if (artworkIdentifierToProcess === currentProcessingArtworkIdentifier || artworkIdentifierToProcess === pendingArtworkUrl) return;
     pendingArtworkUrl = artworkIdentifierToProcess;
     if (!isProcessingArtwork) {
         processNextArtworkFromQueue();
@@ -527,12 +521,14 @@ function processNextArtworkFromQueue() {
     isProcessingArtwork = true;
     currentProcessingArtworkIdentifier = pendingArtworkUrl;
     pendingArtworkUrl = null;
+    console.log("LYPLUS: Processing artwork/state:", currentProcessingArtworkIdentifier);
     const previousPaletteForTransition = currentTargetMasterArtworkPalette.length === MASTER_PALETTE_SIZE ?
         currentTargetMasterArtworkPalette.map(c => ({ ...c })) :
         getDefaultMasterPalette();
     const finishProcessing = (newTargetPalette) => {
         currentTargetMasterArtworkPalette = newTargetPalette;
         updateMasterPaletteTexture(previousPaletteForTransition, currentTargetMasterArtworkPalette);
+
         songPaletteTransitionProgress = 0.0;
         needsAnimation = true;
 
@@ -542,6 +538,7 @@ function processNextArtworkFromQueue() {
             lastFrameTime = performance.now();
             globalAnimationId = requestAnimationFrame(animateWebGLBackground);
         }
+
         lastAppliedArtworkIdentifier = currentProcessingArtworkIdentifier;
         isProcessingArtwork = false;
         currentProcessingArtworkIdentifier = null;
@@ -550,6 +547,7 @@ function processNextArtworkFromQueue() {
         }
     };
     if (currentProcessingArtworkIdentifier === NO_ARTWORK_IDENTIFIER) {
+        console.log("LYPLUS: No artwork detected. Transitioning to default palette.");
         finishProcessing(getDefaultMasterPalette());
         return;
     }
@@ -685,7 +683,6 @@ function animateWebGLBackground() {
     }
 
     // GPGPU Cell State Update (only in non-lightweight mode)
-
     if (currentSettings.lightweight !== true) {
         // Pass 1: GPGPU Update 8x5 Cell States (A -> B)
         gl.bindFramebuffer(gl.FRAMEBUFFER, cellStateFramebuffer);
@@ -709,11 +706,11 @@ function animateWebGLBackground() {
     // Pass 2: Render 8x5 Grid to an Off-screen 16:9 Texture, stretching it.
     gl.bindFramebuffer(gl.FRAMEBUFFER, renderFramebuffer);
     gl.framebufferTexture2D(gl.FRAMEBUFFER, gl.COLOR_ATTACHMENT0, gl.TEXTURE_2D, renderTexture, 0);
-    // FIX: Set the viewport to the 16:9 texture's dimensions.
     gl.viewport(0, 0, STRETCHED_GRID_WIDTH, STRETCHED_GRID_HEIGHT);
     gl.useProgram(glProgram);
     gl.enableVertexAttribArray(a_positionLocation);
     gl.vertexAttribPointer(a_positionLocation, 2, gl.FLOAT, false, 0, 0);
+    
     gl.uniform1f(u_songPaletteTransitionProgressLocation, songPaletteTransitionProgress);
     gl.activeTexture(gl.TEXTURE0);
     gl.bindTexture(gl.TEXTURE_2D, paletteTexture);
@@ -728,11 +725,10 @@ function animateWebGLBackground() {
     gl.enableVertexAttribArray(a_blur_positionLocation);
     gl.vertexAttribPointer(a_blur_positionLocation, 2, gl.FLOAT, false, 0, 0);
 
-
     // Pass 3: Horizontal Blur (stretched texture -> blurTextureA)
     gl.bindFramebuffer(gl.FRAMEBUFFER, blurFramebuffer);
     gl.framebufferTexture2D(gl.FRAMEBUFFER, gl.COLOR_ATTACHMENT0, gl.TEXTURE_2D, blurTextureA, 0);
-    gl.viewport(0, 0, blurDimensions.width, blurDimensions.height); 
+    gl.viewport(0, 0, blurDimensions.width, blurDimensions.height);
     gl.uniform2f(u_blur_directionLocation, 1.0, 0.0);
     gl.uniform2f(u_blur_resolutionLocation, STRETCHED_GRID_WIDTH, STRETCHED_GRID_HEIGHT);
     gl.activeTexture(gl.TEXTURE0);
@@ -750,6 +746,7 @@ function animateWebGLBackground() {
     gl.uniform1i(u_blur_imageLocation, 0);
     gl.drawArrays(gl.TRIANGLES, 0, 6);
 
+    // Continue animation only if needed
     if (shouldContinueAnimation) {
         globalAnimationId = requestAnimationFrame(animateWebGLBackground);
     } else {
