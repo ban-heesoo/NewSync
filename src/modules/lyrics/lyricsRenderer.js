@@ -1036,7 +1036,7 @@ class LyricsPlusRenderer {
         const nextLine = originalLines[index + 1];
         if (parseFloat(nextLine.dataset.startTime) - parseFloat(line.dataset.endTime) >= 7.0) {
           const classesToInherit = [...nextLine.classList].filter(c => ['rtl-text', 'singer-left', 'singer-right'].includes(c));
-          gapLinesToInsert.push({ gapLine: createGapLine(parseFloat(line.dataset.endTime) + 0.4, parseFloat(nextLine.dataset.startTime) - 0.66, classesToInherit), nextLine });
+          gapLinesToInsert.push({ gapLine: createGapLine(parseFloat(line.dataset.endTime) + 0.31, parseFloat(nextLine.dataset.startTime) - 0.66, classesToInherit), nextLine });
         }
       }
     });
