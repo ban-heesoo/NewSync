@@ -156,7 +156,6 @@ ytmusic-app-layout[is-mweb-modernization-enabled] #lyrics-plus-container[style*=
     opacity: 0.7;
     color: #ffffff85;
     font-size: 25px;
-    line-height: 1.4em;
     cursor: pointer;
     transform-origin: left;
     transform: translateY(var(--lyrics-scroll-offset, 0px)) translateZ(1px);
