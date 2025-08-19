@@ -51,6 +51,9 @@ async function fetchAndDisplayLyrics(currentSong, isNewSong = false, forceReload
         effectiveMode = 'none';
       }
       currentDisplayMode = effectiveMode; // Persist auto-applied mode for this song session
+    } else if (currentDisplayMode !== 'none') {
+      // If not a new song but display mode was manually changed, use the current display mode
+      effectiveMode = currentDisplayMode;
     }
 
     let lyricsObjectToDisplay;
@@ -207,6 +210,16 @@ async function fetchAndDisplayLyrics(currentSong, isNewSong = false, forceReload
 
     lastFetchedLyrics = lyricsObjectToDisplay; // Store the fetched lyrics
 
+    // Determine the appropriate largerTextMode based on display mode
+    let effectiveLargerTextMode = currentSettings.largerTextMode;
+    if (finalDisplayModeForRenderer === 'romanize') {
+      effectiveLargerTextMode = 'romanization';
+    } else if (finalDisplayModeForRenderer === 'translate') {
+      effectiveLargerTextMode = 'lyrics';
+    } else if (finalDisplayModeForRenderer === 'both') {
+      effectiveLargerTextMode = currentSettings.largerTextMode; // Keep user preference for both mode
+    }
+
     if (LyricsPlusAPI.displayLyrics) {
       LyricsPlusAPI.displayLyrics(
         lyricsObjectToDisplay,
@@ -219,7 +232,7 @@ async function fetchAndDisplayLyrics(currentSong, isNewSong = false, forceReload
         currentSettings, // Pass currentSettings
         fetchAndDisplayLyrics, // Pass the function itself
         setCurrentDisplayModeAndRender, // Pass the function itself (renamed)
-        currentSettings.largerTextMode // Pass the new setting
+        effectiveLargerTextMode // Pass the dynamically determined largerTextMode
       );
     } else {
       console.error("displayLyrics is not available.");
