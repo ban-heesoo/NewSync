@@ -930,7 +930,7 @@ class LyricsPlusRenderer {
     const isWordByWordMode = lyrics.type === "Word" && currentSettings.wordByWord;
     container.classList.toggle('word-by-word-mode', isWordByWordMode);
     container.classList.toggle('line-by-line-mode', !isWordByWordMode);
-    container.classList.toggle('romanized-big-mode', largerTextMode != "lyrics")
+    container.classList.toggle('romanized-big-mode', this.largerTextMode != "lyrics")
 
     // Re-determine text direction and dual-side layout (copied from displayLyrics)
     let hasRTL = false, hasLTR = false;
