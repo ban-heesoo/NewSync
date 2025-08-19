@@ -889,6 +889,11 @@ ytmusic-player-page[player-fullscreened] #lyrics-plus-translation-dropdown {
     direction: ltr !important; /* Always force LTR for romanization */
 }
 
+.lyrics-romanization-container.rtl-text {
+    direction: rtl !important;
+    /* Always force LTR for big-mode */
+}
+
 /* ==========================================================================
    ENHANCED BACKGROUND & DYNAMIC PLAYER LAYOUT
    ========================================================================== */
