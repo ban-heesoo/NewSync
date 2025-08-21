@@ -887,10 +887,35 @@ ytmusic-player-page[player-fullscreened] #lyrics-plus-translation-dropdown {
 .lyrics-romanization-container {
     direction: ltr !important; /* Always force LTR for romanization */
 }
-
 .lyrics-romanization-container.rtl-text {
     direction: rtl !important;
     /* Always force LTR for big-mode */
+}
+
+/* ==========================================================================
+   ROMANIZED BIG MODE - Controls which text appears larger
+   ========================================================================== */
+
+/* When romanized-big-mode is active (largerTextMode = "romanization") */
+.lyrics-plus-integrated.romanized-big-mode .lyrics-line .main-vocal-container {
+    /* Main container shows romanized text (larger) */
+    font-size: 1em; /* Normal size */
+}
+
+.lyrics-plus-integrated.romanized-big-mode .lyrics-line .lyrics-romanization-container {
+    /* Romanization container shows original text (smaller) */
+    font-size: 0.6em; /* Smaller size */
+}
+
+/* When romanized-big-mode is NOT active (largerTextMode = "lyrics") */
+.lyrics-plus-integrated:not(.romanized-big-mode) .lyrics-line .main-vocal-container {
+    /* Main container shows original text (larger) */
+    font-size: 1em; /* Normal size */
+}
+
+.lyrics-plus-integrated:not(.romanized-big-mode) .lyrics-line .lyrics-romanization-container {
+    /* Romanization container shows romanized text (smaller) */
+    font-size: 0.6em; /* Smaller size */
 }
 
 /* ==========================================================================

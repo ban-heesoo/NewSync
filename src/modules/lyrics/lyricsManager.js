@@ -211,14 +211,7 @@ async function fetchAndDisplayLyrics(currentSong, isNewSong = false, forceReload
     lastFetchedLyrics = lyricsObjectToDisplay; // Store the fetched lyrics
 
     // Determine the appropriate largerTextMode based on display mode
-    let effectiveLargerTextMode = currentSettings.largerTextMode;
-    if (finalDisplayModeForRenderer === 'romanize') {
-      effectiveLargerTextMode = 'romanization';
-    } else if (finalDisplayModeForRenderer === 'translate') {
-      effectiveLargerTextMode = 'lyrics';
-    } else if (finalDisplayModeForRenderer === 'both') {
-      effectiveLargerTextMode = currentSettings.largerTextMode; // Keep user preference for both mode
-    }
+    let effectiveLargerTextMode = currentSettings.largerTextMode; // Always respect user preference
 
     if (LyricsPlusAPI.displayLyrics) {
       LyricsPlusAPI.displayLyrics(
