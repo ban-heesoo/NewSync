@@ -546,10 +546,10 @@ class LyricsPlusRenderer {
       const emWidthPx = this._getTextWidth('M', font);
       const syllableWidthEm = emWidthPx > 0 ? (syllableWidthPx / emWidthPx) : 0;
 
-      const gradientWidthEm = 0.5; // width of the wipe block
-      const edgeOffsetEm = 0.25; // when to trigger relative to syllable end
+      const gradientWidthEm = 0.75; // width of the wipe block
+      const edgeOffsetEm = 0.375; // when to trigger relative to syllable end
 
-      const initialPositionEm = -0.25; // starting leading-edge position
+      const initialPositionEm = -0.375; // starting leading-edge position
       const finalPositionEm = syllableWidthEm + gradientWidthEm;
       const triggerPositionEm = syllableWidthEm - edgeOffsetEm;
 
