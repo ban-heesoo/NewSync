@@ -612,18 +612,18 @@ class LyricsPlusRenderer {
         let maxScale = 1.07; // Default scale
 
         if (shouldEmphasize) {
-          const minDuration = 1000; // The duration (in ms) at which the effect starts.
-          const maxDuration = 3000; // The duration at which the effect reaches its maximum.
-          const easingPower = 3.0;  // The power for the ease-in curve.
+          const minDuration = 1000; 
+          const maxDuration = 3000; 
+          const easingPower = 3.0; 
 
           const progress = Math.min(1, Math.max(0, (totalDuration - minDuration) / (maxDuration - minDuration)));
           const easedProgress = Math.pow(progress, easingPower);
 
-          // 3. Map the eased progress to the final CSS variable values.
-          maxScale = 1.0 + 0.05 + easedProgress * 0.10; // Used for both scale and offset calculation
+          maxScale = 1.0 + 0.05 + easedProgress * 0.10; 
+
           const shadowIntensity = 0.4 + easedProgress * 0.4;
-          const normalizedGrowth = (maxScale - 1.0) / 0.13; // Remaps [1.07, 1.20] to [0, 1]
-          const translateYPeak = -normalizedGrowth * 2.85; // Map [0, 1] to [0, -3.0]
+          const normalizedGrowth = (maxScale - 1.0) / 0.13; 
+          const translateYPeak = -normalizedGrowth * 2.5; 
 
           wordSpan.style.setProperty('--max-scale', maxScale.toFixed(3));
           wordSpan.style.setProperty('--shadow-intensity', shadowIntensity.toFixed(3));
