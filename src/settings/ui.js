@@ -539,15 +539,6 @@ function toggleGeminiRomanizePromptVisibility() {
     }
 }
 
-// Event listener for romanization-provider change is now handled in setupAutoSaveListeners
-
-// Event listener for translation-provider change is now handled in setupAutoSaveListeners
-
-document.getElementById('play-example').addEventListener('click', () => {
-    startFullPreviewSync(currentSettings);
-});
-
-// Event listener for API key visibility toggle button
 document.getElementById('toggle-gemini-api-key-visibility').addEventListener('click', () => {
     const apiKeyInput = document.getElementById('gemini-api-key');
     const toggleButtonIcon = document.querySelector('#toggle-gemini-api-key-visibility .material-symbols-outlined');
