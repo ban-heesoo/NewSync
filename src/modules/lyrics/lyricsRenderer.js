@@ -4,7 +4,15 @@ class LyricsPlusRenderer {
    * Constructor for the LyricsPlusRenderer.
    * Initializes state variables and sets up the initial environment for the lyrics display.
    */
-  constructor() {
+  constructor(uiConfig = {}) {
+    // --- Configuration ---
+    this.uiConfig = {
+      player: uiConfig.player || '[data-player]',
+      patchParent: uiConfig.patchParent || '.ytmusic-player-page',
+      selectors: uiConfig.selectors || ['.ytmusic-player-page', '.ytmusic-player'],
+      ...uiConfig
+    };
+
     // --- State Variables ---
     this.lyricsAnimationFrameId = null;
     this.currentPrimaryActiveLine = null;
@@ -60,6 +68,41 @@ class LyricsPlusRenderer {
       const context = this;
       clearTimeout(timeout);
       timeout = setTimeout(() => func.apply(context, args), delay);
+    };
+  }
+
+  /**
+   * Throttle utility for performance optimization.
+   * @param {Function} func - The function to throttle.
+   * @param {number} limit - The throttle limit in milliseconds.
+   * @returns {Function} - The throttled function.
+   */
+  _throttle(func, limit) {
+    let inThrottle;
+    return function (...args) {
+      if (!inThrottle) {
+        func.apply(this, args);
+        inThrottle = true;
+        setTimeout(() => inThrottle = false, limit);
+      }
+    };
+  }
+
+  /**
+   * Memoization utility for expensive calculations.
+   * @param {Function} func - The function to memoize.
+   * @returns {Function} - The memoized function.
+   */
+  _memoize(func) {
+    const cache = new Map();
+    return function (...args) {
+      const key = JSON.stringify(args);
+      if (cache.has(key)) {
+        return cache.get(key);
+      }
+      const result = func.apply(this, args);
+      cache.set(key, result);
+      return result;
     };
   }
 
@@ -148,16 +191,23 @@ class LyricsPlusRenderer {
    * @returns {HTMLElement | null} - The lyrics container element.
    */
   _getContainer() {
-    if (!this.lyricsContainer) {
-      this.lyricsContainer = document.getElementById('lyrics-plus-container');
+    try {
       if (!this.lyricsContainer) {
-        this._createLyricsContainer();
+        this.lyricsContainer = document.getElementById('lyrics-plus-container');
+        if (!this.lyricsContainer) {
+          this.lyricsContainer = this._createLyricsContainer();
+        }
       }
+      
+      if (this.lyricsContainer && this.lyricsContainer.parentElement && !this.scrollEventHandlerAttached) {
+        this._setupUserScrollListener();
+      }
+      
+      return this.lyricsContainer;
+    } catch (error) {
+      console.error('Error in _getContainer:', error);
+      return null;
     }
-    if (this.lyricsContainer && this.lyricsContainer.parentElement && !this.scrollEventHandlerAttached) {
-      this._setupUserScrollListener();
-    }
-    return this.lyricsContainer;
   }
 
   /**
@@ -1955,11 +2005,12 @@ class LyricsPlusRenderer {
    * Cleans up the lyrics container and resets the state for the next song.
    */
   cleanupLyrics() {
-    // ---  Animation Frame Cleanup ---
-    if (this.lyricsAnimationFrameId) {
-      cancelAnimationFrame(this.lyricsAnimationFrameId);
-      this.lyricsAnimationFrameId = null;
-    }
+    try {
+      // ---  Animation Frame Cleanup ---
+      if (this.lyricsAnimationFrameId) {
+        cancelAnimationFrame(this.lyricsAnimationFrameId);
+        this.lyricsAnimationFrameId = null;
+      }
 
     // --- Touch State Cleanup ---
     if (this.touchState) {
@@ -2089,6 +2140,9 @@ class LyricsPlusRenderer {
 
     // --- Font Cache Cleanup ---
     this.fontCache = {};
+    } catch (error) {
+      console.error('Error in cleanupLyrics:', error);
+    }
   }
 }
 
