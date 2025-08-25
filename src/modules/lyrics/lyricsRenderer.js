@@ -43,6 +43,9 @@ class LyricsPlusRenderer {
     this.isUserControllingScroll = false;
     this.userScrollRevertTimer = null; // Timer to revert control to the player
 
+    // --- Settings ---
+    this.largerTextMode = "lyrics"; // Initialize to default
+
     // --- Initial Setup ---
     // This call ensures the container is found or created and listeners are attached.
     this._getContainer();
@@ -118,6 +121,35 @@ class LyricsPlusRenderer {
     // \s matches any whitespace character.
     // The `u` flag is for Unicode support.
     return /^[\p{Script=Latin}\p{N}\p{P}\p{S}\s]*$/u.test(text);
+  }
+
+  /**
+   * Gets the text content for a lyrics object based on the larger text mode setting.
+   * In romanization mode, it swaps what appears in main container vs romanization container.
+   * @param {object} normal - The lyrics object (line or syllable).
+   * @param {boolean} isOriginal - Whether this is for the original/main container (true) or translation/romanization container (false).
+   * @returns {string} - The appropriate text content.
+   */
+  _getDataText(normal, isOriginal = true) {
+    if (!normal) return ''; // Handle null/undefined 'normal' object
+
+    if (this.largerTextMode === "romanization") {
+      if (isOriginal) {
+        // Main/background container in romanization mode: show romanized
+        return normal.romanizedText || normal.text || '';
+      } else {
+        // Translation/romanization container in romanization mode: show original
+        return normal.text || '';
+      }
+    } else {
+      if (isOriginal) {
+        // Main/background container in lyrics mode: show original
+        return normal.text || '';
+      } else {
+        // Translation/romanization container in lyrics mode: show romanized
+        return normal.romanizedText || normal.text || '';
+      }
+    }
   }
 
   /**
@@ -517,7 +549,7 @@ class LyricsPlusRenderer {
       currentLine.dataset.endTime = line.endTime;
       const singerClass = line.element?.singer ? (singerClassMap[line.element.singer] || 'singer-left') : 'singer-left';
       currentLine.classList.add(singerClass);
-      if (this._isRTL(line.text)) currentLine.classList.add('rtl-text');
+      if (this._isRTL(this._getDataText(line, true))) currentLine.classList.add('rtl-text');
       if (!currentLine.hasClickListener) {
         currentLine.addEventListener('click', this._onLyricClick.bind(this));
         currentLine.hasClickListener = true;
@@ -545,27 +577,27 @@ class LyricsPlusRenderer {
         const totalDuration = currentWordEndTime - currentWordStartTime;
         const shouldEmphasize = !lightweight && !this._isRTL(combinedText) && !this._isCJK(combinedText) && combinedText.trim().length <= 7 && totalDuration >= 1000;
 
-        let maxScale = 1.07; // Default scale
+        let maxScale = 1.03; // Reduced from 1.07 - less dramatic default scale
 
         if (shouldEmphasize) {
           const minDuration = 1000; 
           const maxDuration = 3000; 
-          const easingPower = 3.0; 
+          const easingPower = 2.0; // Reduced from 3.0 - gentler easing
 
           const progress = Math.min(1, Math.max(0, (totalDuration - minDuration) / (maxDuration - minDuration)));
           const easedProgress = Math.pow(progress, easingPower);
 
-          maxScale = 1.0 + 0.05 + easedProgress * 0.10; 
+          maxScale = 1.0 + 0.03 + easedProgress * 0.05; // Reduced from 0.05 + 0.10 - much smaller scaling
 
-          const shadowIntensity = 0.4 + easedProgress * 0.4;
-          const normalizedGrowth = (maxScale - 1.0) / 0.13; 
-          const translateYPeak = -normalizedGrowth * 2.5; 
+          const shadowIntensity = 0.4 + easedProgress * 0.4; // Restored bright glow - back to original values
+          const normalizedGrowth = (maxScale - 1.0) / 0.08; // Adjusted denominator for new scale range
+          const translateYPeak = -normalizedGrowth * 1.5; // Reduced from 2.5 - less vertical movement 
 
           wordSpan.style.setProperty('--max-scale', maxScale.toFixed(3));
           wordSpan.style.setProperty('--shadow-intensity', shadowIntensity.toFixed(3));
           wordSpan.style.setProperty('--translate-y-peak', translateYPeak.toFixed(3));
         }
-        wordSpan.style.setProperty('--min-scale', Math.max(1.0, Math.min(1.06, 1.02)));
+        wordSpan.style.setProperty('--min-scale', Math.max(1.0, Math.min(1.02, 1.01))); // Reduced from 1.06/1.02 to 1.02/1.01
         wordSpan.dataset.totalDuration = totalDuration;
 
         let isCurrentWordBackground = wordBuffer[0].isBackground || false;
@@ -594,7 +626,7 @@ class LyricsPlusRenderer {
             sylSpan.addEventListener('click', this._onLyricClick.bind(this));
             sylSpan.hasClickListener = true;
           }
-          if (this._isRTL(s.text)) sylSpan.classList.add('rtl-text');
+          if (this._isRTL(this._getDataText(s))) sylSpan.classList.add('rtl-text');
 
           // Store syllable for pre-highlight calculation
           syllableElements.push(sylSpan);
@@ -602,12 +634,12 @@ class LyricsPlusRenderer {
           const charSpansForSyllable = [];
 
           if (s.isBackground) {
-            sylSpan.textContent = s.text.replace(/[()]/g, '');
+            sylSpan.textContent = this._getDataText(s).replace(/[()]/g, '');
           } else {
             if (shouldEmphasize) {
               wordSpan.classList.add('growable');
               let charIndex = 0;
-              s.text.split('').forEach(char => {
+              this._getDataText(s).split('').forEach(char => {
                 if (char === ' ') {
                   sylSpan.appendChild(document.createTextNode(' '));
                 } else {
@@ -622,7 +654,7 @@ class LyricsPlusRenderer {
                 }
               });
             } else {
-              sylSpan.textContent = s.text;
+              sylSpan.textContent = this._getDataText(s);
             }
           }
           if (charSpansForSyllable.length > 0) {
@@ -692,7 +724,7 @@ class LyricsPlusRenderer {
           }
         });
       } else {
-        mainContainer.textContent = line.text;
+        mainContainer.textContent = this._getDataText(line);
       }
       fragment.appendChild(currentLine);
     });
@@ -712,14 +744,17 @@ class LyricsPlusRenderer {
       lineDiv.dataset.endTime = line.endTime;
       const singerClass = line.element?.singer ? (singerClassMap[line.element.singer] || 'singer-left') : 'singer-left';
       lineDiv.classList.add(singerClass);
-      if (this._isRTL(line.text)) lineDiv.classList.add('rtl-text');
+      // Apply rtl-text to the line itself based on the "big" text direction for overall flex-direction control.
+      if (this._isRTL(this._getDataText(line, true))) lineDiv.classList.add('rtl-text');
       if (!lineDiv.hasClickListener) {
         lineDiv.addEventListener('click', this._onLyricClick.bind(this));
         lineDiv.hasClickListener = true;
       }
       const mainContainer = document.createElement('div');
       mainContainer.className = 'main-vocal-container';
-      mainContainer.textContent = line.text;
+      mainContainer.textContent = this._getDataText(line);
+      // Apply rtl-text to mainContainer for its internal text alignment.
+      if (this._isRTL(this._getDataText(line, true))) mainContainer.classList.add('rtl-text');
       lineDiv.appendChild(mainContainer);
       // Use the new helper for translation container
       this._renderTranslationContainer(lineDiv, line, displayMode);
@@ -756,12 +791,17 @@ class LyricsPlusRenderer {
         if (lineData.syllabus && lineData.syllabus.length > 0 && lineData.syllabus.some(s => s.romanizedText)) {
           const romanizationContainer = document.createElement('div');
           romanizationContainer.classList.add('lyrics-romanization-container');
+          // Apply rtl-text to the container itself based on the original text direction (lineData.text)
+          // This ensures the container's overall directionality is correct.
+          if (this._isRTL(lineData.text)) romanizationContainer.classList.add('rtl-text');
           lineData.syllabus.forEach(syllable => {
-            const romanizedText = syllable.romanizedText || syllable.text;
+            const romanizedText = this._getDataText(syllable, false); // This is syllable.text (original text of syllable)
             if (romanizedText) {
               const sylSpan = document.createElement('span');
               sylSpan.className = 'lyrics-syllable'; // Use lyrics-syllable class for highlighting
               sylSpan.textContent = romanizedText;
+              // Apply rtl-text to individual syllable spans for their internal text alignment.
+              if (this._isRTL(romanizedText)) sylSpan.classList.add('rtl-text');
               // Copy timing data for highlighting
               sylSpan.dataset.startTime = syllable.time;
               sylSpan.dataset.duration = syllable.duration;
@@ -779,7 +819,11 @@ class LyricsPlusRenderer {
           // Fallback to line-level romanization if no syllable data
           const romanizationContainer = document.createElement('div');
           romanizationContainer.classList.add('lyrics-romanization-container');
-          romanizationContainer.textContent = lineData.romanizedText;
+          const romanizedText = this._getDataText(lineData, false); // This is lineData.text (original text of line)
+          romanizationContainer.textContent = romanizedText;
+          // Apply rtl-text to the container itself based on the original text direction (lineData.text)
+          // This ensures the container's overall directionality is correct.
+          if (this._isRTL(lineData.text)) romanizationContainer.classList.add('rtl-text');
           lineElement.appendChild(romanizationContainer);
         }
       }
@@ -843,6 +887,7 @@ class LyricsPlusRenderer {
     const isWordByWordMode = lyrics.type === "Word" && currentSettings.wordByWord;
     container.classList.toggle('word-by-word-mode', isWordByWordMode);
     container.classList.toggle('line-by-line-mode', !isWordByWordMode);
+    container.classList.toggle('romanized-big-mode', this.largerTextMode === "romanization");
 
     // Re-determine text direction and dual-side layout (copied from displayLyrics)
     let hasRTL = false, hasLTR = false;
@@ -1049,11 +1094,13 @@ class LyricsPlusRenderer {
    * @param {object} currentSettings - The current user settings.
    * @param {Function} fetchAndDisplayLyricsFn - The function to fetch and display lyrics.
    * @param {Function} setCurrentDisplayModeAndRefetchFn - The function to set display mode and refetch.
+   * @param {string} largerTextMode - The larger text mode setting ("lyrics" or "romanization").
    */
-  displayLyrics(lyrics, source = "Unknown", type = "Line", lightweight = false, songWriters, songInfo, displayMode = 'none', currentSettings = {}, fetchAndDisplayLyricsFn, setCurrentDisplayModeAndRefetchFn) {
+  displayLyrics(lyrics, source = "Unknown", type = "Line", lightweight = false, songWriters, songInfo, displayMode = 'none', currentSettings = {}, fetchAndDisplayLyricsFn, setCurrentDisplayModeAndRefetchFn, largerTextMode = "lyrics") {
     this.lastKnownSongInfo = songInfo;
     this.fetchAndDisplayLyricsFn = fetchAndDisplayLyricsFn;
     this.setCurrentDisplayModeAndRefetchFn = setCurrentDisplayModeAndRefetchFn;
+    this.largerTextMode = largerTextMode;
 
     const container = this._getContainer();
     if (!container) return;
@@ -1091,6 +1138,7 @@ class LyricsPlusRenderer {
     const isWordByWordMode = type === "Word" && currentSettings.wordByWord;
     container.classList.toggle('word-by-word-mode', isWordByWordMode);
     container.classList.toggle('line-by-line-mode', !isWordByWordMode);
+    container.classList.toggle('romanized-big-mode', this.largerTextMode === "romanization");
 
     // Call the new updateDisplayMode to handle the actual rendering of lyrics lines
     this.updateDisplayMode(lyrics, displayMode, currentSettings);
@@ -1801,7 +1849,9 @@ class LyricsPlusRenderer {
         <path d="M4.42071 14.8679C4.77605 14.8679 5.02011 14.6817 5.44699 14.2961L7.9329 12.0903H12.5463C14.6844 12.0903 15.838 10.9031 15.838 8.79859V3.29169C15.838 1.18717 14.6844 0 12.5463 0H3.29169C1.15361 0 0 1.18408 0 3.29169V8.79859C0 10.9062 1.15361 12.0903 3.29169 12.0903H3.63069V13.9574C3.63069 14.5141 3.91596 14.8679 4.42071 14.8679ZM4.71496 13.5548V11.4742C4.71496 11.0808 4.5685 10.9343 4.17503 10.9343H3.29478C1.83838 10.9343 1.15596 10.197 1.15596 8.79549V3.29478C1.15596 1.89932 1.83838 1.16362 3.29478 1.16362H12.5432C13.9933 1.16362 14.6819 1.89932 14.6819 3.29478V8.79549C14.6819 10.197 13.9933 10.9343 12.5432 10.9343H7.88595C7.49071 10.9343 7.28478 10.9938 7.01305 11.2761L4.71496 13.5548Z" fill="white"/>
         <path d="M3 4.74C3 4.33 3.32 4 3.7 4H8.09C8.48 4 8.79 4.33 8.79 4.73C8.79 5.13 8.48 5.47 8.09 5.47H3.71C3.61544 5.46741 3.52231 5.44621 3.43595 5.40761C3.34958 5.36902 3.27167 5.31378 3.20666 5.24505C3.14165 5.17633 3.09082 5.09547 3.05708 5.0071C3.02333 4.91872 3.00734 4.82456 3.01 4.73L3 4.74ZM3.7 6.2C3.32 6.2 3 6.54 3 6.94C3 7.34 3.32 7.68 3.7 7.68H5.2C5.58 7.68 5.9 7.35 5.9 6.94C5.9 6.54 5.58 6.2 5.2 6.2H3.7ZM10.24 4.73C10.24 4.33 10.56 4 10.94 4H12.44C12.82 4 13.14 4.33 13.14 4.73C13.14 5.13 12.82 5.47 12.44 5.47H10.94C10.8454 5.46741 10.7523 5.44621 10.6659 5.40761C10.5796 5.36902 10.5017 5.31378 10.4367 5.24505C10.3716 5.17633 10.3208 5.09547 10.2871 5.0071C10.2533 4.91872 10.2373 4.82456 10.24 4.73ZM8.05 6.21C7.66 6.21 7.35 6.55 7.35 6.95C7.35 7.35 7.66 7.69 8.05 7.69H10.26C10.65 7.69 10.96 7.36 10.96 6.95C10.96 6.55 10.65 6.21 10.26 6.21H8.07H8.05Z" fill="white"/>
       </svg>`;
-      pronunciationOptionDiv.innerHTML = `<span>${t('showPronunciation')}</span>${showPronunciationsSVG}`;
+      // Determine the text to show based on larger text mode
+      const showText = this.largerTextMode === "romanization" ? t('showOriginal') : t('showPronunciation');
+      pronunciationOptionDiv.innerHTML = `<span>${showText}</span>${showPronunciationsSVG}`;
       pronunciationOptionDiv.addEventListener('click', () => {
         this.dropdownMenu.classList.add('hidden');
         let newMode = 'romanize';
@@ -1824,7 +1874,9 @@ class LyricsPlusRenderer {
           </clipPath>
         </defs>
       </svg>`;
-      pronunciationOptionDiv.innerHTML = `<span>${t('hidePronunciation')}</span>${hidePronunciationsSVG}`;
+      // Determine the text to show based on larger text mode
+      const hideText = this.largerTextMode === "romanization" ? t('hideOriginal') : t('hidePronunciation');
+      pronunciationOptionDiv.innerHTML = `<span>${hideText}</span>${hidePronunciationsSVG}`;
       pronunciationOptionDiv.addEventListener('click', () => {
         this.dropdownMenu.classList.add('hidden');
         let newMode = 'none';

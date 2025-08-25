@@ -100,11 +100,11 @@ ytmusic-app-layout[player-fullscreened] .song-media-controls.ytmusic-player {
     --lyplus-font-size-button: 18px;
     --lyplus-font-size-dropdown-option: 13px;
 
-    --lyplus-text-primary: #fff;
+    --lyplus-text-primary: #ffffff;
     --lyplus-text-secondary: #ffffff85;
     --lyplus-text-tertiary: #ffffff7a;
     --lyplus-text-inactive: #ffffff31;
-    --lyplus-text-button: rgba(255, 255, 255, 0.87);
+    --lyplus-text-button: #ffffff;
     --lyplus-text-translation-active: #ffffffa4;
 
     --lyplus-blur-amount: 0.07em;
@@ -357,7 +357,7 @@ ytmusic-player-page:not([player-fullscreened]) .lyrics-plus-integrated.blur-inac
 
 .lyrics-line.active:not(.lyrics-gap) .lyrics-syllable.highlight,
 .lyrics-word.growable:has(.lyrics-syllable.highlight) .lyrics-syllable {
-    transform: translateY(-4%) translateZ(1px);
+    transform: translateY(-1.5%) translateZ(1px); /* Reduced from -4% to -1.5% - less dramatic movement */
 }
 
 .lyrics-line.active:not(.lyrics-gap) .lyrics-syllable.highlight.finished {
@@ -901,7 +901,7 @@ ytmusic-player-page[player-fullscreened] #lyrics-plus-translation-dropdown {
     opacity: 0.8;
     font-size: var(--lyplus-font-size-subtext);
     overflow-wrap: break-word;
-    color: var(--lyplus-text-tertiary);
+    color: var(--lyplus-text-tertiary); /* Fixed: Changed from primary to tertiary for smaller text */
     pointer-events: none;
     user-select: none;
     -webkit-user-select: none;
@@ -910,10 +910,10 @@ ytmusic-player-page[player-fullscreened] #lyrics-plus-translation-dropdown {
     transition: opacity 0.3s ease;
 }
 .lyrics-line.active .lyrics-translation-container {
-    color: var(--lyplus-text-translation-active);
+    color: var(--lyplus-text-translation-active); /* More appropriate for active translation */
 }
 .lyrics-line.active .lyrics-romanization-container {
-    color: var(--lyplus-text-tertiary);
+    color: var(--lyplus-text-tertiary); /* Keep tertiary for active romanization - smaller text */
 }
 .lyrics-romanization-container {
     direction: ltr !important; /* Always force LTR for romanization */
@@ -995,7 +995,7 @@ ytmusic-player-page[player-fullscreened] #lyrics-plus-translation-dropdown {
     z-index: 29;
     width: 100%;
     height: 100%;
-    backdrop-filter: brightness(0.5) saturate(1.4) contrast(1.1);
+    backdrop-filter: brightness(0.47) saturate(1.7) contrast(1.3);
 }
 canvas#lyplus-webgl-canvas {
     position: absolute;
@@ -1055,7 +1055,7 @@ ytmusic-app #layout[player-ui-state="FULLSCREEN"] .lyplus-blur-container {
 }
 
 #layout.dynamic-player[player-ui-state="PLAYER_PAGE_OPEN"] .lyplus-blur-container::after {
-    backdrop-filter: brightness(0.5) saturate(1.4) contrast(1.1);
+    backdrop-filter: brightness(0.47) saturate(1.7) contrast(1.3);
 }
 #layout.dynamic-player[player-ui-state="PLAYER_PAGE_OPEN"] ytmusic-player-bar {
     backdrop-filter: blur(20px);
@@ -1178,7 +1178,7 @@ ytmusic-app #layout[player-ui-state="FULLSCREEN"] .lyplus-blur-container {
         min-width: 50%;
         mask-image: linear-gradient(to bottom, transparent 0%, black 26%, black 70%, transparent 100%);
         transform: translateY(-8.8rem);
-        interactivity: auto!important;
+        pointer-events: auto !important;
     }
     ytmusic-app-layout:not([is-mweb-modernization-enabled])[player-fullscreened] .lyplus-blur-container .lyplus-gradient-overlay {
         opacity: 0;
@@ -1284,9 +1284,9 @@ ytmusic-app #layout[player-ui-state="FULLSCREEN"] .lyplus-blur-container {
     ========================================================================== */
 
 :root {
-    --max-scale: 1.12;
-    --min-scale: 1.01;
-    --shadow-intensity: 0.6;
+    --max-scale: 1.05; /* Reduced from 1.12 - less dramatic scaling */
+    --min-scale: 1.01; /* Keep same minimum */
+    --shadow-intensity: 0.6; /* Restored bright glow - back to original value */
 }
 
 @keyframes wipe {
@@ -1362,8 +1362,8 @@ ytmusic-app #layout[player-ui-state="FULLSCREEN"] .lyplus-blur-container {
         filter: drop-shadow(0 0 0 rgba(255, 255, 255, 0));
     }
     25%, 30% {
-        transform: matrix3d(var(--max-scale), 0, 0, 0, 0, var(--max-scale), 0, 0, 0, 0, 1, 0, var(--char-offset-x, 0), var(--translate-y-peak, -2%), 0, 1);
-        filter: drop-shadow(0 0 0.1em rgba(255, 255, 255, var(--shadow-intensity)));
+        transform: matrix3d(var(--max-scale), 0, 0, 0, 0, var(--max-scale), 0, 0, 0, 0, 1, 0, var(--char-offset-x, 0), var(--translate-y-peak, -1%), 0, 1);
+        filter: drop-shadow(0 0 0.1em rgba(255, 255, 255, var(--shadow-intensity))); /* Restored bright blur */
     }
     100% {
         transform: matrix3d(var(--min-scale), 0, 0, 0, 0, var(--min-scale), 0, 0, 0, 0, 1, 0, 0, 0, 0, 1);
@@ -1371,12 +1371,12 @@ ytmusic-app #layout[player-ui-state="FULLSCREEN"] .lyplus-blur-container {
 }
 @keyframes grow-static {
     0%, 100% {
-        transform: scale3d(1.01, 1.01, 1.1) translateY(-0.05%);
+        transform: scale3d(1.01, 1.01, 1.05) translateY(-0.02%); /* Reduced Z-scale and Y-translate */
         text-shadow: 0 0 0 rgba(255, 255, 255, 0);
     }
     30%, 40% {
-        transform: scale3d(1.10, 1.10, 1.1) translateY(-0.05%);
-        text-shadow: 0 0 0.3em rgba(255, 255, 255, 0.5);
+        transform: scale3d(1.04, 1.04, 1.05) translateY(-0.02%); /* Reduced from 1.10 to 1.04 - much smaller scaling */
+        text-shadow: 0 0 0.3em rgba(255, 255, 255, 0.5); /* Restored bright text shadow */
     }
 }
 
