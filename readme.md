@@ -33,7 +33,7 @@ This is a customized fork of the original YouLy+ extension, featuring additional
 <img  width="30px" src="https://img.icons8.com/?size=48&id=cM42lftaD9Z3&format=png" alt="Brave">
 </p>
 
-## 🔧 Modifications & Enhancements
+## Modifications & Enhancements
 
 - **Apple Music-Style Interface:** Enhanced visual design inspired by Apple Music's clean and modern lyrics display.
 - **Improved Synchronization:** Enhanced lyrics timing algorithms for better accuracy, mimicking Apple Music's precision
@@ -44,16 +44,16 @@ This is a customized fork of the original YouLy+ extension, featuring additional
 - **Bug Fixes:** Resolved various issues from the original version
 - **Custom Features:** Additional customization options with Apple Music-style presets
 
-## 📦 Based on YouLy+
+## Based on YouLy+
 
 This modified version builds upon the excellent foundation of YouLy+ by ibratabian17, maintaining all the beloved features while adding improvements based on community feedback and Apple Music's elegant design philosophy.
 
 *For the original YouLy+ project, visit: [github.com/ibratabian17/YouLyPlus](https://github.com/ibratabian17/YouLyPlus)*
 
 
-## ⬇️ Installation
+## Installation
 
-### ⭐ Recommended: Install from Official Stores
+### Recommended: Install from Official Stores
 
 For the safest and easiest experience, install NewSync directly from your browser's web store. This ensures you get automatic updates and a verified version of the extension.
 
@@ -91,11 +91,11 @@ For the safest and easiest experience, install NewSync directly from your browse
 
 </details>
 
-## 🔄 Updating
+## Updating
 
 If you have installed the extension with cloned repository, you can simply update it by running `update.bat` in the folder where you cloned the repository.
 
-## 🚀 Usage
+## Usage
 
 Once installed, simply open [YouTube Music](https://music.youtube.com/) and play any song. The lyrics panel will automatically be enhanced by NewSync with custom lyrics, no external API setup required (except for Gemini AI features).
 
