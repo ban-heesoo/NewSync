@@ -253,6 +253,25 @@ function displayPreviewLyrics(lyrics, lightweight = false, currentSettings = {})
   const container = getPreviewContainer();
   if (!container) return;
 
+  // Add scale-out animation to loading text before removing it
+  const loadingElement = container.querySelector('.text-loading');
+  if (loadingElement) {
+    loadingElement.classList.add('scale-out');
+    // Wait for animation to complete before displaying lyrics
+    setTimeout(() => {
+      _renderPreviewLyricsContent(lyrics, lightweight, currentSettings);
+    }, 400); // Match the CSS transition duration
+    return;
+  }
+
+  _renderPreviewLyricsContent(lyrics, lightweight, currentSettings);
+}
+
+// Helper function to render the actual preview lyrics content
+function _renderPreviewLyricsContent(lyrics, lightweight, currentSettings) {
+  const container = getPreviewContainer();
+  if (!container) return;
+
   // Translations / Romanizations not handled in preview, so class removals are enough.
   container.classList.remove('lyrics-translated', 'lyrics-romanized');
   // if (displayMode === 'translate') { // Not applicable to preview
@@ -322,16 +341,21 @@ function displayPreviewLyrics(lyrics, lightweight = false, currentSettings = {})
         const combinedText = wordBuffer.map(s => s.text).join('');
         const trimmedText = combinedText.trim();
         const totalDuration = currentWordEndTime - currentWordStartTime;
-        const shouldEmphasize = !lightweight && !isRTL(combinedText) && !isCJK(combinedText) && trimmedText.length <= 7 && trimmedText.length > 0 && totalDuration >= 1000;
-        const durationFactor = Math.min(1.0, Math.max(0.5, (totalDuration - 1000) / 1000));
+        const shouldEmphasize = !lightweight && !isRTL(combinedText) && !isCJK(combinedText) && trimmedText.length <= 15 && trimmedText.length > 0 && totalDuration >= 800;
+        const durationFactor = Math.min(1.0, Math.max(0.5, (totalDuration - 800) / 1000)); // Adjusted for new minimum duration
+        
+        // Length-based scaling - longer text gets less dramatic emphasis
+        const textLength = trimmedText.length;
+        const lengthFactor = Math.max(0.5, 1.0 - ((textLength - 3) * 0.05)); // Gradually reduce emphasis for longer text
+        
         let baseMinScale = 1.02;
         let baseMaxScale = 1;
-        const durationScaleFactor = durationFactor * 0.15;
+        const durationScaleFactor = durationFactor * 0.15 * lengthFactor; // Apply length factor
         baseMaxScale += durationScaleFactor;
         const maxScale = Math.min(1.2, baseMaxScale);
         const minScale = Math.max(1.0, Math.min(1.06, baseMinScale));
-        const shadowIntensity = Math.min(0.8, 0.4 + (durationFactor * 0.4));
-        const translateYPeak = -Math.min(3.0, 0.0 + (durationFactor * 3.0));
+        const shadowIntensity = Math.min(0.8, (0.4 + (durationFactor * 0.4)) * lengthFactor); // Apply length factor
+        const translateYPeak = -Math.min(3.0, (0.0 + (durationFactor * 3.0)) * lengthFactor); // Apply length factor
         
         // --- CORRECTED CSS CUSTOM PROPERTY SETTING ---
         wordSpan.style.setProperty('--max-scale', maxScale);

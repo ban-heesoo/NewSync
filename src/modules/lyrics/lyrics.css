@@ -538,6 +538,12 @@ span.lyrics-source-provider {
 .lyrics-plus-integrated .text-loading {
     opacity: 0.8;
     animation: pulse 1.5s ease-in-out infinite;
+    transform: scale(1);
+    transition: transform 0.4s ease-out, opacity 0.4s ease-out;
+}
+.lyrics-plus-integrated .text-loading.scale-out {
+    transform: scale(0.3);
+    opacity: 0;
 }
 .lyrics-plus-integrated .text-loading:after {
     content: "...";
@@ -550,6 +556,11 @@ span.lyrics-source-provider {
     mask-size: 200% 100%;
     mask-repeat: no-repeat;
     animation: ellipsis 3s ease-in-out infinite;
+    transform: scale(1);
+    transition: transform 0.4s ease-out;
+}
+.lyrics-plus-integrated .text-loading.scale-out:after {
+    transform: scale(0.3);
 }
 
 /* ==========================================================================

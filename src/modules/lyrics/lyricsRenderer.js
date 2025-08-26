@@ -575,23 +575,27 @@ class LyricsPlusRenderer {
         let referenceFont = mainContainer.firstChild ? getComputedFont(mainContainer.firstChild) : '400 16px sans-serif';
         const combinedText = wordBuffer.map(s => s.text).join('');
         const totalDuration = currentWordEndTime - currentWordStartTime;
-        const shouldEmphasize = !lightweight && !this._isRTL(combinedText) && !this._isCJK(combinedText) && combinedText.trim().length <= 7 && totalDuration >= 1000;
+        const shouldEmphasize = !lightweight && !this._isRTL(combinedText) && !this._isCJK(combinedText) && combinedText.trim().length <= 15 && totalDuration >= 800;
 
         let maxScale = 1.03; // Reduced from 1.07 - less dramatic default scale
 
         if (shouldEmphasize) {
-          const minDuration = 1000; 
+          const minDuration = 800; // Reduced from 1000 for more sensitivity
           const maxDuration = 3000; 
           const easingPower = 2.0; // Reduced from 3.0 - gentler easing
 
           const progress = Math.min(1, Math.max(0, (totalDuration - minDuration) / (maxDuration - minDuration)));
           const easedProgress = Math.pow(progress, easingPower);
 
-          maxScale = 1.0 + 0.03 + easedProgress * 0.05; // Reduced from 0.05 + 0.10 - much smaller scaling
+          // Length-based scaling - longer text gets less dramatic emphasis
+          const textLength = combinedText.trim().length;
+          const lengthFactor = Math.max(0.5, 1.0 - ((textLength - 3) * 0.05)); // Gradually reduce emphasis for longer text
+          
+          maxScale = 1.0 + (0.03 + easedProgress * 0.05) * lengthFactor; // Apply length factor to scaling
 
-          const shadowIntensity = 0.4 + easedProgress * 0.4; // Restored bright glow - back to original values
+          const shadowIntensity = (0.4 + easedProgress * 0.4) * lengthFactor; // Apply length factor to shadow
           const normalizedGrowth = (maxScale - 1.0) / 0.08; // Adjusted denominator for new scale range
-          const translateYPeak = -normalizedGrowth * 1.5; // Reduced from 2.5 - less vertical movement 
+          const translateYPeak = -normalizedGrowth * 1.5 * lengthFactor; // Apply length factor to movement
 
           wordSpan.style.setProperty('--max-scale', maxScale.toFixed(3));
           wordSpan.style.setProperty('--shadow-intensity', shadowIntensity.toFixed(3));
@@ -1105,7 +1109,29 @@ class LyricsPlusRenderer {
     const container = this._getContainer();
     if (!container) return;
 
+    // Add scale-out animation to loading text before removing it
+    const loadingElement = container.querySelector('.text-loading');
+    if (loadingElement && container.classList.contains('lyrics-plus-message')) {
+      loadingElement.classList.add('scale-out');
+      // Wait for animation to complete before removing the message class and displaying lyrics
+      setTimeout(() => {
+        container.classList.remove('lyrics-plus-message');
+        this._renderLyricsContent(lyrics, source, type, lightweight, songWriters, songInfo, displayMode, currentSettings, fetchAndDisplayLyricsFn, setCurrentDisplayModeAndRefetchFn, largerTextMode);
+      }, 400); // Match the CSS transition duration
+      return;
+    }
+
     container.classList.remove('lyrics-plus-message'); // Remove the class when actual lyrics are displayed
+    this._renderLyricsContent(lyrics, source, type, lightweight, songWriters, songInfo, displayMode, currentSettings, fetchAndDisplayLyricsFn, setCurrentDisplayModeAndRefetchFn, largerTextMode);
+  }
+
+  /**
+   * Helper method to render the actual lyrics content
+   * @private
+   */
+  _renderLyricsContent(lyrics, source, type, lightweight, songWriters, songInfo, displayMode, currentSettings, fetchAndDisplayLyricsFn, setCurrentDisplayModeAndRefetchFn, largerTextMode) {
+    const container = this._getContainer();
+    if (!container) return;
 
     // Apply visual settings that are independent of display mode
     container.classList.toggle('use-song-palette-fullscreen', !!currentSettings.useSongPaletteFullscreen);
