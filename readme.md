@@ -53,6 +53,16 @@ This modified version builds upon the excellent foundation of YouLy+ by ibratabi
 
 ## ⬇️ Installation
 
+### ⭐ Recommended: Install from Official Stores
+
+For the safest and easiest experience, install YouLy+ directly from your browser's web store. This ensures you get automatic updates and a verified version of the extension.
+
+<p float="left">
+<a href="https://addons.mozilla.org/en-US/firefox/addon/newsync/" target="_blank"><img src="https://blog.mozilla.org/addons/files/2020/04/get-the-addon-fx-apr-2020.svg" alt="Firefox Add-ons" height="60"/></a>
+
+<details>
+<summary><b>For Chrome Users, Developers & Advanced Users: Install from Source</b></summary>
+
 ### For Chrome, Edge, Vivaldi, Opera, Brave
 
 1.  **Clone or Download the Repository:**
@@ -80,6 +90,10 @@ This modified version builds upon the excellent foundation of YouLy+ by ibratabi
     Click on "Load Temporary Add-on" and choose the `manifest.json` file from the repository folder.
 
 </details>
+
+## 🔄 Updating
+
+If you have installed the extension with cloned repository, you can simply update it by running `update.bat` in the folder where you cloned the repository.
 
 ## 🚀 Usage
 
