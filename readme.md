@@ -33,17 +33,6 @@ This is a customized fork of the original YouLy+ extension, featuring additional
 <img  width="30px" src="https://img.icons8.com/?size=48&id=cM42lftaD9Z3&format=png" alt="Brave">
 </p>
 
-## Modifications & Enhancements
-
-- **Apple Music-Style Interface:** Enhanced visual design inspired by Apple Music's clean and modern lyrics display.
-- **Improved Synchronization:** Enhanced lyrics timing algorithms for better accuracy, mimicking Apple Music's precision
-- **Extended Provider Support:** Additional lyrics sources and improved fallback mechanisms  
-- **Performance Optimizations:** Faster loading times and reduced resource usage
-- **Apple Music-Inspired Animations:** Smoother transitions and elegant effects similar to Apple Music
-- **Enhanced Visual Effects:** Improved blur effects and typography following Apple Music's design language
-- **Bug Fixes:** Resolved various issues from the original version
-- **Custom Features:** Additional customization options with Apple Music-style presets
-
 ## Based on YouLy+
 
 This modified version builds upon the excellent foundation of YouLy+ by ibratabian17, maintaining all the beloved features while adding improvements based on community feedback and Apple Music's elegant design philosophy.
