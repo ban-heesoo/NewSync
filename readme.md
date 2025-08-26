@@ -55,7 +55,7 @@ This modified version builds upon the excellent foundation of YouLy+ by ibratabi
 
 ### ⭐ Recommended: Install from Official Stores
 
-For the safest and easiest experience, install YouLy+ directly from your browser's web store. This ensures you get automatic updates and a verified version of the extension.
+For the safest and easiest experience, install NewSync directly from your browser's web store. This ensures you get automatic updates and a verified version of the extension.
 
 <p float="left">
 <a href="https://addons.mozilla.org/en-US/firefox/addon/newsync/" target="_blank"><img src="https://blog.mozilla.org/addons/files/2020/04/get-the-addon-fx-apr-2020.svg" alt="Firefox Add-ons" height="60"/></a>
