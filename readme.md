@@ -52,6 +52,21 @@ For the safest and easiest experience, install NewSync directly from your browse
 <details>
 <summary><b>For Chrome Users, Developers & Advanced Users: Install from Source</b></summary>
 
+Requirements:
+- install [git scm](https://github.com/git-for-windows/git/releases/download/v2.51.0.windows.1/Git-2.51.0-64-bit.exe)
+- after installing `git` run:
+
+    for global (apply for all repositories):
+    ```
+    git config --global user.name YourName
+    git config --global user.email youremail@domain.com
+    ```
+    for local (apply for this repository only):
+    ```
+    git config user.name RepositoryName
+    git config user.email youremail@domain.com
+    ```
+    
 ### For Chrome, Edge, Vivaldi, Opera, Brave
 
 1.  **Clone or Download the Repository:**
