@@ -61,7 +61,7 @@ For the safest and easiest experience, install NewSync directly from your browse
     git config --global user.name YourName
     git config --global user.email youremail@domain.com
     ```
-    for local (apply for this repository only):
+    for local (apply for specific repository only):
     ```
     git config user.name RepositoryName
     git config user.email youremail@domain.com
