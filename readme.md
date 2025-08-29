@@ -54,7 +54,7 @@ For the safest and easiest experience, install NewSync directly from your browse
 
 ### Requirements:
 - install [git scm](https://github.com/git-for-windows/git/releases/download/v2.51.0.windows.1/Git-2.51.0-64-bit.exe)
-- after installing `git` run:
+- after installing `git` run one of the two commands below in the command prompt:
 
     for global (apply for all repositories):
     ```
