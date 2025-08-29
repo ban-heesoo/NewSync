@@ -52,7 +52,7 @@ For the safest and easiest experience, install NewSync directly from your browse
 <details>
 <summary><b>For Chrome Users, Developers & Advanced Users: Install from Source</b></summary>
 
-Requirements:
+### Requirements:
 - install [git scm](https://github.com/git-for-windows/git/releases/download/v2.51.0.windows.1/Git-2.51.0-64-bit.exe)
 - after installing `git` run:
 
