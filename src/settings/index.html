@@ -322,6 +322,11 @@
                         <label for="modal-upload-album-name">Album Name (Optional)</label>
                         <input type="text" id="modal-upload-album-name" placeholder="e.g., New Jeans 1st EP">
                     </div>
+                    <div class="setting-item form-group">
+                        <label for="modal-upload-songwriter-name">Songwriter/Composer (Optional)</label>
+                        <input type="text" id="modal-upload-songwriter-name" placeholder="e.g., Bintang, Haerin, Minji, Danielle, Hanni, Hyein">
+                        <p class="helper-text">Enter songwriter names separated by commas.</p>
+                    </div>
                     <div class="setting-item">
                         <div class="form-group">
                             <label for="modal-upload-lyrics-format">Lyrics Format</label>
@@ -347,6 +352,58 @@
                         <button id="modal-upload-lyrics-button" class="btn btn-filled">
                             <span class="material-symbols-outlined">upload_file</span>
                             Upload Lyrics
+                        </button>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Edit Lyrics Modal -->
+            <div id="edit-lyrics-modal" class="modal">
+                <div class="modal-content">
+                    <span class="close-button material-symbols-outlined">close</span>
+                    <h2 class="card-title">Edit Local Lyrics</h2>
+                    <div class="setting-item form-group">
+                        <label for="modal-edit-song-title">Song Title</label>
+                        <input type="text" id="modal-edit-song-title" placeholder="e.g., Hype Boy">
+                    </div>
+                    <div class="setting-item form-group">
+                        <label for="modal-edit-artist-name">Artist Name</label>
+                        <input type="text" id="modal-edit-artist-name" placeholder="e.g., NewJeans">
+                    </div>
+                    <div class="setting-item form-group">
+                        <label for="modal-edit-album-name">Album Name (Optional)</label>
+                        <input type="text" id="modal-edit-album-name" placeholder="e.g., New Jeans 1st EP">
+                    </div>
+                    <div class="setting-item form-group">
+                        <label for="modal-edit-songwriter-name">Songwriter/Composer (Optional)</label>
+                        <input type="text" id="modal-edit-songwriter-name" placeholder="e.g., Bintang, Haerin, Minji, Danielle, Hanni, Hyein">
+                        <p class="helper-text">Enter songwriter names separated by commas.</p>
+                    </div>
+                    <div class="setting-item">
+                        <div class="form-group">
+                            <label for="modal-edit-lyrics-format">Lyrics Format</label>
+                            <div class="select-wrapper">
+                                <select id="modal-edit-lyrics-format">
+                                    <option value="lrc" selected>Lyrics (.lrc)</option>
+                                    <option value="elrc">Enhanced Lyrics (.elrc)</option>
+                                    <option value="apple-lrc">Apple Music LRC (.lrc)</option>
+                                    <option value="ttml">Apple Music Time Markup (.ttml)</option>
+                                    <option value="json">Kpoe Lyrics (.json)</option>
+                                </select>
+                                <span class="material-symbols-outlined select-arrow">arrow_drop_down</span>
+                            </div>
+                            <p class="setting-description">Select the format of the lyrics file you are uploading.</p>
+                        </div>
+                    </div>
+                    <div class="setting-item form-group">
+                        <label for="modal-edit-lyrics-file">Lyrics File</label>
+                        <input type="file" id="modal-edit-lyrics-file" accept=".lrc,.elrc,.ttml,.json">
+                        <p class="helper-text">Upload your LRC, ELRC, Apple TTML, or JSON file.</p>
+                    </div>
+                    <div class="card-actions">
+                        <button id="modal-edit-lyrics-button" class="btn btn-filled">
+                            <span class="material-symbols-outlined">save</span>
+                            Save Changes
                         </button>
                     </div>
                 </div>

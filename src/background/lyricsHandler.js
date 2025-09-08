@@ -20,6 +20,7 @@ const MESSAGE_TYPES = {
     UPLOAD_LOCAL_LYRICS: 'UPLOAD_LOCAL_LYRICS',
     GET_LOCAL_LYRICS_LIST: 'GET_LOCAL_LYRICS_LIST',
     DELETE_LOCAL_LYRICS: 'DELETE_LOCAL_LYRICS',
+    UPDATE_LOCAL_LYRICS: 'UPDATE_LOCAL_LYRICS',
     FETCH_LOCAL_LYRICS: 'FETCH_LOCAL_LYRICS'
 };
 
@@ -246,6 +247,10 @@ pBrowser.runtime.onMessage.addListener((message, sender, sendResponse) => {
             handleDeleteLocalLyrics(message.songId, sendResponse);
             return true;
 
+        case MESSAGE_TYPES.UPDATE_LOCAL_LYRICS:
+            handleUpdateLocalLyrics(message.songId, message.songInfo, message.jsonLyrics, sendResponse);
+            return true;
+
         case MESSAGE_TYPES.FETCH_LOCAL_LYRICS:
             handleFetchLocalLyrics(message.songId, sendResponse);
             return true;
@@ -341,6 +346,16 @@ async function handleDeleteLocalLyrics(songId, sendResponse) {
         sendResponse({ success: true, message: "Local lyrics deleted successfully." });
     } catch (error) {
         console.error("Error deleting local lyrics:", error);
+        sendResponse({ success: false, error: error.message });
+    }
+}
+
+async function handleUpdateLocalLyrics(songId, songInfo, jsonLyrics, sendResponse) {
+    try {
+        await saveLocalLyricsToDB(songId, songInfo, jsonLyrics);
+        sendResponse({ success: true, message: "Local lyrics updated successfully." });
+    } catch (error) {
+        console.error("Error updating local lyrics:", error);
         sendResponse({ success: false, error: error.message });
     }
 }
@@ -1518,7 +1533,7 @@ function parseKPoeFormat(data) {
                 romanizedText: lineRomanizedText // Add line-level romanized text
             };
         }),
-        metadata: { ...data.metadata, source: `${data.metadata.source} (KPoe)` },
+        metadata: { ...data.metadata, source: data.metadata.source },
         ignoreSponsorblock: data.ignoreSponsorblock || data.metadata.ignoreSponsorblock
     };
 }

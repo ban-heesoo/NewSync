@@ -253,6 +253,55 @@ export function deleteLocalLyrics(songId) {
     });
 }
 
+export function updateLocalLyrics(songId, songInfo, jsonLyrics) {
+    return new Promise((resolve, reject) => {
+        if (pBrowser && pBrowser.runtime && typeof pBrowser.runtime.sendMessage === 'function') {
+            pBrowser.runtime.sendMessage({
+                type: 'UPDATE_LOCAL_LYRICS',
+                songId,
+                songInfo,
+                jsonLyrics
+            }, (response) => {
+                if (pBrowser.runtime.lastError) {
+                    console.error("Error updating local lyrics:", pBrowser.runtime.lastError.message);
+                    return reject(pBrowser.runtime.lastError.message);
+                }
+                if (response && response.success) {
+                    resolve(response);
+                } else {
+                    console.error("Error updating local lyrics from response:", response ? response.error : "No response");
+                    reject(response ? response.error : 'Unknown error');
+                }
+            });
+        } else {
+            console.warn("pBrowser.runtime.sendMessage is not available. Skipping local lyrics update.");
+            reject('Local lyrics update feature is unavailable in this context.');
+        }
+    });
+}
+
+export function fetchLocalLyrics(songId) {
+    return new Promise((resolve, reject) => {
+        if (pBrowser && pBrowser.runtime && typeof pBrowser.runtime.sendMessage === 'function') {
+            pBrowser.runtime.sendMessage({ type: 'FETCH_LOCAL_LYRICS', songId }, (response) => {
+                if (pBrowser.runtime.lastError) {
+                    console.error("Error fetching local lyrics:", pBrowser.runtime.lastError.message);
+                    return reject(pBrowser.runtime.lastError.message);
+                }
+                if (response && response.success) {
+                    resolve(response);
+                } else {
+                    console.error("Error fetching local lyrics from response:", response ? response.error : "No response");
+                    reject(response ? response.error : 'Unknown error');
+                }
+            });
+        } else {
+            console.warn("pBrowser.runtime.sendMessage is not available. Skipping local lyrics fetch.");
+            reject('Local lyrics fetch feature is unavailable in this context.');
+        }
+    });
+}
+
 // Message listener for updates (e.g., from background script if settings are changed elsewhere)
 export function setupSettingsMessageListener(callback) {
     if (typeof window.addEventListener === 'function') {

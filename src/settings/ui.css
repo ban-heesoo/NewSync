@@ -734,10 +734,23 @@ select:focus {
     font-size: 20px;
 }
 
+.draggable-source-item .source-actions {
+    display: flex;
+    gap: 8px;
+    margin-left: auto;
+}
+
+.draggable-source-item .edit-source-button {
+    /* Uses .btn-icon styles */
+}
+
+.draggable-source-item .edit-source-button.btn-icon:hover {
+    color: var(--md-sys-color-primary);
+    background-color: rgba(var(--md-sys-color-primary-rgb, 130, 170, 255), 0.08);
+}
+
 .draggable-source-item .remove-source-button {
     /* Uses .btn-icon styles */
-    margin-left: auto;
-    /* Pushes button to the right */
 }
 
 .draggable-source-item .remove-source-button.btn-icon:hover {

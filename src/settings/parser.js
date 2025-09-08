@@ -2,7 +2,7 @@
 // LYRICS PARSERS FOR MULTIPLE FORMATS
 // ==========================================================================
 
-export function parseSyncedLyrics(lrcContent) {
+export function parseSyncedLyrics(lrcContent, songInfo = {}) {
   const lineTimeRegex = /\[(\d+):(\d{2})(?:[.,](\d+))?\]/g;
   const wordTimeRegex = /<(\d+):(\d{2})(?:[.,](\d+))?>/g;
 
@@ -22,6 +22,21 @@ export function parseSyncedLyrics(lrcContent) {
   const lines = lrcContent.split('\n');
   const parsedLyrics = [];
   const isEnhanced = /<(\d+):(\d{2})/.test(lrcContent);
+  const metadata = {};
+  
+  // Parse metadata tags
+  const metadataRegex = /^\[(ti|ar|al|by|offset):(.+)\]$/;
+  
+  for (const line of lines) {
+    const trimmedLine = line.trim();
+    if (!trimmedLine) continue;
+    
+    const metadataMatch = trimmedLine.match(metadataRegex);
+    if (metadataMatch) {
+      const [, tag, value] = metadataMatch;
+      metadata[tag] = value;
+    }
+  }
 
   lines.forEach(line => {
     const lineTimeMatches = [...line.matchAll(lineTimeRegex)];
@@ -106,13 +121,25 @@ export function parseSyncedLyrics(lrcContent) {
     !isNaN(line.time)
   );
 
+  // Parse songwriter information from input or LRC metadata
+  let songWriters = [];
+  if (songInfo.songwriter) {
+    // Split by comma and clean up names
+    songWriters = songInfo.songwriter.split(',').map(name => name.trim()).filter(name => name);
+  } else if (metadata.by) {
+    // Fallback to LRC [by:] tag if available
+    songWriters = [metadata.by.trim()];
+  }
+
   return {
     KpoeTools: '1.0-parseSyncedLyrics-LRC',
     type: isEnhanced ? 'Word' : 'Line',
     metadata: {
-      source: "Local Files",
-      songWriters: [],
-      title: '',
+      source: "Apple Music (SongSync)",
+      songWriters: songWriters,
+      title: metadata.ti || songInfo.title || '',
+      artist: metadata.ar || songInfo.artist || '',
+      album: metadata.al || songInfo.album || '',
       language: '',
       agents: {},
       totalDuration: ''
@@ -122,7 +149,7 @@ export function parseSyncedLyrics(lrcContent) {
   };
 }
 
-export function parseAppleTTML(ttml, offset = 0, separate = false) {
+export function parseAppleTTML(ttml, offset = 0, separate = false, songInfo = {}) {
   const KPOE = '1.0-ConvertTTMLtoJSON-DOMParser';
 
   const NS = {
@@ -201,7 +228,11 @@ export function parseAppleTTML(ttml, offset = 0, separate = false) {
   const timingMode = getAttr(root, NS.itunes, 'timing', 'itunes:timing') || 'Word';
 
   const metadata = {
-    source: 'Local Files', songWriters: [], title: '',
+    source: 'Apple Music TTML', 
+    songWriters: [], 
+    title: songInfo.title || '',
+    artist: songInfo.artist || '',
+    album: songInfo.album || '',
     language: getAttr(root, NS.xml, 'lang', 'xml:lang') || '',
     agents: {},
     totalDuration: getAttr(doc.getElementsByTagName('body')[0], null, 'dur', 'dur') || '',
@@ -229,6 +260,7 @@ export function parseAppleTTML(ttml, offset = 0, separate = false) {
     if (metaContent) {
       const titleEl = metaContent.getElementsByTagName('ttm:title')[0] || metaContent.getElementsByTagName('title')[0];
       if (titleEl) metadata.title = decodeHtmlEntities(titleEl.textContent.trim());
+      else if (songInfo.title) metadata.title = songInfo.title;
 
       const songwritersEl = metaContent.getElementsByTagName('songwriters')[0];
       if (songwritersEl) {
@@ -237,6 +269,9 @@ export function parseAppleTTML(ttml, offset = 0, separate = false) {
           const name = decodeHtmlEntities(songwriterNodes[i].textContent.trim());
           if (name) metadata.songWriters.push(name);
         }
+      } else if (songInfo.songwriter) {
+        // Fallback to input songwriter information
+        metadata.songWriters = songInfo.songwriter.split(',').map(name => name.trim()).filter(name => name);
       }
     }
   }
@@ -408,6 +443,21 @@ export function parseAppleTTML(ttml, offset = 0, separate = false) {
         }
 
         lyrics.push(currentLine);
+      } else {
+        // Line-based fallback: use <p begin/end> when no timed spans exist
+        const pBegin = getAttr(p, null, 'begin', 'begin');
+        const pEnd = getAttr(p, null, 'end', 'end');
+        const lineTextRaw = p.textContent || '';
+        const lineText = decodeHtmlEntities(lineTextRaw).trim();
+        if (pBegin && pEnd && lineText) {
+          lyrics.push({
+            time: timeToMs(pBegin) + offset,
+            duration: Math.max(0, timeToMs(pEnd) - timeToMs(pBegin)),
+            text: lineText,
+            syllabus: [],
+            element: { key, songPart, singer }
+          });
+        }
       }
     }
   }
@@ -417,6 +467,7 @@ export function parseAppleTTML(ttml, offset = 0, separate = false) {
     type: timingMode,
     metadata,
     lyrics,
+    data: lyrics,
   };
 }
 
@@ -531,7 +582,7 @@ export function v1Tov2(data) {
 }
 
 // Apple Music LRC Parser - handles enhanced LRC format with voice tags and background vocals
-export function parseAppleMusicLRC(lrcContent) {
+export function parseAppleMusicLRC(lrcContent, songInfo = {}) {
   const lines = lrcContent.split('\n');
   const parsedLines = [];
   const metadata = {};
@@ -666,15 +717,25 @@ export function parseAppleMusicLRC(lrcContent) {
   // Determine type based on whether we have syllabus data
   const hasSyllabus = parsedLines.some(line => line.syllabus && line.syllabus.length > 0);
   
+  // Parse songwriter information from input or LRC metadata
+  let songWriters = [];
+  if (songInfo.songwriter) {
+    // Split by comma and clean up names
+    songWriters = songInfo.songwriter.split(',').map(name => name.trim()).filter(name => name);
+  } else if (metadata.by) {
+    // Fallback to LRC [by:] tag if available
+    songWriters = [metadata.by.trim()];
+  }
+
   return {
     KpoeTools: '1.0-parseAppleMusicLRC-EnhancedLRC',
     type: hasSyllabus ? 'Word' : 'Line',
     metadata: {
-      source: "Local Files",
-      songWriters: [],
-      title: metadata.ti || 'Unknown',
-      artist: metadata.ar || 'Unknown',
-      album: metadata.al || '',
+      source: "Apple Music (SongSync)",
+      songWriters: songWriters,
+      title: metadata.ti || songInfo.title || 'Unknown',
+      artist: metadata.ar || songInfo.artist || 'Unknown',
+      album: metadata.al || songInfo.album || '',
       language: '',
       agents: {},
       totalDuration: '',

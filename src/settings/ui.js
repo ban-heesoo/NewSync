@@ -436,12 +436,13 @@ document.getElementById('add-source-button').addEventListener('click', addSource
 import { parseSyncedLyrics, parseAppleMusicLRC, parseAppleTTML, v1Tov2, convertToStandardJson } from './parser.js';
 
 // Import local lyrics functions
-import { uploadLocalLyrics, getLocalLyricsList, deleteLocalLyrics } from './settingsManager.js';
+import { uploadLocalLyrics, getLocalLyricsList, deleteLocalLyrics, updateLocalLyrics, fetchLocalLyrics } from './settingsManager.js';
 
 async function handleUploadLocalLyrics() {
     const title = document.getElementById('modal-upload-song-title').value.trim();
     const artist = document.getElementById('modal-upload-artist-name').value.trim();
     const album = document.getElementById('modal-upload-album-name').value.trim();
+    const songwriter = document.getElementById('modal-upload-songwriter-name').value.trim();
     const format = document.getElementById('modal-upload-lyrics-format').value;
     const lyricsFile = document.getElementById('modal-upload-lyrics-file').files[0];
 
@@ -453,20 +454,20 @@ async function handleUploadLocalLyrics() {
     const reader = new FileReader();
     reader.onload = async (e) => {
         const lyricsContent = e.target.result;
-        const songInfo = { title, artist, album };
+        const songInfo = { title, artist, album, songwriter };
 
         try {
             let parsedLyrics;
             switch (format) {
                 case 'lrc': // Both LRC and ELRC will use parseSyncedLyrics
                 case 'elrc':
-                    parsedLyrics = parseSyncedLyrics(lyricsContent);
+                    parsedLyrics = parseSyncedLyrics(lyricsContent, songInfo);
                     break;
                 case 'apple-lrc':
-                    parsedLyrics = parseAppleMusicLRC(lyricsContent);
+                    parsedLyrics = parseAppleMusicLRC(lyricsContent, songInfo);
                     break;
                 case 'ttml':
-                    parsedLyrics = parseAppleTTML(lyricsContent);
+                    parsedLyrics = parseAppleTTML(lyricsContent, 0, false, songInfo);
                     break;
                 case 'json':
                     parsedLyrics = JSON.parse(lyricsContent);
@@ -488,6 +489,7 @@ async function handleUploadLocalLyrics() {
             document.getElementById('modal-upload-song-title').value = '';
             document.getElementById('modal-upload-artist-name').value = '';
             document.getElementById('modal-upload-album-name').value = '';
+            document.getElementById('modal-upload-songwriter-name').value = '';
             document.getElementById('modal-upload-lyrics-file').value = ''; // Clear file input
             document.getElementById('upload-lyrics-modal').classList.remove('show'); // Close modal
             populateLocalLyricsList(); // Refresh the list after upload
@@ -499,6 +501,208 @@ async function handleUploadLocalLyrics() {
         showStatusMessage('Error reading file.', true, 'modal-upload-lyrics-button');
     };
     reader.readAsText(lyricsFile);
+}
+
+// Global variable to store current editing item
+let currentEditingItem = null;
+
+async function openEditLyricsModal(item) {
+    try {
+        // Fetch the actual lyrics data
+        const response = await fetchLocalLyrics(item.songId);
+        if (response.success) {
+            currentEditingItem = {
+                songId: item.songId,
+                songInfo: item.songInfo,
+                lyrics: response.lyrics
+            };
+        } else {
+            throw new Error(response.error || 'Failed to fetch lyrics data');
+        }
+        
+        // Populate the edit modal with current data
+        document.getElementById('modal-edit-song-title').value = item.songInfo.title || '';
+        document.getElementById('modal-edit-artist-name').value = item.songInfo.artist || '';
+        document.getElementById('modal-edit-album-name').value = item.songInfo.album || '';
+        document.getElementById('modal-edit-songwriter-name').value = item.songInfo.songwriter || '';
+        
+        // Clear the file input
+        document.getElementById('modal-edit-lyrics-file').value = '';
+        
+        // Show the edit modal
+        const modal = document.getElementById('edit-lyrics-modal');
+        if (modal) {
+            modal.classList.add('show');
+        }
+    } catch (error) {
+        console.error('Error opening edit modal:', error);
+        showStatusMessage(`Error loading lyrics for editing: ${error.message || error}`, true, 'refresh-local-lyrics-list');
+    }
+}
+
+async function handleEditLocalLyrics() {
+    const title = document.getElementById('modal-edit-song-title').value.trim();
+    const artist = document.getElementById('modal-edit-artist-name').value.trim();
+    const album = document.getElementById('modal-edit-album-name').value.trim();
+    const songwriter = document.getElementById('modal-edit-songwriter-name').value.trim();
+    const format = document.getElementById('modal-edit-lyrics-format').value;
+    const lyricsFile = document.getElementById('modal-edit-lyrics-file').files[0];
+
+    if (!title || !artist) {
+        showStatusMessage('Song Title and Artist Name are required.', true, 'modal-edit-lyrics-button');
+        return;
+    }
+
+    if (!currentEditingItem) {
+        showStatusMessage('No lyrics item selected for editing.', true, 'modal-edit-lyrics-button');
+        return;
+    }
+
+    // If no new file is uploaded, just update the metadata
+    if (!lyricsFile) {
+        try {
+            const updatedSongInfo = { title, artist, album, songwriter };
+            
+            // Update the lyrics metadata in the existing lyrics object
+            const updatedLyrics = {
+                ...currentEditingItem.lyrics,
+                metadata: {
+                    ...currentEditingItem.lyrics.metadata,
+                    title: title,
+                    artist: artist,
+                    album: album,
+                    songWriters: songwriter ? songwriter.split(',').map(name => name.trim()).filter(name => name) : []
+                }
+            };
+            
+            await updateLocalLyrics(currentEditingItem.songId, updatedSongInfo, updatedLyrics);
+            
+            // Clear cache to ensure changes are reflected immediately
+            try {
+                await clearCache();
+                // Also clear any cached lyrics data
+                if (typeof chrome !== 'undefined' && chrome.storage) {
+                    await chrome.storage.local.clear();
+                }
+            } catch (cacheError) {
+                console.warn('Failed to clear cache:', cacheError);
+            }
+            
+            showStatusMessage('Lyrics metadata updated successfully!', false, 'modal-edit-lyrics-button');
+            closeEditModal();
+            populateLocalLyricsList(); // Refresh list
+            
+            // Notify content script to refresh lyrics if currently playing
+            try {
+                if (typeof chrome !== 'undefined' && chrome.tabs) {
+                    chrome.tabs.query({active: true, currentWindow: true}, (tabs) => {
+                        if (tabs[0]) {
+                            chrome.tabs.sendMessage(tabs[0].id, {
+                                type: 'REFRESH_LYRICS_AFTER_EDIT',
+                                songId: currentEditingItem.songId
+                            });
+                        }
+                    });
+                }
+            } catch (error) {
+                console.warn('Failed to notify content script:', error);
+            }
+        } catch (error) {
+            showStatusMessage(`Error updating lyrics: ${error}`, true, 'modal-edit-lyrics-button');
+        }
+        return;
+    }
+
+    // If a new file is uploaded, parse and update the lyrics
+    const reader = new FileReader();
+    reader.onload = async (e) => {
+        const lyricsContent = e.target.result;
+        const songInfo = { title, artist, album, songwriter };
+
+        try {
+            let parsedLyrics;
+            switch (format) {
+                case 'lrc': // Both LRC and ELRC will use parseSyncedLyrics
+                case 'elrc':
+                    parsedLyrics = parseSyncedLyrics(lyricsContent, songInfo);
+                    break;
+                case 'apple-lrc':
+                    parsedLyrics = parseAppleMusicLRC(lyricsContent, songInfo);
+                    break;
+                case 'ttml':
+                    parsedLyrics = parseAppleTTML(lyricsContent, 0, false, songInfo);
+                    break;
+                case 'json':
+                    parsedLyrics = JSON.parse(lyricsContent);
+                    if (parsedLyrics && parsedLyrics.KpoeTools && !parsedLyrics.KpoeTools.includes('1.31R2-LPlusBcknd')) {
+                        console.log("Converting V1 JSON to V2 format.");
+                        parsedLyrics = v1Tov2(parsedLyrics);
+                    } else if (parsedLyrics && !parsedLyrics.KpoeTools && parsedLyrics.lyrics && parsedLyrics.lyrics.length > 0 && parsedLyrics.lyrics[0].isLineEnding !== undefined) {
+                        console.log("Converting older V1 JSON (no KpoeTools) to V2 format.");
+                        parsedLyrics = v1Tov2(parsedLyrics);
+                    }
+                    break;
+                default:
+                    throw new Error('Unsupported lyrics format.');
+            }
+            const jsonLyrics = format === 'json' ? parsedLyrics : convertToStandardJson(parsedLyrics);
+
+            await updateLocalLyrics(currentEditingItem.songId, songInfo, jsonLyrics);
+            
+            // Clear cache to ensure changes are reflected immediately
+            try {
+                await clearCache();
+                // Also clear any cached lyrics data
+                if (typeof chrome !== 'undefined' && chrome.storage) {
+                    await chrome.storage.local.clear();
+                }
+            } catch (cacheError) {
+                console.warn('Failed to clear cache:', cacheError);
+            }
+            
+            showStatusMessage('Lyrics updated successfully!', false, 'modal-edit-lyrics-button');
+            closeEditModal();
+            populateLocalLyricsList(); // Refresh list
+            
+            // Notify content script to refresh lyrics if currently playing
+            try {
+                if (typeof chrome !== 'undefined' && chrome.tabs) {
+                    chrome.tabs.query({active: true, currentWindow: true}, (tabs) => {
+                        if (tabs[0]) {
+                            chrome.tabs.sendMessage(tabs[0].id, {
+                                type: 'REFRESH_LYRICS_AFTER_EDIT',
+                                songId: currentEditingItem.songId
+                            });
+                        }
+                    });
+                }
+            } catch (error) {
+                console.warn('Failed to notify content script:', error);
+            }
+        } catch (error) {
+            console.error("Error updating lyrics:", error);
+            showStatusMessage(`Error updating lyrics: ${error.message || error}`, true, 'modal-edit-lyrics-button');
+        }
+    };
+    reader.onerror = () => {
+        showStatusMessage('Error reading file.', true, 'modal-edit-lyrics-button');
+    };
+    reader.readAsText(lyricsFile);
+}
+
+function closeEditModal() {
+    const modal = document.getElementById('edit-lyrics-modal');
+    if (modal) {
+        modal.classList.remove('show');
+    }
+    currentEditingItem = null;
+    
+    // Clear form fields
+    document.getElementById('modal-edit-song-title').value = '';
+    document.getElementById('modal-edit-artist-name').value = '';
+    document.getElementById('modal-edit-album-name').value = '';
+    document.getElementById('modal-edit-songwriter-name').value = '';
+    document.getElementById('modal-edit-lyrics-file').value = '';
 }
 
 async function populateLocalLyricsList() {
@@ -527,10 +731,28 @@ async function populateLocalLyricsList() {
             listItem.innerHTML = `
                 <span class="material-symbols-outlined drag-handle">music_note</span>
                 <span class="source-name">${item.songInfo.title} - ${item.songInfo.artist}</span>
-                <button class="remove-source-button btn-icon btn-icon-error" title="Delete local lyrics">
-                    <span class="material-symbols-outlined">delete</span>
-                </button>
+                <div class="source-actions">
+                    <button class="edit-source-button btn-icon btn-icon-primary" title="Edit local lyrics">
+                        <span class="material-symbols-outlined">edit</span>
+                    </button>
+                    <button class="remove-source-button btn-icon btn-icon-error" title="Delete local lyrics">
+                        <span class="material-symbols-outlined">delete</span>
+                    </button>
+                </div>
             `;
+            
+            // Add event listener for edit button
+            const editBtn = listItem.querySelector('.edit-source-button');
+            if (editBtn) {
+                editBtn.addEventListener('click', async (e) => {
+                    e.stopPropagation();
+                    try {
+                        await openEditLyricsModal(item);
+                    } catch (error) {
+                        showStatusMessage(`Error loading lyrics for editing: ${error}`, true, 'refresh-local-lyrics-list');
+                    }
+                });
+            }
             
             // Add event listener for delete button
             const deleteBtn = listItem.querySelector('.remove-source-button');
@@ -614,6 +836,33 @@ document.addEventListener('DOMContentLoaded', () => {
         uploadButton.addEventListener('click', handleUploadLocalLyrics);
     } else {
         console.error('Upload button not found');
+    }
+
+    // Edit modal close button
+    const editCloseButton = document.querySelector('#edit-lyrics-modal .close-button');
+    if (editCloseButton) {
+        editCloseButton.addEventListener('click', (e) => {
+            e.preventDefault();
+            closeEditModal();
+        });
+    } else {
+        console.error('Edit modal close button not found');
+    }
+
+    // Edit modal close on outside click
+    window.addEventListener('click', (event) => {
+        const editModal = document.getElementById('edit-lyrics-modal');
+        if (event.target === editModal) {
+            closeEditModal();
+        }
+    });
+
+    // Edit button
+    const editButton = document.getElementById('modal-edit-lyrics-button');
+    if (editButton) {
+        editButton.addEventListener('click', handleEditLocalLyrics);
+    } else {
+        console.error('Edit button not found');
     }
 
     // Refresh button
