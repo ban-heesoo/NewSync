@@ -123,7 +123,7 @@ ytmusic-app #layout[player-ui-state="FULLSCREEN"] .lyplus-blur-container {
 }
 
 #layout.dynamic-player[player-ui-state="PLAYER_PAGE_OPEN"] :not([player-fullscreened]) ytmusic-player {
-    border: 1px solid #afafaf2c;
+    border: none;
     border-radius: 2em;
     box-shadow: 0 1em 3em #00000038;
 }
@@ -160,7 +160,7 @@ ytmusic-app #layout[player-ui-state="FULLSCREEN"] .lyplus-blur-container {
         left: 30%;
         width: 45rem;
         height: 45rem;
-        border: 1px solid #afafaf2c;
+        border: none;
         border-radius: 1em;
         box-shadow: 0 1em 3em #00000038;
         mask-image: none !important;
