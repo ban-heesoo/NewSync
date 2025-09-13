@@ -912,7 +912,7 @@ ytmusic-player-page[player-fullscreened] #lyrics-plus-translation-dropdown {
     opacity: 0.8;
     font-size: var(--lyplus-font-size-subtext);
     overflow-wrap: break-word;
-    color: var(--lyplus-text-tertiary); /* Fixed: Changed from primary to tertiary for smaller text */
+    color: var(--lyplus-lyrics-pallete, var(--lyplus-text-primary)); /* Use same color as main lyrics */
     pointer-events: none;
     user-select: none;
     -webkit-user-select: none;
@@ -924,10 +924,15 @@ ytmusic-player-page[player-fullscreened] #lyrics-plus-translation-dropdown {
     color: var(--lyplus-text-translation-active); /* More appropriate for active translation */
 }
 .lyrics-line.active .lyrics-romanization-container {
-    color: var(--lyplus-text-tertiary); /* Keep tertiary for active romanization - smaller text */
+    color: var(--lyplus-lyrics-pallete, var(--lyplus-text-primary)); /* Use same color as main lyrics */
 }
 .lyrics-romanization-container {
     direction: ltr !important; /* Always force LTR for romanization */
+}
+
+/* Ensure romanized lyrics use same color as main lyrics when inactive */
+.lyrics-line:not(.active) .lyrics-romanization-container {
+    color: var(--lyplus-text-secondary); /* Same as inactive main lyrics */
 }
 .lyrics-romanization-container.rtl-text {
     direction: rtl !important;
