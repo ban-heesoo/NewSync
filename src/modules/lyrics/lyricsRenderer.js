@@ -887,7 +887,8 @@ class LyricsPlusRenderer {
       }
     }
 
-    container.classList.toggle('fullscreen', document.body.hasAttribute('player-fullscreened_'));
+    const playerPageElement = document.querySelector('ytmusic-player-page');
+    container.classList.toggle('fullscreen', playerPageElement && playerPageElement.hasAttribute('player-fullscreened'));
     const isWordByWordMode = lyrics.type === "Word" && currentSettings.wordByWord;
     container.classList.toggle('word-by-word-mode', isWordByWordMode);
     container.classList.toggle('line-by-line-mode', !isWordByWordMode);
@@ -997,6 +998,14 @@ class LyricsPlusRenderer {
     }
 
     container.appendChild(fragment);
+
+    // Add song information display in fullscreen mode
+    const playerPageForSongInfo = document.querySelector('ytmusic-player-page');
+    const isFullscreen = playerPageForSongInfo && playerPageForSongInfo.hasAttribute('player-fullscreened');
+    console.log('LYPLUS: Fullscreen check - playerPage:', !!playerPageForSongInfo, 'isFullscreen:', isFullscreen, 'hasSongInfo:', !!this.lastKnownSongInfo);
+    if (isFullscreen && this.lastKnownSongInfo) {
+      this._addSongInfoDisplay(container);
+    }
 
     // Post-rendering logic for gaps and timing adjustments
     const originalLines = Array.from(container.querySelectorAll('.lyrics-line:not(.lyrics-gap)'));
@@ -1160,7 +1169,8 @@ class LyricsPlusRenderer {
       }
     }
 
-    container.classList.toggle('fullscreen', document.body.hasAttribute('player-fullscreened_'));
+    const playerPageElement = document.querySelector('ytmusic-player-page');
+    container.classList.toggle('fullscreen', playerPageElement && playerPageElement.hasAttribute('player-fullscreened'));
     const isWordByWordMode = type === "Word" && currentSettings.wordByWord;
     container.classList.toggle('word-by-word-mode', isWordByWordMode);
     container.classList.toggle('line-by-line-mode', !isWordByWordMode);
@@ -1168,6 +1178,22 @@ class LyricsPlusRenderer {
 
     // Call the new updateDisplayMode to handle the actual rendering of lyrics lines
     this.updateDisplayMode(lyrics, displayMode, currentSettings);
+
+    // Add song information display in fullscreen mode
+    const playerPageForDisplay = document.querySelector('ytmusic-player-page');
+    const isFullscreen = playerPageForDisplay && playerPageForDisplay.hasAttribute('player-fullscreened');
+    console.log('LYPLUS: DisplayLyrics fullscreen check - playerPage:', !!playerPageForDisplay, 'isFullscreen:', isFullscreen, 'hasSongInfo:', !!songInfo);
+    if (isFullscreen && songInfo) {
+      this._addSongInfoDisplay(container);
+    }
+    
+    // Also add song info display when not in fullscreen initially (for when user goes fullscreen later)
+    if (songInfo) {
+      this._addSongInfoDisplay(container);
+    }
+    
+    // Set up fullscreen change listener
+    this._setupFullscreenListener();
 
     // Create control buttons (only once)
     this._createControlButtons();
@@ -1190,6 +1216,13 @@ class LyricsPlusRenderer {
     if (container) {
       // Fully reset internal state to avoid any stale lyrics lingering
       this.cleanupLyrics();
+      // Also remove any leftover song-info overlay tied to previous track
+      const existingSongInfo = document.querySelector('.lyrics-song-info');
+      if (existingSongInfo) existingSongInfo.remove();
+      if (this._cleanupArtworkObservers) {
+        this._cleanupArtworkObservers();
+        this._cleanupArtworkObservers = null;
+      }
       const refreshedContainer = this._getContainer();
       if (refreshedContainer) {
         refreshedContainer.innerHTML = `<span class="text-not-found">${t("notFound")}</span>`;
@@ -2001,6 +2034,13 @@ class LyricsPlusRenderer {
       this.resizeObserver.disconnect();
       this.resizeObserver = null;
     }
+    // Remove song info overlay on cleanup to prevent stale titles
+    const existingSongInfo = document.querySelector('.lyrics-song-info');
+    if (existingSongInfo) existingSongInfo.remove();
+    if (this._cleanupArtworkObservers) {
+      this._cleanupArtworkObservers();
+      this._cleanupArtworkObservers = null;
+    }
     
     // Hide refresh button and translation button during loading
     if (this.reloadButton) {
@@ -2009,6 +2049,248 @@ class LyricsPlusRenderer {
     if (this.translationButton) {
       this.translationButton.style.display = 'none';
     }
+  }
+
+  /**
+   * Adds song information display below the album art in fullscreen mode
+   * @private
+   */
+  _addSongInfoDisplay(container) {
+    console.log('LYPLUS: Adding song info display, songInfo:', this.lastKnownSongInfo);
+    
+    // Check if we're actually in YouTube Music fullscreen mode
+    const playerPage = document.querySelector('ytmusic-player-page');
+    const isFullscreen = playerPage && playerPage.hasAttribute('player-fullscreened');
+    const isVideoMode = playerPage && playerPage.hasAttribute('video-mode');
+    
+    if (!isFullscreen) {
+      console.log('LYPLUS: Not in fullscreen mode, skipping song info');
+      return;
+    }
+    // Skip in video fullscreen mode
+    if (isVideoMode) {
+      console.log('LYPLUS: Video mode detected, skipping song info');
+      return;
+    }
+    
+    // Remove existing song info display if it exists
+    const existingSongInfo = document.querySelector('.lyrics-song-info');
+    if (existingSongInfo) {
+      existingSongInfo.remove();
+    }
+
+    const songInfo = this.lastKnownSongInfo;
+    if (!songInfo) {
+      console.log('LYPLUS: No song info available');
+      return;
+    }
+    if (songInfo.isVideo) {
+      // Do not show song info overlay for video contents
+      console.log('LYPLUS: Song is video content, skipping song info');
+      return;
+    }
+
+    // Create song info container positioned directly below album art
+    const songInfoContainer = document.createElement('div');
+    songInfoContainer.className = 'lyrics-song-info';
+    songInfoContainer.style.display = 'block';
+    songInfoContainer.style.position = 'fixed';
+    songInfoContainer.style.top = '60%';
+    songInfoContainer.style.left = '25%';
+    songInfoContainer.style.transform = 'none';
+    songInfoContainer.style.textAlign = 'left';
+    songInfoContainer.style.zIndex = '1000';
+    songInfoContainer.style.pointerEvents = 'none';
+    songInfoContainer.style.maxWidth = '25rem';
+    songInfoContainer.style.width = '100%';
+    
+    // Create song title (large and prominent like in the reference image)
+    const titleElement = document.createElement('p');
+    titleElement.id = 'lyrics-song-title';
+    titleElement.textContent = songInfo.title;
+    titleElement.style.fontSize = '1.7rem';
+    titleElement.style.fontWeight = '700';
+    titleElement.style.color = '#ffffffeb';
+    titleElement.style.margin = '0 0 0.5rem 0';
+    // No text shadow for cleaner look
+    titleElement.style.lineHeight = '1.1';
+    titleElement.style.letterSpacing = '-0.02em';
+    titleElement.style.fontFamily = 'SF Pro Display, sans-serif';
+    
+    // Create artist info (smaller, below title)
+    const artistElement = document.createElement('p');
+    artistElement.id = 'lyrics-song-artist';
+    
+    let artistText = songInfo.artist;
+    if (songInfo.album && songInfo.album.trim() !== '') {
+      artistText += ` — ${songInfo.album}`;
+    }
+    
+    artistElement.textContent = artistText;
+    artistElement.style.fontSize = '1.7rem';
+    artistElement.style.color = '#ffffffa3';
+    artistElement.style.margin = '0';
+    // No text shadow for cleaner look
+    artistElement.style.lineHeight = '1.0';
+    artistElement.style.fontWeight = '700';
+    artistElement.style.fontFamily = 'SF Pro Display, sans-serif';
+    
+    // Append elements to container
+    songInfoContainer.appendChild(titleElement);
+    songInfoContainer.appendChild(artistElement);
+    
+    // Add to body first
+    document.body.appendChild(songInfoContainer);
+    // Position relative to album artwork and keep it synced
+    this._positionSongInfoRelativeToArtwork(songInfoContainer);
+    this._setupArtworkObservers(songInfoContainer);
+    console.log('LYPLUS: Song info added and positioned relative to artwork');
+  }
+
+  _addSongInfoToContainer(container, songInfo) {
+    // Fallback method to add song info to lyrics container
+    const songInfoContainer = document.createElement('div');
+    songInfoContainer.className = 'lyrics-song-info';
+    songInfoContainer.style.display = 'block';
+    songInfoContainer.style.position = 'fixed';
+    songInfoContainer.style.bottom = '20px';
+    songInfoContainer.style.left = '20px';
+    songInfoContainer.style.right = '20px';
+    songInfoContainer.style.textAlign = 'center';
+    songInfoContainer.style.zIndex = '1000';
+    
+    const titleElement = document.createElement('p');
+    titleElement.id = 'lyrics-song-title';
+    titleElement.textContent = songInfo.title;
+    
+    const artistElement = document.createElement('p');
+    artistElement.id = 'lyrics-song-artist';
+    
+    let artistText = songInfo.artist;
+    if (songInfo.album && songInfo.album.trim() !== '') {
+      artistText += ` — ${songInfo.album}`;
+    }
+    
+    artistElement.textContent = artistText;
+    
+    songInfoContainer.appendChild(titleElement);
+    songInfoContainer.appendChild(artistElement);
+    
+    // Add to body to ensure it's visible
+    document.body.appendChild(songInfoContainer);
+    console.log('LYPLUS: Song info added to body as fallback');
+  }
+
+  _setupFullscreenListener() {
+    // Only set up once
+    if (this.fullscreenListenerSetup) return;
+    this.fullscreenListenerSetup = true;
+    
+    // Listen for fullscreen changes
+    const observer = new MutationObserver((mutations) => {
+      mutations.forEach((mutation) => {
+        if (mutation.type === 'attributes' && mutation.attributeName === 'player-fullscreened') {
+          const playerPage = mutation.target;
+          const isFullscreen = playerPage.hasAttribute('player-fullscreened');
+          console.log('LYPLUS: Fullscreen changed:', isFullscreen);
+          
+          if (isFullscreen && !playerPage.hasAttribute('video-mode') && this.lastKnownSongInfo && !this.lastKnownSongInfo.isVideo) {
+            // Add song info when entering fullscreen
+            this._addSongInfoDisplay(null);
+          } else {
+            // Remove song info when exiting fullscreen
+            const existingSongInfo = document.querySelector('.lyrics-song-info');
+            if (existingSongInfo) {
+              existingSongInfo.remove();
+            }
+            if (this._cleanupArtworkObservers) {
+              this._cleanupArtworkObservers();
+              this._cleanupArtworkObservers = null;
+            }
+          }
+        }
+      });
+    });
+    
+    // Observe the player page for fullscreen changes
+    const playerPage = document.querySelector('ytmusic-player-page');
+    if (playerPage) {
+      observer.observe(playerPage, {
+        attributes: true,
+        attributeFilter: ['player-fullscreened']
+      });
+    }
+  }
+
+  /**
+   * Finds the album artwork element in YT Music fullscreen layout.
+   */
+  _findArtworkElement() {
+    // Common selectors observed in YT Music layouts
+    const candidates = [
+      // Fullscreen player artwork image
+      'ytmusic-player-page[player-fullscreened] img.image',
+      // Artwork container backgrounds
+      'ytmusic-player-page[player-fullscreened] #thumbnail img',
+      'ytmusic-player-page[player-fullscreened] .image',
+      // Player bar image (fallback)
+      '.image.ytmusic-player-bar'
+    ];
+    for (const sel of candidates) {
+      const el = document.querySelector(sel);
+      if (el && el.getBoundingClientRect) return el;
+    }
+    return null;
+  }
+
+  /**
+   * Positions the provided container just below the artwork bounding box.
+   */
+  _positionSongInfoRelativeToArtwork(songInfoContainer) {
+    const artworkEl = this._findArtworkElement();
+    if (!artworkEl) return;
+    const rect = artworkEl.getBoundingClientRect();
+
+    // Place left-aligned under the artwork
+    const leftX = rect.left;
+    const topY = rect.bottom + 16; // 16px gap below artwork
+
+    songInfoContainer.style.position = 'fixed';
+    songInfoContainer.style.left = `${leftX}px`;
+    songInfoContainer.style.top = `${topY}px`;
+    songInfoContainer.style.transform = 'none';
+    songInfoContainer.style.maxWidth = `${Math.max(260, Math.floor(rect.width))}px`;
+    songInfoContainer.style.textAlign = 'left';
+  }
+
+  /**
+   * Observes layout changes to keep song info aligned with artwork when zooming/resizing.
+   */
+  _setupArtworkObservers(songInfoContainer) {
+    // Reposition on resize/scroll to follow layout changes
+    const reposition = () => this._positionSongInfoRelativeToArtwork(songInfoContainer);
+    this._artworkRepositionHandler = reposition;
+
+    window.addEventListener('resize', reposition, { passive: true });
+    window.addEventListener('scroll', reposition, { passive: true });
+
+    // Mutation observer to watch player layout changes
+    const playerPage = document.querySelector('ytmusic-player-page');
+    if (playerPage) {
+      if (this._artworkMutationObserver) this._artworkMutationObserver.disconnect();
+      this._artworkMutationObserver = new MutationObserver(() => reposition());
+      this._artworkMutationObserver.observe(playerPage, { attributes: true, childList: true, subtree: true });
+    }
+
+    // Clean-up hook when leaving fullscreen
+    this._cleanupArtworkObservers = () => {
+      window.removeEventListener('resize', reposition);
+      window.removeEventListener('scroll', reposition);
+      if (this._artworkMutationObserver) {
+        this._artworkMutationObserver.disconnect();
+        this._artworkMutationObserver = null;
+      }
+    };
   }
 }
 

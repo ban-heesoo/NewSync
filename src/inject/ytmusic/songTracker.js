@@ -97,8 +97,14 @@ function LYPLUS_checkForSongChange() {
         return;
     }
 
-    // Notify extension only if the song title or artist has changed
-    if (newSongInfo.title !== LYPLUS_currentSong.title || newSongInfo.artist !== LYPLUS_currentSong.artist || Math.round(newSongInfo.duration) !== Math.round(LYPLUS_currentSong.duration) || newSongInfo.videoId !== LYPLUS_currentSong.videoId) {
+    // Notify extension if any key field changed (including album)
+    if (
+        newSongInfo.title !== LYPLUS_currentSong.title ||
+        newSongInfo.artist !== LYPLUS_currentSong.artist ||
+        newSongInfo.album !== LYPLUS_currentSong.album ||
+        Math.round(newSongInfo.duration) !== Math.round(LYPLUS_currentSong.duration) ||
+        newSongInfo.videoId !== LYPLUS_currentSong.videoId
+    ) {
         LYPLUS_currentSong = newSongInfo;
         
         // Send message to the extension script
