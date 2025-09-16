@@ -1118,6 +1118,10 @@ class LyricsPlusRenderer {
     const container = this._getContainer();
     if (!container) return;
 
+    // Ensure no stale song info remains while loading
+    const staleInfo = document.querySelector('.lyrics-song-info');
+    if (staleInfo) staleInfo.remove();
+
     // Add scale-out animation to loading text before removing it
     const loadingElement = container.querySelector('.text-loading');
     if (loadingElement && container.classList.contains('lyrics-plus-message')) {
@@ -2034,6 +2038,8 @@ class LyricsPlusRenderer {
       this.resizeObserver.disconnect();
       this.resizeObserver = null;
     }
+    // Prevent stale song info overlay from re-appearing while loading next song
+    this.lastKnownSongInfo = null;
     // Remove song info overlay on cleanup to prevent stale titles
     const existingSongInfo = document.querySelector('.lyrics-song-info');
     if (existingSongInfo) existingSongInfo.remove();
@@ -2104,20 +2110,13 @@ class LyricsPlusRenderer {
     songInfoContainer.style.maxWidth = '25rem';
     songInfoContainer.style.width = '100%';
     
-    // Create song title (large and prominent like in the reference image)
+    // Create song title (styles from CSS)
     const titleElement = document.createElement('p');
     titleElement.id = 'lyrics-song-title';
     titleElement.textContent = songInfo.title;
-    titleElement.style.fontSize = '1.7rem';
-    titleElement.style.fontWeight = '700';
-    titleElement.style.color = '#ffffffeb';
-    titleElement.style.margin = '0 0 0.5rem 0';
-    // No text shadow for cleaner look
-    titleElement.style.lineHeight = '1.1';
-    titleElement.style.letterSpacing = '-0.02em';
-    titleElement.style.fontFamily = 'SF Pro Display, sans-serif';
+    // All typography from CSS
     
-    // Create artist info (smaller, below title)
+    // Create artist info (styles from CSS)
     const artistElement = document.createElement('p');
     artistElement.id = 'lyrics-song-artist';
     
@@ -2127,12 +2126,7 @@ class LyricsPlusRenderer {
     }
     
     artistElement.textContent = artistText;
-    artistElement.style.fontSize = '1.7rem';
-    artistElement.style.color = '#ffffffa3';
-    artistElement.style.margin = '0';
-    // No text shadow for cleaner look
-    artistElement.style.lineHeight = '1.0';
-    artistElement.style.fontWeight = '700';
+    // All typography from CSS
     artistElement.style.fontFamily = 'SF Pro Display, sans-serif';
     
     // Append elements to container

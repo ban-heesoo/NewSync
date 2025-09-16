@@ -522,21 +522,21 @@ span.lyrics-source-provider {
 }
 
 #lyrics-song-title {
-    font-size: 1.5rem;
+    font-size: 1.7rem;
     font-weight: 700;
-    color: #ffffff;
-    margin: 0;
+    color: #ffffffeb;
+    margin: 0 0 0.25rem 0;
     /* text-shadow: 0 2px 8px rgba(0, 0, 0, 0.6); */
-    line-height: 1.2;
+    line-height: 1.1;
 }
 
 #lyrics-song-artist {
-    font-size: 1.5rem;
+    font-size: 1.7rem;
     font-weight: 700;
-    color: #ffffff80;
-    margin: 0.25rem 0 0;
+    color: #ffffffa3;
+    margin: 0;
     /* text-shadow: 0 1px 4px rgba(0, 0, 0, 0.6); */
-    line-height: 1.3;
+    line-height: 1.1;
 }
 
 /* Show song info only in fullscreen mode */
