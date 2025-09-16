@@ -1172,6 +1172,14 @@ class LyricsPlusRenderer {
     // Create control buttons (only once)
     this._createControlButtons();
     container.classList.toggle('blur-inactive-enabled', !!currentSettings.blurInactive);
+    
+    // Show refresh button and translation button when lyrics are successfully displayed
+    if (this.reloadButton) {
+      this.reloadButton.style.display = '';
+    }
+    if (this.translationButton) {
+      this.translationButton.style.display = '';
+    }
   }
 
   /**
@@ -1180,8 +1188,20 @@ class LyricsPlusRenderer {
   displaySongNotFound() {
     const container = this._getContainer();
     if (container) {
-      container.innerHTML = `<span class="text-not-found">${t("notFound")}</span>`;
-      container.classList.add('lyrics-plus-message');
+      // Fully reset internal state to avoid any stale lyrics lingering
+      this.cleanupLyrics();
+      const refreshedContainer = this._getContainer();
+      if (refreshedContainer) {
+        refreshedContainer.innerHTML = `<span class="text-not-found">${t("notFound")}</span>`;
+        refreshedContainer.classList.add('lyrics-plus-message');
+      }
+      // Keep refresh button and translation button hidden when lyrics not found
+      if (this.reloadButton) {
+        this.reloadButton.style.display = 'none';
+      }
+      if (this.translationButton) {
+        this.translationButton.style.display = 'none';
+      }
     }
   }
 
@@ -1193,6 +1213,13 @@ class LyricsPlusRenderer {
     if (container) {
       container.innerHTML = `<span class="text-not-found">${t("notFoundError")}</span>`;
       container.classList.add('lyrics-plus-message');
+      // Hide refresh button and translation button when there's an error
+      if (this.reloadButton) {
+        this.reloadButton.style.display = 'none';
+      }
+      if (this.translationButton) {
+        this.translationButton.style.display = 'none';
+      }
     }
   }
 
@@ -1973,6 +2000,14 @@ class LyricsPlusRenderer {
     if (this.resizeObserver) {
       this.resizeObserver.disconnect();
       this.resizeObserver = null;
+    }
+    
+    // Hide refresh button and translation button during loading
+    if (this.reloadButton) {
+      this.reloadButton.style.display = 'none';
+    }
+    if (this.translationButton) {
+      this.translationButton.style.display = 'none';
     }
   }
 }
