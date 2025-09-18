@@ -1014,7 +1014,7 @@ ytmusic-player-page[player-fullscreened] #lyrics-plus-translation-dropdown {
     -webkit-user-select: none;
     -moz-user-select: none;
     -ms-user-select: none;
-    transition: opacity 0.3s ease;
+    transition: opacity 0.3s ease, color 0.18s ease; /* Smooth color change like main lyrics */
 }
 .lyrics-line.active .lyrics-translation-container {
     color: var(--lyplus-lyrics-pallete, var(--lyplus-text-primary)); /* Bright like active main lyrics */
