@@ -224,6 +224,10 @@ ytmusic-app-layout[is-mweb-modernization-enabled] #lyrics-plus-container[style*=
 .lyrics-plus-integrated.fade-past-lines .lyrics-translation-container {
     opacity: 1; /* avoid stacking 0.8 with parent line opacity */
 }
+/* Apply same rule to romanization for uniform fade */
+.lyrics-plus-integrated.fade-past-lines .lyrics-romanization-container {
+    opacity: 1;
+}
 
 /* In fade-past-lines mode, keep background vocals expanded/visible only for past lines */
 .lyrics-plus-integrated.fade-past-lines .lyrics-line.past .background-vocal-container {
@@ -1382,11 +1386,29 @@ ytmusic-app #layout[player-ui-state="FULLSCREEN"] .lyplus-blur-container {
     border: none !important;
     box-shadow: none !important;
   }
+  /* Spacing between main lyric, romanization, and translation in video fullscreen */
+  ytmusic-player-page[video-mode][player-fullscreened] .lyrics-line .main-vocal-container {
+    margin-bottom: 0.25em;
+  }
+  ytmusic-player-page[video-mode][player-fullscreened] .lyrics-line .lyrics-romanization-container {
+    margin-top: 0.1em;
+    margin-bottom: 0.15em;
+  }
+  ytmusic-player-page[video-mode][player-fullscreened] .lyrics-line .lyrics-translation-container {
+    margin-top: 0.15em !important; /* override default for consistent spacing */
+  }
   ytmusic-player-page[video-mode][player-fullscreened] .lyrics-line.active .lyrics-translation-container {
     color: #ffffff !important; /* Bright when active */
   }
   ytmusic-player-page[video-mode][player-fullscreened] .lyrics-line:not(.active) .lyrics-translation-container {
     color: #ffffff7a !important; /* Dim when inactive (for completeness) */
+  }
+  /* Match romanization brightness to translation in video fullscreen */
+  ytmusic-player-page[video-mode][player-fullscreened] .lyrics-line.active .lyrics-romanization-container {
+    color: #ffffff !important;
+  }
+  ytmusic-player-page[video-mode][player-fullscreened] .lyrics-line:not(.active) .lyrics-romanization-container {
+    color: #ffffff7a !important;
   }
   ytmusic-player-page[player-fullscreened]:not([video-mode]) .lyrics-translation-container {
     background: none !important;
@@ -1404,6 +1426,13 @@ ytmusic-app #layout[player-ui-state="FULLSCREEN"] .lyplus-blur-container {
   }
   ytmusic-player-page[player-fullscreened]:not([video-mode]) .lyrics-line:not(.active) .lyrics-translation-container {
     color: #ffffff7a !important; /* Dim when inactive */
+  }
+  /* Match romanization brightness to translation in non-video fullscreen */
+  ytmusic-player-page[player-fullscreened]:not([video-mode]) .lyrics-line.active .lyrics-romanization-container {
+    color: #ffffff !important;
+  }
+  ytmusic-player-page[player-fullscreened]:not([video-mode]) .lyrics-line:not(.active) .lyrics-romanization-container {
+    color: #ffffff7a !important;
   }
 }
  
