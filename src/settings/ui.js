@@ -31,6 +31,7 @@ function setupAutoSaveListeners() {
         // Appearance
         { id: 'lightweight', key: 'lightweight', type: 'checkbox' },
         { id: 'hide-offscreen', key: 'hideOffscreen', type: 'checkbox' },
+        { id: 'fade-past-lines', key: 'fadePastLines', type: 'checkbox' },
         { id: 'compability-wipe', key: 'compabilityWipe', type: 'checkbox' },
         { id: 'blur-inactive', key: 'blurInactive', type: 'checkbox' },
         { id: 'dynamic-player', key: 'dynamicPlayer', type: 'checkbox' },
@@ -92,6 +93,7 @@ function updateFormElements(settings) {
     document.getElementById('lightweight').checked = settings.lightweight;
     document.getElementById('wordByWord').checked = settings.wordByWord;
     document.getElementById('hide-offscreen').checked = settings.hideOffscreen;
+    document.getElementById('fade-past-lines').checked = !!settings.fadePastLines;
     document.getElementById('compability-wipe').checked = settings.compabilityWipe;
     document.getElementById('blur-inactive').checked = settings.blurInactive;
     document.getElementById('dynamic-player').checked = settings.dynamicPlayer;

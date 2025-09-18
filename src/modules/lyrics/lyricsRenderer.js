@@ -1149,6 +1149,9 @@ class LyricsPlusRenderer {
     // Apply visual settings that are independent of display mode
     container.classList.toggle('use-song-palette-fullscreen', !!currentSettings.useSongPaletteFullscreen);
     container.classList.toggle('use-song-palette-all-modes', !!currentSettings.useSongPaletteAllModes);
+    const isVideoFullscreen = this._isVideoFullscreen?.() ?? this.__detectVideoFullscreen();
+    container.classList.toggle('fade-past-lines', !!currentSettings.fadePastLines && !isVideoFullscreen);
+    this._setupPlayerStateObserver?.(currentSettings);
 
     if (currentSettings.overridePaletteColor) {
       container.classList.add('override-palette-color');
@@ -1210,6 +1213,37 @@ class LyricsPlusRenderer {
     if (this.translationButton) {
       this.translationButton.style.display = '';
     }
+  }
+
+  // Detect if YT Music is currently in video fullscreen mode
+  __detectVideoFullscreen() {
+    try {
+      const page = document.querySelector('ytmusic-player-page');
+      return !!(page && page.hasAttribute('video-mode') && page.hasAttribute('player-fullscreened'));
+    } catch (_) {
+      return false;
+    }
+  }
+
+  _isVideoFullscreen() {
+    return this.__detectVideoFullscreen();
+  }
+
+  _setupPlayerStateObserver(currentSettings) {
+    const page = document.querySelector('ytmusic-player-page');
+    const container = this._getContainer();
+    if (!page || !container) return;
+
+    if (this._playerStateObserver) {
+      try { this._playerStateObserver.disconnect(); } catch (_) {}
+    }
+
+    this._playerStateObserver = new MutationObserver(() => {
+      const isVideoFullscreen = this._isVideoFullscreen();
+      const shouldEnableFade = !!currentSettings?.fadePastLines && !isVideoFullscreen;
+      container.classList.toggle('fade-past-lines', shouldEnableFade);
+    });
+    this._playerStateObserver.observe(page, { attributes: true });
   }
 
   /**
@@ -1423,6 +1457,9 @@ class LyricsPlusRenderer {
         if (line) {
           line.classList.remove('active');
           this._resetSyllables(line);
+          if (this.lyricsContainer && this.lyricsContainer.classList.contains('fade-past-lines')) {
+            line.classList.add('past');
+          }
         }
       }
     }
@@ -1434,6 +1471,8 @@ class LyricsPlusRenderer {
         const line = document.getElementById(lineId);
         if (line) {
           line.classList.add('active');
+          // Ensure newly active line is not treated as past
+          if (line.classList.contains('past')) line.classList.remove('past');
         }
       }
     }
@@ -1465,6 +1504,35 @@ class LyricsPlusRenderer {
           }
         }
         this._lastVisibilityUpdateSize = this.visibleLineIds.size;
+      }
+    }
+
+    // Apply fade-out class to past lines when enabled
+    if (this.lyricsContainer && this.lyricsContainer.classList.contains('fade-past-lines')) {
+      const elements = this.cachedLyricsLines;
+      const graceMs = 180; // small grace for smoother feel
+      for (let i = 0; i < elements.length; i++) {
+        const line = elements[i];
+        if (!line || typeof line._endTimeMs !== 'number') continue;
+        const becamePast = currentTime > line._endTimeMs; // immediate past detection to avoid collapse
+        const stablePast = currentTime > (line._endTimeMs + graceMs); // for stable fade state
+        const isActive = this.activeLineIds.has(line.id);
+
+        if (isActive) {
+          if (line.classList.contains('past')) line.classList.remove('past');
+          continue;
+        }
+
+        // Mark as past immediately after end to prevent background vocal collapse
+        if (becamePast) {
+          line.classList.add('past');
+          continue;
+        }
+
+        // If rewound significantly before the line start, clear past
+        if (currentTime < (line._startTimeMs - 50) && line.classList.contains('past')) {
+          line.classList.remove('past');
+        }
       }
     }
   }

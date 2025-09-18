@@ -21,6 +21,7 @@ let currentSettings = {
     cacheStrategy: 'aggressive',
     fontSize: 16,
     hideOffscreen: true, // New compatibility setting
+    fadePastLines: false,
     compabilityWipe: false, // New compatibility setting
     blurInactive: true,
     dynamicPlayer: true,
@@ -55,6 +56,7 @@ function loadSettings(callback) {
         cacheStrategy: 'aggressive',
         fontSize: 16,
         hideOffscreen: true, // New compatibility setting
+        fadePastLines: false,
         compabilityWipe: false, // New compatibility setting
         blurInactive: true,
         dynamicPlayer: true,

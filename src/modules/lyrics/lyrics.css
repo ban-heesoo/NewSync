@@ -204,6 +204,35 @@ ytmusic-app-layout[is-mweb-modernization-enabled] #lyrics-plus-container[style*=
     will-change: transform, opacity; /* Refine will-change for active state */
 }
 
+/* Fade-out for past lines when enabled */
+.lyrics-plus-integrated.fade-past-lines .lyrics-line {
+    transition: opacity 0.9s cubic-bezier(0.22, 0.61, 0.36, 1), transform 0.4s ease var(--lyrics-line-delay, 0ms), filter 0.3s ease;
+}
+.lyrics-plus-integrated.fade-past-lines .lyrics-line.lyrics-gap {
+    transition: padding .3s .5s, height .3s .5s, opacity .2s .5s, transform .3s var(--lyrics-line-delay, 0ms);
+}
+.lyrics-plus-integrated.fade-past-lines .lyrics-line:not(.active):not(.lyrics-gap):not(.past) {
+    opacity: 0.55;
+}
+.lyrics-plus-integrated.fade-past-lines .lyrics-line.past:not(.active):not(.lyrics-gap) {
+    opacity: 0;
+    pointer-events: none;
+    will-change: opacity;
+}
+
+/* In fade-past-lines mode, keep background vocals expanded/visible only for past lines */
+.lyrics-plus-integrated.fade-past-lines .lyrics-line.past .background-vocal-container {
+    max-height: 10em;
+    opacity: 1;
+}
+
+/* Allow default gap animation to handle scale-down; no forced transform here */
+
+/* Slightly stronger emphasis for current line in fade mode */
+.lyrics-plus-integrated.fade-past-lines .lyrics-line.active .main-vocal-container {
+    transform: scale3d(1.001, 1.001, 1);
+}
+
 .lyrics-line.singer-right {
     text-align: end;
 }
