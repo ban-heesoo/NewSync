@@ -220,6 +220,11 @@ ytmusic-app-layout[is-mweb-modernization-enabled] #lyrics-plus-container[style*=
     will-change: opacity;
 }
 
+/* In fade-past-lines mode, ensure translation fades uniformly with main lyrics (no extra dimming) */
+.lyrics-plus-integrated.fade-past-lines .lyrics-translation-container {
+    opacity: 1; /* avoid stacking 0.8 with parent line opacity */
+}
+
 /* In fade-past-lines mode, keep background vocals expanded/visible only for past lines */
 .lyrics-plus-integrated.fade-past-lines .lyrics-line.past .background-vocal-container {
     max-height: 10em;
