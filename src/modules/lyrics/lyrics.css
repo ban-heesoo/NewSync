@@ -1003,7 +1003,7 @@ ytmusic-player-page[player-fullscreened] #lyrics-plus-translation-dropdown {
     opacity: 0.8;
     font-size: var(--lyplus-font-size-subtext);
     overflow-wrap: break-word;
-    color: var(--lyplus-lyrics-pallete, var(--lyplus-text-primary)); /* Use same color as main lyrics */
+    color: var(--lyplus-text-secondary); /* Match inactive main lyrics color by default */
     pointer-events: none;
     user-select: none;
     -webkit-user-select: none;
@@ -1012,7 +1012,7 @@ ytmusic-player-page[player-fullscreened] #lyrics-plus-translation-dropdown {
     transition: opacity 0.3s ease;
 }
 .lyrics-line.active .lyrics-translation-container {
-    color: var(--lyplus-text-translation-active); /* More appropriate for active translation */
+    color: var(--lyplus-lyrics-pallete, var(--lyplus-text-primary)); /* Bright like active main lyrics */
 }
 .lyrics-line.active .lyrics-romanization-container {
     color: var(--lyplus-lyrics-pallete, var(--lyplus-text-primary)); /* Use same color as main lyrics */
@@ -1370,7 +1370,6 @@ ytmusic-app #layout[player-ui-state="FULLSCREEN"] .lyplus-blur-container {
     background: none !important;
     border-radius: 0 !important;
     padding: none !important;
-    color: #ffffff !important;
     margin-top: 0.2em;
     pointer-events: auto;
     backdrop-filter: blur(28px) !important;
@@ -1378,17 +1377,28 @@ ytmusic-app #layout[player-ui-state="FULLSCREEN"] .lyplus-blur-container {
     border: none !important;
     box-shadow: none !important;
   }
+  ytmusic-player-page[video-mode][player-fullscreened] .lyrics-line.active .lyrics-translation-container {
+    color: #ffffff !important; /* Bright when active */
+  }
+  ytmusic-player-page[video-mode][player-fullscreened] .lyrics-line:not(.active) .lyrics-translation-container {
+    color: #ffffff7a !important; /* Dim when inactive (for completeness) */
+  }
   ytmusic-player-page[player-fullscreened]:not([video-mode]) .lyrics-translation-container {
     background: none !important;
     border-radius: 0 !important;
     padding: 0 !important;
-    color: #ffffff7a !important;
     margin-top: 0.2em;
     pointer-events: auto;
     backdrop-filter: none !important;
     -webkit-backdrop-filter: none !important;
     border: none !important;
     box-shadow: none !important;
+  }
+  ytmusic-player-page[player-fullscreened]:not([video-mode]) .lyrics-line.active .lyrics-translation-container {
+    color: #ffffff !important; /* Bright when active */
+  }
+  ytmusic-player-page[player-fullscreened]:not([video-mode]) .lyrics-line:not(.active) .lyrics-translation-container {
+    color: #ffffff7a !important; /* Dim when inactive */
   }
 }
  
