@@ -241,10 +241,27 @@ function getDefaultMasterPalette() {
     });
 }
 
+/**
+ * Sets up WebGL blur effect for dynamic background
+ * Applies dynamic-player class based on current mode (player page vs fullscreen)
+ */
 function LYPLUS_setupBlurEffect() {
     console.log("LYPLUS: Setting up WebGL with GPU blur...");
-    if (typeof currentSettings !== 'undefined' && currentSettings.dynamicPlayer) {
-        document.querySelector('#layout')?.classList.add("dynamic-player");
+    
+    if (typeof currentSettings !== 'undefined') {
+        // Check current mode and apply appropriate setting
+        const playerPageElement = document.querySelector('ytmusic-player-page');
+        const isFullscreen = playerPageElement && playerPageElement.hasAttribute('player-fullscreened');
+        const shouldEnableDynamic = isFullscreen ? 
+            currentSettings.dynamicPlayerFullscreen : 
+            currentSettings.dynamicPlayerPage;
+            
+        const layoutElement = document.querySelector('#layout');
+        if (shouldEnableDynamic) {
+            layoutElement?.classList.add("dynamic-player");
+        } else {
+            layoutElement?.classList.remove("dynamic-player");
+        }
     }
 
     const existingContainer = document.querySelector('.lyplus-blur-container');

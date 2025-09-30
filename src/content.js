@@ -48,6 +48,24 @@ function initializeLyricsPlus() {
             }
         }
     });
+
+    /**
+     * Listen for settings updates from popup
+     * Updates dynamic background when settings change
+     */
+    // Listen for settings updates from popup
+    if (typeof chrome !== 'undefined' && chrome.runtime && chrome.runtime.onMessage) {
+        chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
+            if (message.type === 'YOUPLUS_SETTINGS_UPDATED') {
+                console.log('Settings updated from popup:', message.settings);
+                // Update current settings and reapply dynamic background
+                currentSettings = message.settings;
+                if (typeof applyDynamicPlayerClass === 'function') {
+                    applyDynamicPlayerClass();
+                }
+            }
+        });
+    }
 }
 
 

@@ -24,7 +24,8 @@ let currentSettings = {
     fadePastLines: false,
     compabilityWipe: false, // New compatibility setting
     blurInactive: true,
-    dynamicPlayer: true,
+    dynamicPlayerPage: true,
+    dynamicPlayerFullscreen: true,
     customCSS: '',
     // Translation settings
     translationProvider: 'google', // 'google' or 'gemini'
@@ -59,7 +60,8 @@ function loadSettings(callback) {
         fadePastLines: false,
         compabilityWipe: false, // New compatibility setting
         blurInactive: true,
-        dynamicPlayer: true,
+        dynamicPlayerPage: true,
+    dynamicPlayerFullscreen: true,
         // Translation settings
         translationProvider: 'google',
         geminiApiKey: '',
@@ -93,13 +95,52 @@ function updateSettings(newSettings) {
     });
 }
 
+/**
+ * Applies or removes dynamic-player class based on current mode and settings
+ * @private
+ */
 function applyDynamicPlayerClass() {
     const layoutElement = document.getElementById('layout');
     if (!layoutElement) return;
 
-    if (currentSettings.dynamicPlayer) {
+    // Check if we're in fullscreen mode
+    const playerPageElement = document.querySelector('ytmusic-player-page');
+    const isFullscreen = playerPageElement && playerPageElement.hasAttribute('player-fullscreened');
+    
+    // Apply dynamic background based on current mode
+    const shouldEnableDynamic = isFullscreen ? 
+        currentSettings.dynamicPlayerFullscreen : 
+        currentSettings.dynamicPlayerPage;
+
+    if (shouldEnableDynamic) {
         layoutElement.classList.add('dynamic-player');
     } else {
         layoutElement.classList.remove('dynamic-player');
     }
 }
+
+/**
+ * Sets up a MutationObserver to watch for fullscreen changes and update dynamic background
+ * @private
+ */
+function setupDynamicBackgroundListener() {
+    const playerPageElement = document.querySelector('ytmusic-player-page');
+    if (!playerPageElement) return;
+
+    const observer = new MutationObserver(() => {
+        applyDynamicPlayerClass();
+    });
+
+    observer.observe(playerPageElement, {
+        attributes: true,
+        attributeFilter: ['player-fullscreened']
+    });
+}
+
+// Initialize the listener when settings are loaded
+if (typeof currentSettings !== 'undefined') {
+    setupDynamicBackgroundListener();
+}
+
+// Expose applyDynamicPlayerClass globally for content script
+window.applyDynamicPlayerClass = applyDynamicPlayerClass;
