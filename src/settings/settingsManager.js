@@ -16,7 +16,8 @@ let currentSettings = {
     fadePastLines: false,
     compabilityWipe: false, // New compatibility setting
     blurInactive: true,
-    dynamicPlayer: true,
+    dynamicPlayerPage: true,
+    dynamicPlayerFullscreen: true,
     customCSS: '',
     translationProvider: 'google', // Default translation provider
     geminiApiKey: '', // Default Gemini API key

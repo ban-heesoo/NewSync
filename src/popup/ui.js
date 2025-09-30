@@ -8,14 +8,22 @@ document.addEventListener('DOMContentLoaded', () => {
     const lyEnabledSwitchInput = document.getElementById('lyEnabled');
     const sponsorBlockSwitchInput = document.getElementById('sponsorblock');
     const largerTextModeSelect = document.getElementById('largerTextMode');
-    const dynamicBackgroundSwitchInput = document.getElementById('dynamicBackground');
+    const dynamicPlayerPageSwitchInput = document.getElementById('dynamicPlayerPage');
+    const dynamicPlayerFullscreenSwitchInput = document.getElementById('dynamicPlayerFullscreen');
     const overrideGeminiPromptSwitchInput = document.getElementById('overrideGeminiPrompt');
     const customGeminiPromptTextarea = document.getElementById('customGeminiPrompt');
     const customGeminiPromptGroup = document.getElementById('customGeminiPromptGroup');
     
     // Verify critical elements exist (only warn for missing elements)
-    if (!dynamicBackgroundSwitchInput) console.warn('YouLy+: dynamicBackgroundSwitchInput not found');
-    if (!overrideGeminiPromptSwitchInput) console.warn('YouLy+: overrideGeminiPromptSwitchInput not found');
+    const criticalElements = [
+        { element: dynamicPlayerPageSwitchInput, name: 'dynamicPlayerPageSwitchInput' },
+        { element: dynamicPlayerFullscreenSwitchInput, name: 'dynamicPlayerFullscreenSwitchInput' },
+        { element: overrideGeminiPromptSwitchInput, name: 'overrideGeminiPromptSwitchInput' }
+    ];
+    
+    criticalElements.forEach(({ element, name }) => {
+        if (!element) console.warn(`YouLy+: ${name} not found`);
+    });
 
     const clearCacheButton = document.getElementById('clearCache');
     const refreshCacheButton = document.getElementById('refreshCache');
@@ -80,7 +88,8 @@ document.addEventListener('DOMContentLoaded', () => {
         isEnabled: true,
         useSponsorBlock: true,
         largerTextMode: 'lyrics',
-        dynamicPlayer: true,
+        dynamicPlayerPage: true,
+        dynamicPlayerFullscreen: true,
         overrideGeminiPrompt: false,
         customGeminiPrompt: '',
     };
@@ -143,9 +152,13 @@ document.addEventListener('DOMContentLoaded', () => {
             largerTextModeSelect.value = currentSettings.largerTextMode;
             console.log("YouLy+: Set largerTextMode to:", currentSettings.largerTextMode);
         }
-        if (dynamicBackgroundSwitchInput) {
-            dynamicBackgroundSwitchInput.checked = currentSettings.dynamicPlayer;
-            console.log("YouLy+: Set dynamicPlayer to:", currentSettings.dynamicPlayer);
+        if (dynamicPlayerPageSwitchInput) {
+            dynamicPlayerPageSwitchInput.checked = currentSettings.dynamicPlayerPage;
+            console.log("YouLy+: Set dynamicPlayerPage to:", currentSettings.dynamicPlayerPage);
+        }
+        if (dynamicPlayerFullscreenSwitchInput) {
+            dynamicPlayerFullscreenSwitchInput.checked = currentSettings.dynamicPlayerFullscreen;
+            console.log("YouLy+: Set dynamicPlayerFullscreen to:", currentSettings.dynamicPlayerFullscreen);
         }
         if (overrideGeminiPromptSwitchInput) {
             overrideGeminiPromptSwitchInput.checked = currentSettings.overrideGeminiPrompt;
@@ -168,7 +181,8 @@ document.addEventListener('DOMContentLoaded', () => {
                 isEnabled: true,
                 useSponsorBlock: true,
                 largerTextMode: 'lyrics',
-                dynamicPlayer: true,
+                dynamicPlayerPage: true,
+        dynamicPlayerFullscreen: true,
                 overrideGeminiPrompt: false,
                 customGeminiPrompt: '',
             };
@@ -193,16 +207,29 @@ document.addEventListener('DOMContentLoaded', () => {
             isEnabled: lyEnabledSwitchInput.checked,
             useSponsorBlock: sponsorBlockSwitchInput.checked,
             largerTextMode: largerTextModeSelect ? largerTextModeSelect.value : 'lyrics',
-            dynamicPlayer: dynamicBackgroundSwitchInput ? dynamicBackgroundSwitchInput.checked : false,
+            dynamicPlayerPage: dynamicPlayerPageSwitchInput ? dynamicPlayerPageSwitchInput.checked : false,
+            dynamicPlayerFullscreen: dynamicPlayerFullscreenSwitchInput ? dynamicPlayerFullscreenSwitchInput.checked : false,
             overrideGeminiPrompt: overrideGeminiPromptSwitchInput ? overrideGeminiPromptSwitchInput.checked : false,
             customGeminiPrompt: customGeminiPromptTextarea ? customGeminiPromptTextarea.value : '',
         };
+        
+        // Check if only dynamic background settings changed before updating
+        const dynamicBgSettingsChanged = (
+            (dynamicPlayerPageSwitchInput && dynamicPlayerPageSwitchInput.checked !== currentSettings.dynamicPlayerPage) ||
+            (dynamicPlayerFullscreenSwitchInput && dynamicPlayerFullscreenSwitchInput.checked !== currentSettings.dynamicPlayerFullscreen)
+        );
         
         currentSettings = { ...currentSettings, ...newSettings };
 
         try {
             await storageLocalSet(currentSettings);
-            showSnackbar('Settings saved! Reload YouTube pages for changes.');
+            
+            if (dynamicBgSettingsChanged) {
+                showSnackbar('Dynamic background settings updated!');
+            } else {
+                showSnackbar('Settings saved! Reload YouTube pages for changes.');
+            }
+            
             notifyContentScripts(currentSettings);
         } catch (error) {
             console.error("YouLy+: Error saving settings:", error);
@@ -233,7 +260,17 @@ document.addEventListener('DOMContentLoaded', () => {
     }
     
     // For switches, the 'change' event is dispatched manually by the .m3-switch click handler
-    [wordByWordSwitchInput, lightweightSwitchInput, lyEnabledSwitchInput, sponsorBlockSwitchInput, dynamicBackgroundSwitchInput, overrideGeminiPromptSwitchInput].forEach(input => {
+    const switchInputs = [
+        wordByWordSwitchInput, 
+        lightweightSwitchInput, 
+        lyEnabledSwitchInput, 
+        sponsorBlockSwitchInput, 
+        dynamicPlayerPageSwitchInput, 
+        dynamicPlayerFullscreenSwitchInput, 
+        overrideGeminiPromptSwitchInput
+    ];
+    
+    switchInputs.forEach(input => {
         if (input) {
             input.addEventListener('change', (e) => {
                 // Handle special case for overrideGeminiPrompt to toggle textbox visibility
