@@ -71,7 +71,7 @@ ytmusic-tab-renderer:has(#lyrics-plus-container[style*="display: block"]) #lyric
 /* Show blur background when player page is open or in fullscreen */
 #layout.dynamic-player[player-ui-state="PLAYER_PAGE_OPEN"] .lyplus-blur-container,
 #layout.dynamic-player[is-mweb-modernization-enabled][player-ui-state="MINIPLAYER_IN_PLAYER_PAGE"] .lyplus-blur-container,
-ytmusic-app #layout[player-ui-state="FULLSCREEN"] .lyplus-blur-container {
+ytmusic-app #layout.dynamic-player[player-ui-state="FULLSCREEN"] .lyplus-blur-container {
     display: block;
     opacity: 1;
 }

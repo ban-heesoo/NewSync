@@ -19,7 +19,10 @@ function hideReloadNotification() {
     }
 }
 
-// Sets up listeners for controls that should save automatically on change
+/**
+ * Sets up listeners for controls that should save automatically on change
+ * Maps DOM element IDs to setting keys and their types
+ */
 function setupAutoSaveListeners() {
     const autoSaveControls = [
         // General
@@ -34,7 +37,8 @@ function setupAutoSaveListeners() {
         { id: 'fade-past-lines', key: 'fadePastLines', type: 'checkbox' },
         { id: 'compability-wipe', key: 'compabilityWipe', type: 'checkbox' },
         { id: 'blur-inactive', key: 'blurInactive', type: 'checkbox' },
-        { id: 'dynamic-player', key: 'dynamicPlayer', type: 'checkbox' },
+        { id: 'dynamic-player-page', key: 'dynamicPlayerPage', type: 'checkbox' },
+        { id: 'dynamic-player-fullscreen', key: 'dynamicPlayerFullscreen', type: 'checkbox' },
         { id: 'useSongPaletteFullscreen', key: 'useSongPaletteFullscreen', type: 'checkbox' },
         { id: 'useSongPaletteAllModes', key: 'useSongPaletteAllModes', type: 'checkbox' },
         { id: 'overridePaletteColor', key: 'overridePaletteColor', type: 'value' },
@@ -96,7 +100,8 @@ function updateFormElements(settings) {
     document.getElementById('fade-past-lines').checked = !!settings.fadePastLines;
     document.getElementById('compability-wipe').checked = settings.compabilityWipe;
     document.getElementById('blur-inactive').checked = settings.blurInactive;
-    document.getElementById('dynamic-player').checked = settings.dynamicPlayer;
+    document.getElementById('dynamic-player-page').checked = settings.dynamicPlayerPage;
+    document.getElementById('dynamic-player-fullscreen').checked = settings.dynamicPlayerFullscreen;
     document.getElementById('useSongPaletteFullscreen').checked = settings.useSongPaletteFullscreen;
     document.getElementById('useSongPaletteAllModes').checked = settings.useSongPaletteAllModes;
     document.getElementById('overridePaletteColor').value = settings.overridePaletteColor;

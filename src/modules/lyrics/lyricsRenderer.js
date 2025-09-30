@@ -236,6 +236,8 @@ class LyricsPlusRenderer {
       if (this.lyricsContainer) {
         this.lyricsContainer.classList.add('not-focused', 'user-scrolling', 'wheel-scrolling');
         this.lyricsContainer.classList.remove('touch-scrolling');
+        // Remove 'past' class from all lines when user scrolls to prevent fade out
+        this._removePastClassFromAllLines();
       }
       const scrollAmount = event.deltaY;
       this._handleUserScroll(scrollAmount);
@@ -269,6 +271,8 @@ class LyricsPlusRenderer {
       if (this.lyricsContainer) {
         this.lyricsContainer.classList.add('not-focused', 'user-scrolling', 'touch-scrolling');
         this.lyricsContainer.classList.remove('wheel-scrolling');
+        // Remove 'past' class from all lines when user scrolls to prevent fade out
+        this._removePastClassFromAllLines();
       }
       clearTimeout(this.userScrollIdleTimer);
     }, { passive: true });
@@ -1247,6 +1251,18 @@ class LyricsPlusRenderer {
   }
 
   /**
+   * Removes 'past' class from all lyrics lines to prevent fade out during user scroll
+   * @private
+   */
+  _removePastClassFromAllLines() {
+    if (!this.lyricsContainer) return;
+    const lines = this.lyricsContainer.querySelectorAll('.lyrics-line');
+    lines.forEach(line => {
+      line.classList.remove('past');
+    });
+  }
+
+  /**
    * Displays a "not found" message in the lyrics container.
    */
   displaySongNotFound() {
@@ -1457,7 +1473,8 @@ class LyricsPlusRenderer {
         if (line) {
           line.classList.remove('active');
           this._resetSyllables(line);
-          if (this.lyricsContainer && this.lyricsContainer.classList.contains('fade-past-lines')) {
+          // Only add 'past' class during programmatic scrolling (auto scroll), not user scroll
+          if (this.lyricsContainer && this.lyricsContainer.classList.contains('fade-past-lines') && this.isProgrammaticScrolling) {
             line.classList.add('past');
           }
         }
@@ -1507,8 +1524,8 @@ class LyricsPlusRenderer {
       }
     }
 
-    // Apply fade-out class to past lines when enabled
-    if (this.lyricsContainer && this.lyricsContainer.classList.contains('fade-past-lines')) {
+    // Apply fade-out class to past lines when enabled - ONLY during programmatic scrolling (auto scroll)
+    if (this.lyricsContainer && this.lyricsContainer.classList.contains('fade-past-lines') && this.isProgrammaticScrolling) {
       const elements = this.cachedLyricsLines;
       const graceMs = 180; // small grace for smoother feel
       for (let i = 0; i < elements.length; i++) {

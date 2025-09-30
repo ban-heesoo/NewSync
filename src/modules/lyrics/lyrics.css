@@ -204,41 +204,41 @@ ytmusic-app-layout[is-mweb-modernization-enabled] #lyrics-plus-container[style*=
     will-change: transform, opacity; /* Refine will-change for active state */
 }
 
-/* Fade-out for past lines when enabled */
-.lyrics-plus-integrated.fade-past-lines .lyrics-line {
+/* Fade-out for past lines when enabled - ONLY in fullscreen mode */
+ytmusic-player-page[player-fullscreened] .lyrics-plus-integrated.fade-past-lines .lyrics-line {
     transition: opacity 0.9s cubic-bezier(0.22, 0.61, 0.36, 1), transform 0.4s ease var(--lyrics-line-delay, 0ms), filter 0.3s ease;
 }
-.lyrics-plus-integrated.fade-past-lines .lyrics-line.lyrics-gap {
+ytmusic-player-page[player-fullscreened] .lyrics-plus-integrated.fade-past-lines .lyrics-line.lyrics-gap {
     transition: padding .3s .5s, height .3s .5s, opacity .2s .5s, transform .3s var(--lyrics-line-delay, 0ms);
 }
-.lyrics-plus-integrated.fade-past-lines .lyrics-line:not(.active):not(.lyrics-gap):not(.past) {
+ytmusic-player-page[player-fullscreened] .lyrics-plus-integrated.fade-past-lines .lyrics-line:not(.active):not(.lyrics-gap):not(.past) {
     opacity: 0.55;
 }
-.lyrics-plus-integrated.fade-past-lines .lyrics-line.past:not(.active):not(.lyrics-gap) {
+ytmusic-player-page[player-fullscreened] .lyrics-plus-integrated.fade-past-lines .lyrics-line.past:not(.active):not(.lyrics-gap) {
     opacity: 0;
     pointer-events: none;
     will-change: opacity;
 }
 
-/* In fade-past-lines mode, ensure translation fades uniformly with main lyrics (no extra dimming) */
-.lyrics-plus-integrated.fade-past-lines .lyrics-translation-container {
+/* In fade-past-lines mode, ensure translation fades uniformly with main lyrics (no extra dimming) - ONLY in fullscreen */
+ytmusic-player-page[player-fullscreened] .lyrics-plus-integrated.fade-past-lines .lyrics-translation-container {
     opacity: 1; /* avoid stacking 0.8 with parent line opacity */
 }
-/* Apply same rule to romanization for uniform fade */
-.lyrics-plus-integrated.fade-past-lines .lyrics-romanization-container {
+/* Apply same rule to romanization for uniform fade - ONLY in fullscreen */
+ytmusic-player-page[player-fullscreened] .lyrics-plus-integrated.fade-past-lines .lyrics-romanization-container {
     opacity: 1;
 }
 
-/* In fade-past-lines mode, keep background vocals expanded/visible only for past lines */
-.lyrics-plus-integrated.fade-past-lines .lyrics-line.past .background-vocal-container {
+/* In fade-past-lines mode, keep background vocals expanded/visible only for past lines - ONLY in fullscreen */
+ytmusic-player-page[player-fullscreened] .lyrics-plus-integrated.fade-past-lines .lyrics-line.past .background-vocal-container {
     max-height: 10em;
     opacity: 1;
 }
 
 /* Allow default gap animation to handle scale-down; no forced transform here */
 
-/* Slightly stronger emphasis for current line in fade mode */
-.lyrics-plus-integrated.fade-past-lines .lyrics-line.active .main-vocal-container {
+/* Slightly stronger emphasis for current line in fade mode - ONLY in fullscreen */
+ytmusic-player-page[player-fullscreened] .lyrics-plus-integrated.fade-past-lines .lyrics-line.active .main-vocal-container {
     transform: scale3d(1.001, 1.001, 1);
 }
 
@@ -1128,7 +1128,7 @@ canvas#lyplus-webgl-canvas {
 /* Show blur background when player page is open or in fullscreen */
 #layout.dynamic-player[player-ui-state="PLAYER_PAGE_OPEN"] .lyplus-blur-container,
 #layout.dynamic-player[is-mweb-modernization-enabled][player-ui-state="MINIPLAYER_IN_PLAYER_PAGE"] .lyplus-blur-container,
-ytmusic-app #layout[player-ui-state="FULLSCREEN"] .lyplus-blur-container {
+ytmusic-app #layout.dynamic-player[player-ui-state="FULLSCREEN"] .lyplus-blur-container {
     display: block;
     opacity: 1;
 }
