@@ -85,7 +85,9 @@ For the safest and easiest experience, install NewSync directly from your browse
 
 ## Updating
 
-If you have installed the extension with cloned repository, you can simply update it by running `update.bat` in the folder where you cloned the repository.
+If you have installed the extension with cloned repository, you can simply update it by running update script in the folder where you cloned the repository:<br>
+- `update.bat`(for windows) or
+- `update.sh`(for linux)
 
 ## Usage
 
