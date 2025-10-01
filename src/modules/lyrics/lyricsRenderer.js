@@ -581,31 +581,31 @@ class LyricsPlusRenderer {
         const totalDuration = currentWordEndTime - currentWordStartTime;
         const shouldEmphasize = !lightweight && !this._isRTL(combinedText) && !this._isCJK(combinedText) && combinedText.trim().length <= 15 && totalDuration >= 800;
 
-        let maxScale = 1.03; // Reduced from 1.07 - less dramatic default scale
+        let maxScale = 1.05; // Subtle but noticeable scale
 
         if (shouldEmphasize) {
-          const minDuration = 800; // Reduced from 1000 for more sensitivity
+          const minDuration = 800;
           const maxDuration = 3000; 
-          const easingPower = 2.0; // Reduced from 3.0 - gentler easing
+          const easingPower = 3.0; // AGGRESSIVE easing - more dramatic curve
 
           const progress = Math.min(1, Math.max(0, (totalDuration - minDuration) / (maxDuration - minDuration)));
           const easedProgress = Math.pow(progress, easingPower);
 
           // Length-based scaling - longer text gets less dramatic emphasis
           const textLength = combinedText.trim().length;
-          const lengthFactor = Math.max(0.5, 1.0 - ((textLength - 3) * 0.05)); // Gradually reduce emphasis for longer text
+          const lengthFactor = Math.max(0.5, 1.0 - ((textLength - 3) * 0.05));
           
-          maxScale = 1.0 + (0.03 + easedProgress * 0.05) * lengthFactor; // Apply length factor to scaling
+          maxScale = 1.0 + (0.05 + easedProgress * 0.08) * lengthFactor; // Subtle scaling range
 
-          const shadowIntensity = (0.4 + easedProgress * 0.4) * lengthFactor; // Apply length factor to shadow
-          const normalizedGrowth = (maxScale - 1.0) / 0.08; // Adjusted denominator for new scale range
-          const translateYPeak = -normalizedGrowth * 1.5 * lengthFactor; // Apply length factor to movement
+          const shadowIntensity = (0.8 + easedProgress * 0.6) * lengthFactor; // AGGRESSIVE shadow (0.8-1.4 range)
+          const normalizedGrowth = (maxScale - 1.0) / 0.08;
+          const translateYPeak = -normalizedGrowth * 3.0 * lengthFactor; // AGGRESSIVE vertical movement (doubled)
 
           wordSpan.style.setProperty('--max-scale', maxScale.toFixed(3));
           wordSpan.style.setProperty('--shadow-intensity', shadowIntensity.toFixed(3));
           wordSpan.style.setProperty('--translate-y-peak', translateYPeak.toFixed(3));
         }
-        wordSpan.style.setProperty('--min-scale', Math.max(1.0, Math.min(1.02, 1.01))); // Reduced from 1.06/1.02 to 1.02/1.01
+        wordSpan.style.setProperty('--min-scale', Math.max(1.0, Math.min(1.02, 1.01))); // Subtle min-scale
         wordSpan.dataset.totalDuration = totalDuration;
 
         let isCurrentWordBackground = wordBuffer[0].isBackground || false;

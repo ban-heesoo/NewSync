@@ -342,20 +342,20 @@ function _renderPreviewLyricsContent(lyrics, lightweight, currentSettings) {
         const trimmedText = combinedText.trim();
         const totalDuration = currentWordEndTime - currentWordStartTime;
         const shouldEmphasize = !lightweight && !isRTL(combinedText) && !isCJK(combinedText) && trimmedText.length <= 15 && trimmedText.length > 0 && totalDuration >= 800;
-        const durationFactor = Math.min(1.0, Math.max(0.5, (totalDuration - 800) / 1000)); // Adjusted for new minimum duration
+        const durationFactor = Math.min(1.0, Math.max(0.5, (totalDuration - 800) / 1000));
         
         // Length-based scaling - longer text gets less dramatic emphasis
         const textLength = trimmedText.length;
-        const lengthFactor = Math.max(0.5, 1.0 - ((textLength - 3) * 0.05)); // Gradually reduce emphasis for longer text
+        const lengthFactor = Math.max(0.5, 1.0 - ((textLength - 3) * 0.05));
         
-        let baseMinScale = 1.02;
-        let baseMaxScale = 1;
-        const durationScaleFactor = durationFactor * 0.15 * lengthFactor; // Apply length factor
+        let baseMinScale = 1.01; // Subtle min-scale
+        let baseMaxScale = 1.05; // Subtle base scale
+        const durationScaleFactor = durationFactor * 0.08 * lengthFactor; // Subtle scaling
         baseMaxScale += durationScaleFactor;
-        const maxScale = Math.min(1.2, baseMaxScale);
-        const minScale = Math.max(1.0, Math.min(1.06, baseMinScale));
-        const shadowIntensity = Math.min(0.8, (0.4 + (durationFactor * 0.4)) * lengthFactor); // Apply length factor
-        const translateYPeak = -Math.min(3.0, (0.0 + (durationFactor * 3.0)) * lengthFactor); // Apply length factor
+        const maxScale = Math.min(1.15, baseMaxScale); // Subtle max limit
+        const minScale = Math.max(1.0, Math.min(1.02, baseMinScale)); // Subtle min-scale
+        const shadowIntensity = Math.min(1.4, (0.8 + (durationFactor * 0.6)) * lengthFactor); // AGGRESSIVE shadow
+        const translateYPeak = -Math.min(6.0, (0.0 + (durationFactor * 6.0)) * lengthFactor); // AGGRESSIVE movement (doubled)
         
         // --- CORRECTED CSS CUSTOM PROPERTY SETTING ---
         wordSpan.style.setProperty('--max-scale', maxScale);
