@@ -1200,7 +1200,11 @@ class LyricsPlusRenderer {
 
     const playerPageElement = document.querySelector('ytmusic-player-page');
     container.classList.toggle('fullscreen', playerPageElement && playerPageElement.hasAttribute('player-fullscreened'));
-    const isWordByWordMode = type === "Word" && currentSettings.wordByWord;
+    // Prefer word-by-word mode in video fullscreen for better karaoke-style experience
+    let isWordByWordMode = (type === "Word" && currentSettings.wordByWord);
+    if (this._isVideoFullscreen?.() ?? this.__detectVideoFullscreen()) {
+      isWordByWordMode = true;
+    }
     container.classList.toggle('word-by-word-mode', isWordByWordMode);
     container.classList.toggle('line-by-line-mode', !isWordByWordMode);
     container.classList.toggle('romanized-big-mode', this.largerTextMode === "romanization");
