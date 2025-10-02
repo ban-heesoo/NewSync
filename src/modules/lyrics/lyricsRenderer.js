@@ -2185,15 +2185,8 @@ class LyricsPlusRenderer {
     const songInfoContainer = document.createElement('div');
     songInfoContainer.className = 'lyrics-song-info';
     songInfoContainer.style.display = 'block';
-    songInfoContainer.style.position = 'fixed';
-    songInfoContainer.style.top = '60%';
-    songInfoContainer.style.left = '25%';
-    songInfoContainer.style.transform = 'none';
-    songInfoContainer.style.textAlign = 'left';
-    songInfoContainer.style.zIndex = '1000';
-    songInfoContainer.style.pointerEvents = 'none';
-    songInfoContainer.style.maxWidth = '25rem';
-    songInfoContainer.style.width = '100%';
+    // Don't set positioning here - let _positionSongInfoRelativeToArtwork handle it
+    // This avoids conflicts between inline styles and CSS fallback
     
     // Create song title (styles from CSS)
     const titleElement = document.createElement('p');
@@ -2312,12 +2305,23 @@ class LyricsPlusRenderer {
       // Artwork container backgrounds
       'ytmusic-player-page[player-fullscreened] #thumbnail img',
       'ytmusic-player-page[player-fullscreened] .image',
+      // Additional selectors for better compatibility
+      'ytmusic-player-page[player-fullscreened] #player img',
+      'ytmusic-player-page[player-fullscreened] .player-image',
+      'ytmusic-player-page[player-fullscreened] ytmusic-player img',
+      'ytmusic-player-page[player-fullscreened] #thumbnail',
       // Player bar image (fallback)
       '.image.ytmusic-player-bar'
     ];
     for (const sel of candidates) {
       const el = document.querySelector(sel);
-      if (el && el.getBoundingClientRect) return el;
+      if (el && el.getBoundingClientRect) {
+        const rect = el.getBoundingClientRect();
+        // Ensure element has valid dimensions
+        if (rect.width > 0 && rect.height > 0) {
+          return el;
+        }
+      }
     }
     return null;
   }
@@ -2327,7 +2331,17 @@ class LyricsPlusRenderer {
    */
   _positionSongInfoRelativeToArtwork(songInfoContainer) {
     const artworkEl = this._findArtworkElement();
-    if (!artworkEl) return;
+    if (!artworkEl) {
+      // Remove inline styles to let CSS fallback positioning take over
+      songInfoContainer.style.position = '';
+      songInfoContainer.style.left = '';
+      songInfoContainer.style.top = '';
+      songInfoContainer.style.transform = '';
+      songInfoContainer.style.maxWidth = '';
+      songInfoContainer.style.textAlign = '';
+      console.log('LYPLUS: Artwork not found, using CSS fallback positioning');
+      return;
+    }
     const rect = artworkEl.getBoundingClientRect();
 
     // Place left-aligned under the artwork
