@@ -1122,6 +1122,10 @@ class LyricsPlusRenderer {
     const container = this._getContainer();
     if (!container) return;
 
+    // Ensure any previous user-scroll state does not suppress effects on new song
+    container.classList.remove('not-focused', 'user-scrolling', 'touch-scrolling', 'wheel-scrolling');
+    this.isUserControllingScroll = false;
+
     // Ensure no stale song info remains while loading
     const staleInfo = document.querySelector('.lyrics-song-info');
     if (staleInfo) staleInfo.remove();
@@ -1140,6 +1144,20 @@ class LyricsPlusRenderer {
 
     container.classList.remove('lyrics-plus-message'); // Remove the class when actual lyrics are displayed
     this._renderLyricsContent(lyrics, source, type, lightweight, songWriters, songInfo, displayMode, currentSettings, fetchAndDisplayLyricsFn, setCurrentDisplayModeAndRefetchFn, largerTextMode);
+
+    // Re-assert visual effect classes based on current settings after render
+    container.classList.toggle('blur-inactive-enabled', !!currentSettings.blurInactive);
+    const isVideoFullscreenPost = this._isVideoFullscreen?.() ?? this.__detectVideoFullscreen();
+    container.classList.toggle('fade-past-lines', !!currentSettings.fadePastLines && !isVideoFullscreenPost);
+
+    // Nudge programmatic scrolling state briefly so fade/blur logic reliably activates after song change
+    this.lyricsContainer && this.lyricsContainer.classList.remove('not-focused', 'user-scrolling', 'touch-scrolling', 'wheel-scrolling');
+    clearTimeout(this.endProgrammaticScrollTimer);
+    this.isProgrammaticScrolling = true;
+    this.endProgrammaticScrollTimer = setTimeout(() => {
+      this.isProgrammaticScrolling = false;
+      this.endProgrammaticScrollTimer = null;
+    }, 300);
   }
 
   /**
