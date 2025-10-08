@@ -17,9 +17,9 @@
 
 <br>
 
-**A Modified Version of [YouLy+](https://github.com/ibratabian17/YouLyPlus) with Enhanced Apple Music-Style Features**
+**Extension for Synchronized Lyrics on YouTube Music**
 
-This is a customized fork of the original YouLy+ extension, featuring additional improvements and modifications to enhance your YouTube Music lyrics experience with a focus on Apple Music-inspired design and functionality. All core YouLy+ functionality remains intact while adding new capabilities and refinements.
+NewSync is a feature-rich browser extension that brings synchronized lyrics to YouTube Music with an elegant Apple Music-inspired interface. Experience your favorite songs like never before with real-time lyrics display, smart translations, and beautiful visual effects. Enjoy perfectly synchronized lyrics that follow your music with line-by-line and word-by-word highlighting, sleek minimal design with premium fonts and custom icons, and instant translation capabilities using Google Translate or Gemini AI.
 
 <p align="center">
     <b>Supported Browsers:</b>
@@ -32,13 +32,6 @@ This is a customized fork of the original YouLy+ extension, featuring additional
 <img  width="30px" src="https://cdn-icons-png.flaticon.com/128/6124/6124994.png" alt="Opera">
 <img  width="30px" src="https://img.icons8.com/?size=48&id=cM42lftaD9Z3&format=png" alt="Brave">
 </p>
-
-## Based on YouLy+
-
-This modified version builds upon the excellent foundation of YouLy+ by ibratabian17, maintaining all the beloved features while adding improvements based on community feedback and Apple Music's elegant design philosophy.
-
-*For the original YouLy+ project, visit: [github.com/ibratabian17/YouLyPlus](https://github.com/ibratabian17/YouLyPlus)*
-
 
 ## Installation
 
