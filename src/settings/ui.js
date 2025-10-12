@@ -587,9 +587,21 @@ async function handleEditLocalLyrics() {
             // Clear cache to ensure changes are reflected immediately
             try {
                 await clearCache();
-                // Also clear any cached lyrics data
+                // Clear only lyrics-related cached data, preserve settings
                 if (typeof chrome !== 'undefined' && chrome.storage) {
-                    await chrome.storage.local.clear();
+                    const keysToRemove = [];
+                    const allData = await chrome.storage.local.get();
+                    
+                    // Remove only lyrics-related keys, preserve all settings
+                    for (const key in allData) {
+                        if (key.includes('lyrics') || key.includes('cache') || key.startsWith('song_')) {
+                            keysToRemove.push(key);
+                        }
+                    }
+                    
+                    if (keysToRemove.length > 0) {
+                        await chrome.storage.local.remove(keysToRemove);
+                    }
                 }
             } catch (cacheError) {
                 console.warn('Failed to clear cache:', cacheError);
@@ -659,9 +671,21 @@ async function handleEditLocalLyrics() {
             // Clear cache to ensure changes are reflected immediately
             try {
                 await clearCache();
-                // Also clear any cached lyrics data
+                // Clear only lyrics-related cached data, preserve settings
                 if (typeof chrome !== 'undefined' && chrome.storage) {
-                    await chrome.storage.local.clear();
+                    const keysToRemove = [];
+                    const allData = await chrome.storage.local.get();
+                    
+                    // Remove only lyrics-related keys, preserve all settings
+                    for (const key in allData) {
+                        if (key.includes('lyrics') || key.includes('cache') || key.startsWith('song_')) {
+                            keysToRemove.push(key);
+                        }
+                    }
+                    
+                    if (keysToRemove.length > 0) {
+                        await chrome.storage.local.remove(keysToRemove);
+                    }
                 }
             } catch (cacheError) {
                 console.warn('Failed to clear cache:', cacheError);
