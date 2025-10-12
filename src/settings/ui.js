@@ -584,32 +584,12 @@ async function handleEditLocalLyrics() {
             
             await updateLocalLyrics(currentEditingItem.songId, updatedSongInfo, updatedLyrics);
             
-            // Clear cache to ensure changes are reflected immediately
-            try {
-                await clearCache();
-                // Clear only lyrics-related cached data, preserve settings
-                if (typeof chrome !== 'undefined' && chrome.storage) {
-                    const keysToRemove = [];
-                    const allData = await chrome.storage.local.get();
-                    
-                    // Remove only lyrics-related keys, preserve all settings
-                    for (const key in allData) {
-                        if (key.includes('lyrics') || key.includes('cache') || key.startsWith('song_')) {
-                            keysToRemove.push(key);
-                        }
-                    }
-                    
-                    if (keysToRemove.length > 0) {
-                        await chrome.storage.local.remove(keysToRemove);
-                    }
-                }
-            } catch (cacheError) {
-                console.warn('Failed to clear cache:', cacheError);
-            }
-            
             showStatusMessage('Lyrics metadata updated successfully!', false, 'modal-edit-lyrics-button');
+            console.log('Settings before closeEditModal:', currentSettings);
             closeEditModal();
+            console.log('Settings after closeEditModal:', currentSettings);
             populateLocalLyricsList(); // Refresh list
+            console.log('Settings after populateLocalLyricsList:', currentSettings);
             
             // Notify content script to refresh lyrics if currently playing
             try {
@@ -668,32 +648,12 @@ async function handleEditLocalLyrics() {
 
             await updateLocalLyrics(currentEditingItem.songId, songInfo, jsonLyrics);
             
-            // Clear cache to ensure changes are reflected immediately
-            try {
-                await clearCache();
-                // Clear only lyrics-related cached data, preserve settings
-                if (typeof chrome !== 'undefined' && chrome.storage) {
-                    const keysToRemove = [];
-                    const allData = await chrome.storage.local.get();
-                    
-                    // Remove only lyrics-related keys, preserve all settings
-                    for (const key in allData) {
-                        if (key.includes('lyrics') || key.includes('cache') || key.startsWith('song_')) {
-                            keysToRemove.push(key);
-                        }
-                    }
-                    
-                    if (keysToRemove.length > 0) {
-                        await chrome.storage.local.remove(keysToRemove);
-                    }
-                }
-            } catch (cacheError) {
-                console.warn('Failed to clear cache:', cacheError);
-            }
-            
             showStatusMessage('Lyrics updated successfully!', false, 'modal-edit-lyrics-button');
+            console.log('Settings before closeEditModal (file upload):', currentSettings);
             closeEditModal();
+            console.log('Settings after closeEditModal (file upload):', currentSettings);
             populateLocalLyricsList(); // Refresh list
+            console.log('Settings after populateLocalLyricsList (file upload):', currentSettings);
             
             // Notify content script to refresh lyrics if currently playing
             try {
@@ -737,6 +697,7 @@ function closeEditModal() {
 }
 
 async function populateLocalLyricsList() {
+    console.log('populateLocalLyricsList called, currentSettings:', currentSettings);
     const localLyricsListContainer = document.getElementById('local-lyrics-list');
     if (!localLyricsListContainer) {
         console.error('local-lyrics-list container not found');
