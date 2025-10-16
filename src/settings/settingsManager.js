@@ -13,9 +13,9 @@ let currentSettings = {
     cacheStrategy: 'aggressive',
     fontSize: 16,
     hideOffscreen: true, // New compatibility setting
-    fadePastLines: false,
+    fadePastLines: true,
     compabilityWipe: false, // New compatibility setting
-    blurInactive: true,
+    blurInactive: false,
     dynamicPlayerPage: true,
     dynamicPlayerFullscreen: true,
     customCSS: '',
