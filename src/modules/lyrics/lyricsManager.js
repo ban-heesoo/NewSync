@@ -216,6 +216,15 @@ async function fetchAndDisplayLyrics(currentSong, isNewSong = false, forceReload
     // Determine the appropriate largerTextMode based on display mode
     let effectiveLargerTextMode = currentSettings.largerTextMode; // Always respect user preference
 
+    // Merge lyrics metadata with current song info for proper display
+    // Prefer metadata from parsed lyrics for title, artist, and album
+    const enrichedSongInfo = {
+      ...currentSong,
+      title: lyricsObjectToDisplay.metadata.title || currentSong.title,
+      artist: lyricsObjectToDisplay.metadata.artist || currentSong.artist,
+      album: lyricsObjectToDisplay.metadata.album || currentSong.album
+    };
+
     if (LyricsPlusAPI.displayLyrics) {
       LyricsPlusAPI.displayLyrics(
         lyricsObjectToDisplay,
@@ -223,7 +232,7 @@ async function fetchAndDisplayLyrics(currentSong, isNewSong = false, forceReload
         lyricsObjectToDisplay.type === "Line" ? "Line" : "Word",
         currentSettings.lightweight,
         lyricsObjectToDisplay.metadata.songWriters,
-        currentSong,
+        enrichedSongInfo,
         finalDisplayModeForRenderer, // Pass the actual display mode
         currentSettings, // Pass currentSettings
         fetchAndDisplayLyrics, // Pass the function itself
@@ -234,7 +243,7 @@ async function fetchAndDisplayLyrics(currentSong, isNewSong = false, forceReload
       console.error("displayLyrics is not available.");
     }
 
-    lastKnownSongInfo = currentSong; // Update last known song info
+    lastKnownSongInfo = enrichedSongInfo; // Update last known song info with enriched metadata
     lastProcessedDisplayMode = finalDisplayModeForRenderer; // Update after successful display
 
   } catch (error) {
