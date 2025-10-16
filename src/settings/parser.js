@@ -135,7 +135,7 @@ export function parseSyncedLyrics(lrcContent, songInfo = {}) {
     KpoeTools: '1.0-parseSyncedLyrics-LRC',
     type: isEnhanced ? 'Word' : 'Line',
     metadata: {
-      source: "Apple Music (SongSync)",
+      source: "Apple Music",
       songWriters: songWriters,
       title: metadata.ti || songInfo.title || '',
       artist: metadata.ar || songInfo.artist || '',
@@ -228,7 +228,7 @@ export function parseAppleTTML(ttml, offset = 0, separate = false, songInfo = {}
   const timingMode = getAttr(root, NS.itunes, 'timing', 'itunes:timing') || 'Word';
 
   const metadata = {
-    source: 'Apple Music TTML', 
+    source: 'Apple Music', 
     songWriters: [], 
     title: songInfo.title || '',
     artist: songInfo.artist || '',
@@ -731,7 +731,7 @@ export function parseAppleMusicLRC(lrcContent, songInfo = {}) {
     KpoeTools: '1.0-parseAppleMusicLRC-EnhancedLRC',
     type: hasSyllabus ? 'Word' : 'Line',
     metadata: {
-      source: "Apple Music (SongSync)",
+      source: "Apple Music",
       songWriters: songWriters,
       title: metadata.ti || songInfo.title || 'Unknown',
       artist: metadata.ar || songInfo.artist || 'Unknown',
