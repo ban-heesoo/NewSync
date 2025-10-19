@@ -29,7 +29,7 @@ h1 img {
 
 .heading {
 	font-size: 1.375rem;
-	font-weight: 600;
+    font-weight: 600;
 	display: flex;
 	align-items: baseline;
 	gap: 0.5rem;
@@ -67,7 +67,7 @@ button {
 }
 
 body {
-	background: #28292c;
+	background: #1f1f1f;
 	color: #fff;
 	padding: 1.25rem 1.5rem;
 	overflow: hidden;
@@ -75,7 +75,7 @@ body {
 }
 
 .container {
-	display: flex;
+    display: flex;
 	align-items: center;
 	gap: 1rem;
 	font-size: 0.9375rem;
@@ -198,9 +198,9 @@ select option {
 }
 
 .small-btn {
-	display: flex;
-	align-items: center;
-	justify-content: center;
+    display: flex;
+    align-items: center;
+    justify-content: center;
 	gap: 0.375rem;
 	background-color: hsla(0, 0%, 100%, 0.1);
 	color: #fff;
@@ -261,7 +261,7 @@ select option {
 }
 
 .tab-container {
-	display: flex;
+    display: flex;
 	gap: 0.375rem;
 	margin-bottom: 1.5rem;
 	background: rgba(255, 255, 255, 0.05);
@@ -303,16 +303,16 @@ select option {
 }
 
 label {
-	position: relative;
+    position: relative;
 	display: inline-block;
 	width: 40px;
 	height: 22px;
 }
 
 label input {
-	opacity: 0;
-	width: 0;
-	height: 0;
+    opacity: 0;
+    width: 0;
+    height: 0;
 }
 
 .checkmark {
@@ -328,7 +328,7 @@ label input {
 }
 
 .checkmark:before {
-	position: absolute;
+    position: absolute;
 	content: "";
 	height: 18px;
 	width: 18px;
@@ -341,7 +341,7 @@ label input {
 }
 
 input:checked + .checkmark {
-	background-color: hsla(220, 100%, 70%, 0.5);
+	background-color: #fa233b;
 }
 
 input:checked + .checkmark:before {
@@ -429,46 +429,52 @@ input:checked + .checkmark:before {
 	color: rgba(255, 255, 255, 0.4);
 }
 
-.full-width-btn {
+.action-buttons {
 	display: flex;
-	align-items: center;
-	justify-content: center;
 	gap: 0.5rem;
-	background-color: hsla(220, 100%, 70%, 0.2);
+	margin-top: 0.5rem;
+}
+
+.action-btn {
+	display: flex;
+    align-items: center;
+    justify-content: center;
+	gap: 0.375rem;
+	background-color: #fa233b;
 	color: #fff;
-	padding: 12px 20px;
-	margin: 8px 0;
-	border: none;
-	width: 100%;
-	border-radius: 1000rem;
+	padding: 10px 16px;
+	margin: 0;
+    border: none;
+	flex: 1;
+	border-radius: 0.5rem;
 	text-align: center;
-	cursor: pointer;
+    cursor: pointer;
 	transition: background 0.2s, transform 0.1s;
 	font-weight: 600;
-	font-size: 0.9375rem;
-	text-decoration: none;
+	font-size: 0.875rem;
+    text-decoration: none;
 }
 
-.full-width-btn:hover {
-	background-color: hsla(220, 100%, 70%, 0.3);
+.action-btn:hover {
+	background-color: #ff344c;
 }
 
-.full-width-btn:active {
+.action-btn:active {
 	transform: scale(0.98);
 }
 
-.full-width-btn.btn-secondary {
+.action-btn.btn-secondary {
 	background-color: hsla(0, 0%, 100%, 0.1);
 	font-weight: 500;
 }
 
-.full-width-btn.btn-secondary:hover {
+.action-btn.btn-secondary:hover {
 	background-color: hsla(0, 0%, 100%, 0.15);
 }
 
-.full-width-btn svg {
-	width: 1.125rem;
-	height: 1.125rem;
+.action-btn svg {
+	width: 1rem;
+	height: 1rem;
 }
 
 /* Scrollbar */

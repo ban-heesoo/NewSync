@@ -1,6 +1,13 @@
 const pBrowser = (typeof browser !== "undefined") ? browser : chrome;
 
 document.addEventListener('DOMContentLoaded', () => {
+    // Set version from manifest
+    const versionElement = document.getElementById('version');
+    if (versionElement && pBrowser.runtime && pBrowser.runtime.getManifest) {
+        const manifest = pBrowser.runtime.getManifest();
+        versionElement.textContent = `v${manifest.version}`;
+    }
+    
     // DOM Elements
     const lyricsProviderSelect = document.getElementById('lyricsProvider');
     const wordByWordSwitchInput = document.getElementById('wordByWord');
