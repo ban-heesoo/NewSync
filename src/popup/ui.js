@@ -14,26 +14,13 @@ document.addEventListener('DOMContentLoaded', () => {
     const customGeminiPromptTextarea = document.getElementById('customGeminiPrompt');
     const customGeminiPromptGroup = document.getElementById('customGeminiPromptGroup');
     
-    // Verify critical elements exist (only warn for missing elements)
-    const criticalElements = [
-        { element: dynamicPlayerPageSwitchInput, name: 'dynamicPlayerPageSwitchInput' },
-        { element: dynamicPlayerFullscreenSwitchInput, name: 'dynamicPlayerFullscreenSwitchInput' },
-        { element: overrideGeminiPromptSwitchInput, name: 'overrideGeminiPromptSwitchInput' }
-    ];
-    
-    criticalElements.forEach(({ element, name }) => {
-        if (!element) console.warn(`YouLy+: ${name} not found`);
-    });
-
     const clearCacheButton = document.getElementById('clearCache');
     const refreshCacheButton = document.getElementById('refreshCache');
     const reloadExtensionButton = document.getElementById('reloadExtension');
     const cacheSizeElement = document.querySelector('.cache-size-value');
     const cacheCountElement = document.querySelector('.cache-count-value');
 
-    const snackbar = document.getElementById('statusSnackbar');
-    const snackbarText = snackbar.querySelector('.snackbar-text');
-    let snackbarTimeout;
+    const status = document.getElementById('status');
 
     // --- Tabs ---
     const tabs = document.querySelectorAll('.tab');
@@ -44,41 +31,10 @@ document.addEventListener('DOMContentLoaded', () => {
             tabs.forEach(t => t.classList.remove('active'));
             tabContents.forEach(tc => tc.classList.remove('active'));
             tab.classList.add('active');
-            const targetContentId = tab.dataset.tab;
+            const targetContentId = tab.dataset.target.replace('#', '');
             document.getElementById(targetContentId)?.classList.add('active');
         });
     });
-
-    // --- M3 Switch Click Handling ---
-    document.querySelectorAll('.m3-switch').forEach(switchContainer => {
-        switchContainer.addEventListener('click', function() {
-            const checkbox = this.querySelector('.m3-switch-input');
-            if (checkbox) {
-                checkbox.checked = !checkbox.checked;
-                // Manually dispatch a 'change' event to trigger settings save
-                checkbox.dispatchEvent(new Event('change', { bubbles: true }));
-            }
-        });
-        // Add keyboard support for switches
-        switchContainer.addEventListener('keydown', function(event) {
-            if (event.key === ' ' || event.key === 'Enter') {
-                event.preventDefault(); // Prevent page scroll on space
-                const checkbox = this.querySelector('.m3-switch-input');
-                if (checkbox) {
-                    checkbox.checked = !checkbox.checked;
-                    checkbox.dispatchEvent(new Event('change', { bubbles: true }));
-                }
-            }
-        });
-        // Set tabindex to make the div focusable for keyboard interaction
-        switchContainer.setAttribute('tabindex', '0');
-
-        // Prevent double toggle if label is also clicked (since label also toggles the input)
-        // This is only needed if clicks on children of m3-switch are not desired to bubble up
-        // to THIS specific listener (they should bubble to the document).
-        // This setup should be fine, as the label is a sibling, not a child of .m3-switch
-    });
-
 
     // --- Settings Object ---
     let currentSettings = {
@@ -94,17 +50,15 @@ document.addEventListener('DOMContentLoaded', () => {
         customGeminiPrompt: '',
     };
 
-    // --- Storage Functions (ensure polyfill.js or similar provides these) ---
+    // --- Storage Functions ---
     const storageLocalGet = (keys) => {
         return new Promise((resolve, reject) => {
             if (typeof pBrowser === 'undefined' || !pBrowser.storage) {
-                console.warn("pBrowser.storage not available. Using mock storage.");
-                // Mock for environments without extension APIs
-                const mockStorage = JSON.parse(localStorage.getItem('youly_mock_storage') || '{}');
+                const mockStorage = JSON.parse(localStorage.getItem('newsync_mock_storage') || '{}');
                 const result = {};
                 Object.keys(keys).forEach(key => {
                     if (mockStorage.hasOwnProperty(key)) result[key] = mockStorage[key];
-                    else result[key] = keys[key]; // Return default if not found
+                    else result[key] = keys[key];
                 });
                 resolve(result);
                 return;
@@ -118,13 +72,13 @@ document.addEventListener('DOMContentLoaded', () => {
             });
         });
     };
+    
     const storageLocalSet = (items) => {
         return new Promise((resolve, reject) => {
              if (typeof pBrowser === 'undefined' || !pBrowser.storage) {
-                console.warn("pBrowser.storage not available. Using mock storage.");
-                let mockStorage = JSON.parse(localStorage.getItem('youly_mock_storage') || '{}');
+                let mockStorage = JSON.parse(localStorage.getItem('newsync_mock_storage') || '{}');
                 mockStorage = {...mockStorage, ...items};
-                localStorage.setItem('youly_mock_storage', JSON.stringify(mockStorage));
+                localStorage.setItem('newsync_mock_storage', JSON.stringify(mockStorage));
                 resolve();
                 return;
             }
@@ -140,8 +94,6 @@ document.addEventListener('DOMContentLoaded', () => {
 
     // --- Load Settings ---
     function loadSettingsUI() {
-        console.log("YouLy+: Loading UI with settings:", currentSettings);
-        
         lyricsProviderSelect.value = currentSettings.lyricsProvider;
         wordByWordSwitchInput.checked = currentSettings.wordByWord;
         lightweightSwitchInput.checked = currentSettings.lightweight;
@@ -150,15 +102,12 @@ document.addEventListener('DOMContentLoaded', () => {
         
         if (largerTextModeSelect) {
             largerTextModeSelect.value = currentSettings.largerTextMode;
-            console.log("YouLy+: Set largerTextMode to:", currentSettings.largerTextMode);
         }
         if (dynamicPlayerPageSwitchInput) {
             dynamicPlayerPageSwitchInput.checked = currentSettings.dynamicPlayerPage;
-            console.log("YouLy+: Set dynamicPlayerPage to:", currentSettings.dynamicPlayerPage);
         }
         if (dynamicPlayerFullscreenSwitchInput) {
             dynamicPlayerFullscreenSwitchInput.checked = currentSettings.dynamicPlayerFullscreen;
-            console.log("YouLy+: Set dynamicPlayerFullscreen to:", currentSettings.dynamicPlayerFullscreen);
         }
         if (overrideGeminiPromptSwitchInput) {
             overrideGeminiPromptSwitchInput.checked = currentSettings.overrideGeminiPrompt;
@@ -167,13 +116,11 @@ document.addEventListener('DOMContentLoaded', () => {
             customGeminiPromptTextarea.value = currentSettings.customGeminiPrompt || '';
         }
         
-        // Update textbox visibility based on switch state
         toggleCustomGeminiPromptVisibility();
     }
 
     async function fetchAndLoadSettings() {
         try {
-            // Get all settings from storage, with proper defaults
             const defaultSettings = {
                 lyricsProvider: 'kpoe',
                 wordByWord: true,
@@ -182,19 +129,17 @@ document.addEventListener('DOMContentLoaded', () => {
                 useSponsorBlock: true,
                 largerTextMode: 'lyrics',
                 dynamicPlayerPage: true,
-        dynamicPlayerFullscreen: true,
+                dynamicPlayerFullscreen: true,
                 overrideGeminiPrompt: false,
                 customGeminiPrompt: '',
             };
             
             const items = await storageLocalGet(defaultSettings);
-            console.log("YouLy+: Fetched settings from storage:", items);
-            currentSettings = { ...defaultSettings, ...items }; // Merge defaults with stored values
-            console.log("YouLy+: Final currentSettings after merge:", currentSettings);
+            currentSettings = { ...defaultSettings, ...items };
             loadSettingsUI();
         } catch (error) {
-            console.error("YouLy+: Error loading settings:", error);
-            loadSettingsUI(); // Load UI with defaults if error
+            console.error("NewSync: Error loading settings:", error);
+            loadSettingsUI();
         }
     }
 
@@ -213,27 +158,15 @@ document.addEventListener('DOMContentLoaded', () => {
             customGeminiPrompt: customGeminiPromptTextarea ? customGeminiPromptTextarea.value : '',
         };
         
-        // Check if only dynamic background settings changed before updating
-        const dynamicBgSettingsChanged = (
-            (dynamicPlayerPageSwitchInput && dynamicPlayerPageSwitchInput.checked !== currentSettings.dynamicPlayerPage) ||
-            (dynamicPlayerFullscreenSwitchInput && dynamicPlayerFullscreenSwitchInput.checked !== currentSettings.dynamicPlayerFullscreen)
-        );
-        
         currentSettings = { ...currentSettings, ...newSettings };
 
         try {
             await storageLocalSet(currentSettings);
-            
-            if (dynamicBgSettingsChanged) {
-                showSnackbar('Dynamic background settings updated!');
-            } else {
-                showSnackbar('Settings saved! Reload YouTube pages for changes.');
-            }
-            
+            showStatus('Settings saved!');
             notifyContentScripts(currentSettings);
         } catch (error) {
-            console.error("YouLy+: Error saving settings:", error);
-            showSnackbar('Error saving settings.', true);
+            console.error("NewSync: Error saving settings:", error);
+            showStatus('Error saving settings.', true);
         }
     }
 
@@ -241,25 +174,23 @@ document.addEventListener('DOMContentLoaded', () => {
     function toggleCustomGeminiPromptVisibility() {
         if (customGeminiPromptGroup && overrideGeminiPromptSwitchInput) {
             if (overrideGeminiPromptSwitchInput.checked) {
-                customGeminiPromptGroup.style.display = 'block';
+                customGeminiPromptGroup.style.display = 'flex';
             } else {
                 customGeminiPromptGroup.style.display = 'none';
             }
         }
     }
 
-    // --- Event Listeners for Settings (now on inputs) ---
+    // --- Event Listeners ---
     lyricsProviderSelect.addEventListener('change', saveAndApplySettings);
     if (largerTextModeSelect) {
         largerTextModeSelect.addEventListener('change', saveAndApplySettings);
     }
     
-    // Textbox event listener
     if (customGeminiPromptTextarea) {
         customGeminiPromptTextarea.addEventListener('input', saveAndApplySettings);
     }
     
-    // For switches, the 'change' event is dispatched manually by the .m3-switch click handler
     const switchInputs = [
         wordByWordSwitchInput, 
         lightweightSwitchInput, 
@@ -273,78 +204,52 @@ document.addEventListener('DOMContentLoaded', () => {
     switchInputs.forEach(input => {
         if (input) {
             input.addEventListener('change', (e) => {
-                // Handle special case for overrideGeminiPrompt to toggle textbox visibility
                 if (input === overrideGeminiPromptSwitchInput) {
                     toggleCustomGeminiPromptVisibility();
                 }
                 saveAndApplySettings();
             });
-        } else {
-            console.warn(`YouLy+: Switch input not found`);
         }
     });
 
-
-    // --- Snackbar ---
-    function showSnackbar(message, isError = false) {
-        if (snackbarTimeout) clearTimeout(snackbarTimeout);
-        snackbarText.textContent = message;
-        // Basic error indication - you might add a specific class for styling
-        snackbar.style.backgroundColor = isError ? 'var(--md-sys-color-error-container)' : 'var(--md-sys-color-inverse-surface)';
-        snackbar.style.color = isError ? 'var(--md-sys-color-on-error-container)' : 'var(--md-sys-color-inverse-on-surface)';
-
-        snackbar.classList.add('show');
-        snackbarTimeout = setTimeout(() => {
-            snackbar.classList.remove('show');
-        }, 3500);
+    // --- Status Display ---
+    function showStatus(message, isError = false) {
+        if (!status) return;
+        status.textContent = message;
+        status.style.backgroundColor = isError ? 'rgba(239, 68, 68, 0.9)' : 'rgba(62, 62, 65, 0.95)';
+        status.classList.add('active');
+        
+        setTimeout(() => {
+            status.classList.remove('active');
+        }, 3000);
     }
 
     // --- Notify Content Scripts ---
     function notifyContentScripts(settings) {
-        // Make this non-blocking and optional
         try {
             if (typeof pBrowser !== 'undefined' && pBrowser.tabs && pBrowser.tabs.query) {
                 pBrowser.tabs.query({ url: ["*://*.music.youtube.com/*"] }, (tabs) => {
-                    if (pBrowser.runtime.lastError) {
-                        console.warn("YouLy+: Error querying tabs (this is normal if no YouTube Music tabs are open):", pBrowser.runtime.lastError.message);
-                        return;
-                    }
-                    if (tabs.length === 0) {
-                        return;
-                    }
+                    if (pBrowser.runtime.lastError) return;
+                    if (tabs.length === 0) return;
+                    
                     tabs.forEach(tab => {
-                        if (tab.id) {
-                            // Use Promise-based approach with better error handling
-                            const sendMessage = () => {
-                                if (pBrowser.tabs.sendMessage) {
-                                    return pBrowser.tabs.sendMessage(tab.id, {
-                                        type: 'YOUPLUS_SETTINGS_UPDATED',
-                                        settings: settings
-                                    });
-                                }
-                                return Promise.reject(new Error('sendMessage not available'));
-                            };
-                            
-                            sendMessage()
-                                .then(() => {
-                                    // Successfully notified tab
-                                })
-                                .catch(err => {
-                                    // This is normal if content script isn't injected yet - ignore silently
-                                });
+                        if (tab.id && pBrowser.tabs.sendMessage) {
+                            pBrowser.tabs.sendMessage(tab.id, {
+                                type: 'NEWSYNC_SETTINGS_UPDATED',
+                                settings: settings
+                            }).catch(() => {});
                         }
                     });
                 });
             }
         } catch (error) {
-            console.warn("YouLy+: Error in notifyContentScripts (non-critical):", error);
+            console.warn("NewSync: Error in notifyContentScripts:", error);
         }
     }
 
     // --- Cache Management ---
     async function updateCacheDisplay() {
         if (typeof pBrowser === 'undefined' || !pBrowser.runtime || !pBrowser.runtime.sendMessage) {
-            console.warn("YouLy+: pBrowser.runtime.sendMessage not available for cache display.");
             cacheSizeElement.textContent = 'N/A';
             cacheCountElement.textContent = 'N/A';
             return;
@@ -358,74 +263,63 @@ document.addEventListener('DOMContentLoaded', () => {
             } else {
                 cacheSizeElement.textContent = 'N/A';
                 cacheCountElement.textContent = 'N/A';
-                console.error("YouLy+: Error getting cache size:", response ? response.error : "No response");
             }
         } catch (error) {
             cacheSizeElement.textContent = 'Error';
             cacheCountElement.textContent = 'Error';
-            console.error("YouLy+: Failed to send GET_CACHED_SIZE message:", error);
+            console.error("NewSync: Failed to get cache size:", error);
         }
     }
 
     clearCacheButton.addEventListener('click', async () => {
         if (typeof pBrowser === 'undefined' || !pBrowser.runtime || !pBrowser.runtime.sendMessage) {
-            showSnackbar('Cannot clear cache: Extension API not available.', true);
+            showStatus('Cannot clear cache.', true);
             return;
         }
         try {
             const response = await pBrowser.runtime.sendMessage({ type: 'RESET_CACHE' });
             if (response && response.success) {
-                showSnackbar('Cache cleared successfully!');
+                showStatus('Cache cleared!');
                 updateCacheDisplay();
             } else {
-                showSnackbar('Failed to clear cache.', true);
-                console.error("YouLy+: Error resetting cache:", response ? response.error : "No response");
+                showStatus('Failed to clear cache.', true);
             }
         } catch (error) {
-            showSnackbar('Error communicating to clear cache.', true);
-            console.error("YouLy+: Failed to send RESET_CACHE message:", error);
+            showStatus('Error clearing cache.', true);
         }
     });
 
     refreshCacheButton.addEventListener('click', () => {
         updateCacheDisplay();
-        showSnackbar('Cache info refreshed.');
+        showStatus('Cache refreshed.');
     });
 
     // --- Reload Extension ---
     reloadExtensionButton.addEventListener('click', async () => {
         if (typeof pBrowser === 'undefined' || !pBrowser.runtime || !pBrowser.runtime.reload) {
-            showSnackbar('Cannot reload extension: Runtime API not available.', true);
+            showStatus('Cannot reload extension.', true);
             return;
         }
         
         try {
-            showSnackbar('Reloading extension and YouTube Music tabs...');
+            showStatus('Reloading extension...');
             
-            // First, reload all YouTube Music tabs
             if (pBrowser.tabs && pBrowser.tabs.query) {
                 try {
                     const youtubeTabs = await new Promise((resolve, reject) => {
-                        pBrowser.tabs.query(
-                            { url: ["*://*.music.youtube.com/*"] }, 
-                            (tabs) => {
-                                if (pBrowser.runtime.lastError) {
-                                    reject(pBrowser.runtime.lastError);
-                                } else {
-                                    resolve(tabs);
-                                }
+                        pBrowser.tabs.query({ url: ["*://*.music.youtube.com/*"] }, (tabs) => {
+                            if (pBrowser.runtime.lastError) {
+                                reject(pBrowser.runtime.lastError);
+                            } else {
+                                resolve(tabs);
                             }
-                        );
+                        });
                     });
                     
-                    // Reload each YouTube Music tab
                     const reloadPromises = youtubeTabs.map(tab => {
                         return new Promise((resolve) => {
                             if (tab.id) {
-                                pBrowser.tabs.reload(tab.id, () => {
-                                    // Ignore errors (tab might be closed, etc.)
-                                    resolve();
-                                });
+                                pBrowser.tabs.reload(tab.id, () => resolve());
                             } else {
                                 resolve();
                             }
@@ -433,35 +327,29 @@ document.addEventListener('DOMContentLoaded', () => {
                     });
                     
                     await Promise.all(reloadPromises);
-                                                // Successfully reloaded YouTube tabs
                     
-                    // Update snackbar with count info
                     if (youtubeTabs.length > 0) {
-                        showSnackbar(`Reloading extension + ${youtubeTabs.length} YouTube Music tab(s)...`);
+                        showStatus(`Reloading ${youtubeTabs.length} tab(s)...`);
                     }
-                    
                 } catch (tabError) {
-                    console.warn('YouLy+: Error reloading YouTube Music tabs:', tabError);
-                    // Continue with extension reload even if tab reload fails
+                    console.warn('NewSync: Error reloading tabs:', tabError);
                 }
             }
             
-            // Small delay to let tabs start reloading, then reload extension
             setTimeout(() => {
                 pBrowser.runtime.reload();
             }, 300);
             
         } catch (error) {
             console.error('Error reloading extension:', error);
-            showSnackbar('Error reloading extension.', true);
+            showStatus('Error reloading.', true);
         }
     });
 
-    // --- Storage Change Listener for Real-time Sync ---
+    // --- Storage Change Listener ---
     if (typeof pBrowser !== 'undefined' && pBrowser.storage && pBrowser.storage.onChanged) {
         pBrowser.storage.onChanged.addListener((changes, namespace) => {
             if (namespace === 'local') {
-                // Update currentSettings with new values
                 Object.keys(changes).forEach(key => {
                     if (currentSettings.hasOwnProperty(key)) {
                         const newValue = changes[key].newValue;
@@ -470,8 +358,6 @@ document.addEventListener('DOMContentLoaded', () => {
                         }
                     }
                 });
-                
-                // Update UI to reflect changes
                 loadSettingsUI();
             }
         });

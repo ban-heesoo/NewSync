@@ -1,198 +1,215 @@
 <!DOCTYPE html>
-<html lang="en">
+<html>
 <head>
+    <meta name="color-scheme" content="dark">
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>NewSync Settings</title>
-    <link href="https://fonts.googleapis.com/css2?family=Roboto:wght@400;500;700&display=swap" rel="stylesheet">
-    <link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:opsz,wght,FILL,GRAD@20..48,100..700,0..1,-50..200" rel="stylesheet">
-    <link href="../lib/material3.css" rel="stylesheet" />
-    <link rel="stylesheet" type="text/css" href="ui.css">
-    <!-- Assuming polyfill.js provides browser/chrome namespace and storage helpers -->
+    <title>NewSync</title>
+    <link href="https://fonts.googleapis.com/css2?family=Satoshi:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="ui.css" />
     <script src="../lib/polyfill.js" defer></script>
 </head>
 <body>
-    <div class="container">
-        <header class="app-header">
-            <img src="../../icons/binky big/icon32.png" alt="NewSync Logo" class="logo-icon">
-            <h1>NewSync Settings</h1>
-        </header>
+    <nav>
+        <h1>
+            <img src="../../icons/binky big/icon32.png" alt="NewSync" width="24" height="24" />
+            <div class="heading">
+                NewSync <span>v2.2.5</span>
+            </div>
+        </h1>
+    </nav>
+    
+    <div id="options">
+        <div class="tab-container">
+            <button class="tab active" data-target="#general-content">General</button>
+            <button class="tab" data-target="#display-content">Display</button>
+            <button class="tab" data-target="#advanced-content">Advanced</button>
+        </div>
 
-        <nav class="tabs">
-            <button class="tab active" data-tab="general-tab">
-                <span class="material-symbols-outlined tab-icon">tune</span>General
-            </button>
-            <button class="tab" data-tab="appearance-tab">
-                <span class="material-symbols-outlined tab-icon">display_settings</span>Display
-            </button>
-            <button class="tab" data-tab="advanced-tab">
-                <span class="material-symbols-outlined tab-icon">settings</span>Advanced
-            </button>
-        </nav>
-
-        <main>
-            <!-- General Tab Content -->
-            <div class="tab-content active" id="general-tab">
-                <section class="settings-section">
-                    <h2 class="section-title">
-                        <span class="material-symbols-outlined section-icon">toggle_on</span>Core Features
-                    </h2>
-                    <div class="setting-item">
-                        <label for="lyEnabled" class="setting-label">Enable NewSync</label>
-                        <div class="m3-switch" role="switch" aria-labelledby="lyEnabled">
-                            <input type="checkbox" id="lyEnabled" class="m3-switch-input">
-                            <span class="m3-switch-track"></span>
-                            <span class="m3-switch-thumb-container"><span class="m3-switch-thumb"></span></span>
-                        </div>
-                    </div>
-                </section>
-
-                <section class="settings-section">
-                    <h2 class="section-title">
-                        <span class="material-symbols-outlined section-icon">cloud_download</span>Data Sources
-                    </h2>
-                    <div class="setting-item">
-                        <label for="lyricsProvider" class="setting-label">Primary Lyrics Provider</label>
-                        <div class="m3-select-wrapper">
-                            <select id="lyricsProvider" class="m3-select">
-                                <option value="kpoe">Lyrics+ (KPoe)</option>
-                                <option value="customKpoe">Custom KPoe Server</option>
-                                <option value="lrclib">LRCLIB</option>
-                            </select>
-                            <span class="material-symbols-outlined select-arrow">expand_more</span>
-                        </div>
-                    </div>
-                    <div class="setting-item">
-                        <label for="sponsorblock" class="setting-label">Integrate SponsorBlock</label>
-                        <div class="m3-switch" role="switch" aria-labelledby="sponsorblock">
-                            <input type="checkbox" id="sponsorblock" class="m3-switch-input">
-                            <span class="m3-switch-track"></span>
-                            <span class="m3-switch-thumb-container"><span class="m3-switch-thumb"></span></span>
-                        </div>
-                    </div>
-                </section>
+        <!-- General Tab -->
+        <div class="tab-content active" id="general-content">
+            <div class="settings-group">
+                <h2>
+                    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor">
+                        <path fill-rule="evenodd" d="M11.078 2.25c-.917 0-1.699.663-1.85 1.567L9.05 4.889c-.02.12-.115.26-.297.348a7.493 7.493 0 0 0-.986.57c-.166.115-.334.126-.45.083L6.3 5.508a1.875 1.875 0 0 0-2.282.819l-.922 1.597a1.875 1.875 0 0 0 .432 2.385l.84.692c.095.078.17.229.154.43a7.598 7.598 0 0 0 0 1.139c.015.2-.059.352-.153.43l-.841.692a1.875 1.875 0 0 0-.432 2.385l.922 1.597a1.875 1.875 0 0 0 2.282.818l1.019-.382c.115-.043.283-.031.45.082.312.214.641.405.985.57.182.088.277.228.297.35l.178 1.071c.151.904.933 1.567 1.85 1.567h1.844c.916 0 1.699-.663 1.85-1.567l.178-1.072c.02-.12.114-.26.297-.349.344-.165.673-.356.985-.57.167-.114.335-.125.45-.082l1.02.382a1.875 1.875 0 0 0 2.28-.819l.923-1.597a1.875 1.875 0 0 0-.432-2.385l-.84-.692c-.095-.078-.17-.229-.154-.43a7.614 7.614 0 0 0 0-1.139c-.016-.2.059-.352.153-.43l.84-.692c.708-.582.891-1.59.433-2.385l-.922-1.597a1.875 1.875 0 0 0-2.282-.818l-1.02.382c-.114.043-.282.031-.449-.083a7.49 7.49 0 0 0-.985-.57c-.183-.087-.277-.227-.297-.348l-.179-1.072a1.875 1.875 0 0 0-1.85-1.567h-1.843ZM12 15.75a3.75 3.75 0 1 0 0-7.5 3.75 3.75 0 0 0 0 7.5Z" clip-rule="evenodd" />
+                    </svg>
+                    Core Features
+                </h2>
+                <p>Essential settings for NewSync functionality.</p>
+                <div class="container">
+                    <span>Enable NewSync</span>
+                    <label>
+                        <input type="checkbox" id="lyEnabled" />
+                        <span class="checkmark"></span>
+                    </label>
+                </div>
+                <div class="container">
+                    <span>Word-by-Word Highlighting</span>
+                    <label>
+                        <input type="checkbox" id="wordByWord" />
+                        <span class="checkmark"></span>
+                    </label>
+                </div>
+                <div class="container">
+                    <span>SponsorBlock Integration</span>
+                    <label>
+                        <input type="checkbox" id="sponsorblock" />
+                        <span class="checkmark"></span>
+                    </label>
+                </div>
             </div>
 
-            <!-- Appearance Tab Content -->
-            <div class="tab-content" id="appearance-tab">
-                <section class="settings-section">
-                    <h2 class="section-title">
-                        <span class="material-symbols-outlined section-icon">text_fields</span>Text Display
-                    </h2>
-                    <div class="setting-item">
-                        <label for="largerTextMode" class="setting-label">Larger Text:</label>
-                        <div class="m3-select-wrapper">
-                            <select id="largerTextMode" class="m3-select">
-                                <option value="lyrics">Lyrics</option>
-                                <option value="romanization">Pronunciation</option>
-                            </select>
-                            <span class="material-symbols-outlined select-arrow">expand_more</span>
-                        </div>
+            <div class="settings-group">
+                <h2>
+                    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor">
+                        <path fill-rule="evenodd" d="M2.25 5.25a3 3 0 0 1 3-3h13.5a3 3 0 0 1 3 3V15a3 3 0 0 1-3 3h-3v.257c0 .597.237 1.17.659 1.591l.621.622a.75.75 0 0 1-.53 1.28h-9a.75.75 0 0 1-.53-1.28l.621-.622a2.25 2.25 0 0 0 .659-1.59V18h-3a3 3 0 0 1-3-3V5.25Zm1.5 0v7.5a1.5 1.5 0 0 0 1.5 1.5h13.5a1.5 1.5 0 0 0 1.5-1.5v-7.5a1.5 1.5 0 0 0-1.5-1.5H5.25a1.5 1.5 0 0 0-1.5 1.5Z" clip-rule="evenodd" />
+                    </svg>
+                    Lyrics Provider
+                </h2>
+                <p>Choose your preferred lyrics source.</p>
+                <div class="container">
+                    <span>Primary Provider</span>
+                    <div class="select">
+                        <select id="lyricsProvider">
+                            <option value="kpoe">Lyrics+ (KPoe)</option>
+                            <option value="customKpoe">Custom KPoe</option>
+                            <option value="lrclib">LRCLIB</option>
+                        </select>
                     </div>
-                    <p class="setting-description">Choose whether lyrics or pronunciation appears larger when both are displayed.</p>
-                </section>
-                
-                <section class="settings-section">
-                    <h2 class="section-title">
-                        <span class="material-symbols-outlined section-icon">auto_fix_high</span>Lyrics Effects
-                    </h2>
-                    <div class="setting-item">
-                        <label for="lightweight" class="setting-label">Lightweight Mode</label>
-                        <div class="m3-switch" role="switch" aria-labelledby="lightweight">
-                            <input type="checkbox" id="lightweight" class="m3-switch-input">
-                            <span class="m3-switch-track"></span>
-                            <span class="m3-switch-thumb-container"><span class="m3-switch-thumb"></span></span>
-                        </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Display Tab -->
+        <div class="tab-content" id="display-content">
+            <div class="settings-group">
+                <h2>
+                    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor">
+                        <path d="M12 15a3 3 0 1 0 0-6 3 3 0 0 0 0 6Z" />
+                        <path fill-rule="evenodd" d="M1.323 11.447C2.811 6.976 7.028 3.75 12.001 3.75c4.97 0 9.185 3.223 10.675 7.69.12.362.12.752 0 1.113-1.487 4.471-5.705 7.697-10.677 7.697-4.97 0-9.186-3.223-10.675-7.69a1.762 1.762 0 0 1 0-1.113ZM17.25 12a5.25 5.25 0 1 1-10.5 0 5.25 5.25 0 0 1 10.5 0Z" clip-rule="evenodd" />
+                    </svg>
+                    Display Settings
+                </h2>
+                <p>Customize how lyrics appear.</p>
+                <div class="container">
+                    <span>Lightweight Mode</span>
+                    <label>
+                        <input type="checkbox" id="lightweight" />
+                        <span class="checkmark"></span>
+                    </label>
+                </div>
+                <div class="container">
+                    <span>Larger Text</span>
+                    <div class="select">
+                        <select id="largerTextMode">
+                            <option value="lyrics">Lyrics</option>
+                            <option value="romanization">Pronunciation</option>
+                        </select>
                     </div>
-                    <div class="setting-item">
-                        <label for="wordByWord" class="setting-label">Word-by-Word Highlighting</label>
-                        <div class="m3-switch" role="switch" aria-labelledby="wordByWord">
-                            <input type="checkbox" id="wordByWord" class="m3-switch-input">
-                            <span class="m3-switch-track"></span>
-                            <span class="m3-switch-thumb-container"><span class="m3-switch-thumb"></span></span>
-                        </div>
-                    </div>
-                </section>
-                
-                <section class="settings-section">
-                    <h2 class="section-title">
-                        <span class="material-symbols-outlined section-icon">wallpaper</span>Dynamic Background
-                    </h2>
-                    <div class="setting-item">
-                        <label for="dynamicPlayerPage" class="setting-label">Player Page</label>
-                        <div class="m3-switch" role="switch" aria-labelledby="dynamicPlayerPage">
-                            <input type="checkbox" id="dynamicPlayerPage" class="m3-switch-input">
-                            <span class="m3-switch-track"></span>
-                            <span class="m3-switch-thumb-container"><span class="m3-switch-thumb"></span></span>
-                        </div>
-                    </div>
-                    <div class="setting-item">
-                        <label for="dynamicPlayerFullscreen" class="setting-label">Fullscreen</label>
-                        <div class="m3-switch" role="switch" aria-labelledby="dynamicPlayerFullscreen">
-                            <input type="checkbox" id="dynamicPlayerFullscreen" class="m3-switch-input">
-                            <span class="m3-switch-track"></span>
-                            <span class="m3-switch-thumb-container"><span class="m3-switch-thumb"></span></span>
-                        </div>
-                    </div>
-                </section>
-                
-                <section class="settings-section">
-                    <h2 class="section-title">
-                        <span class="material-symbols-outlined section-icon">g_translate</span>AI Translation
-                    </h2>
-                    <div class="setting-item">
-                        <label for="overrideGeminiPrompt" class="setting-label">Override Gemini AI Prompt</label>
-                        <div class="m3-switch" role="switch" aria-labelledby="overrideGeminiPrompt">
-                            <input type="checkbox" id="overrideGeminiPrompt" class="m3-switch-input">
-                            <span class="m3-switch-track"></span>
-                            <span class="m3-switch-thumb-container"><span class="m3-switch-thumb"></span></span>
-                        </div>
-                    </div>
-                    <div class="setting-item" id="customGeminiPromptGroup" style="display: none;">
-                        <label for="customGeminiPrompt" class="setting-label">Custom Gemini AI Prompt</label>
-                        <textarea id="customGeminiPrompt" class="m3-textfield" placeholder="Enter custom prompt for Gemini AI translation..." rows="3"></textarea>
-                        <p class="setting-description">Use {targetLang} for target language placeholder</p>
-                    </div>
-                </section>
+                </div>
             </div>
 
-            <!-- Advanced Tab Content -->
-            <div class="tab-content" id="advanced-tab">
-                <section class="settings-section">
-                    <h2 class="section-title">
-                        <span class="material-symbols-outlined section-icon">database</span>Data Management
-                    </h2>
-                    <div class="cache-info">
-                        <p>Storage Used: <span class="cache-size-value">0.00 MB</span></p>
-                        <p>Lyrics Cached: <span class="cache-count-value">0</span></p>
-                    </div>
-                    <div class="cache-controls">
-                        <button class="m3-button m3-button-filled m3-button-error" id="clearCache">
-                            <span class="material-symbols-outlined button-icon">delete</span>Clear Cache
-                        </button>
-                        <button class="m3-button m3-button-tonal" id="refreshCache">
-                            <span class="material-symbols-outlined button-icon">sync</span>Refresh
-                        </button>
-                    </div>
-                </section>
-                
-
+            <div class="settings-group">
+                <h2>
+                    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor">
+                        <path d="M4.5 6.375a4.125 4.125 0 1 1 8.25 0 4.125 4.125 0 0 1-8.25 0ZM14.25 8.625a3.375 3.375 0 1 1 6.75 0 3.375 3.375 0 0 1-6.75 0ZM1.5 19.125a7.125 7.125 0 0 1 14.25 0v.003l-.001.119a.75.75 0 0 1-.363.63 13.067 13.067 0 0 1-6.761 1.873c-2.472 0-4.786-.684-6.76-1.873a.75.75 0 0 1-.364-.63l-.001-.122ZM17.25 19.128l-.001.144a2.25 2.25 0 0 1-.233.96 10.088 10.088 0 0 0 5.06-1.01.75.75 0 0 0 .42-.643 4.875 4.875 0 0 0-6.957-4.611 8.586 8.586 0 0 1 1.71 5.157v.003Z" />
+                    </svg>
+                    Dynamic Background
+                </h2>
+                <p>Animated backgrounds based on album art.</p>
+                <div class="container">
+                    <span>Player Page</span>
+                    <label>
+                        <input type="checkbox" id="dynamicPlayerPage" />
+                        <span class="checkmark"></span>
+                    </label>
+                </div>
+                <div class="container">
+                    <span>Fullscreen</span>
+                    <label>
+                        <input type="checkbox" id="dynamicPlayerFullscreen" />
+                        <span class="checkmark"></span>
+                    </label>
+                </div>
             </div>
-        </main>
+        </div>
 
-        <footer class="app-footer">
-            <button id="reloadExtension" class="m3-button m3-button-text">
-                <span class="material-symbols-outlined button-icon">refresh</span>Reload Extension
-            </button>
-            <a href="../settings/index.html" target="_blank" class="m3-button m3-button-text">
-                <span class="material-symbols-outlined button-icon">settings_applications</span>More Settings
-            </a>
-        </footer>
+        <!-- Advanced Tab -->
+        <div class="tab-content" id="advanced-content">
+            <div class="settings-group">
+                <h2>
+                    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor">
+                        <path d="M11.47 3.841a.75.75 0 0 1 1.06 0l8.69 8.69a.75.75 0 1 0 1.06-1.061l-8.689-8.69a2.25 2.25 0 0 0-3.182 0l-8.69 8.69a.75.75 0 1 0 1.061 1.06l8.69-8.689Z" />
+                        <path d="m12 5.432 8.159 8.159c.03.03.06.058.091.086v6.198c0 1.035-.84 1.875-1.875 1.875H15a.75.75 0 0 1-.75-.75v-4.5a.75.75 0 0 0-.75-.75h-3a.75.75 0 0 0-.75.75V21a.75.75 0 0 1-.75.75H5.625a1.875 1.875 0 0 1-1.875-1.875v-6.198a2.29 2.29 0 0 0 .091-.086L12 5.432Z" />
+                    </svg>
+                    Data Management
+                </h2>
+                <p>Manage cached lyrics and storage.</p>
+                <div class="text-group">
+                    <p>
+                        <span class="text-group__title">Lyrics Cached</span>
+                        <span class="dots"></span>
+                        <span class="cache-count-value">0</span>
+                    </p>
+                    <p>
+                        <span class="text-group__title">Cache Size</span>
+                        <span class="dots"></span>
+                        <span class="cache-size-value">0.00 MB</span>
+                    </p>
+                </div>
+                <div class="container container--small">
+                    <button class="small-btn btn-danger" id="clearCache">
+                        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor">
+                            <path fill-rule="evenodd" d="M16.5 4.478v.227a48.816 48.816 0 0 1 3.878.512.75.75 0 1 1-.256 1.478l-.209-.035-1.005 13.07a3 3 0 0 1-2.991 2.77H8.084a3 3 0 0 1-2.991-2.77L4.087 6.66l-.209.035a.75.75 0 0 1-.256-1.478A48.567 48.567 0 0 1 7.5 4.705v-.227c0-1.564 1.213-2.9 2.816-2.951a52.662 52.662 0 0 1 3.369 0c1.603.051 2.815 1.387 2.815 2.951Zm-6.136-1.452a51.196 51.196 0 0 1 3.273 0C14.39 3.05 15 3.684 15 4.478v.113a49.488 49.488 0 0 0-6 0v-.113c0-.794.609-1.428 1.364-1.452Zm-.355 5.945a.75.75 0 1 0-1.5.058l.347 9a.75.75 0 1 0 1.499-.058l-.346-9Zm5.48.058a.75.75 0 1 0-1.498-.058l-.347 9a.75.75 0 0 0 1.5.058l.345-9Z" clip-rule="evenodd" />
+                        </svg>
+                        Clear Cache
+                    </button>
+                    <button class="small-btn" id="refreshCache">
+                        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor">
+                            <path fill-rule="evenodd" d="M4.755 10.059a7.5 7.5 0 0 1 12.548-3.364l1.903 1.903h-3.183a.75.75 0 1 0 0 1.5h4.992a.75.75 0 0 0 .75-.75V4.356a.75.75 0 0 0-1.5 0v3.18l-1.9-1.9A9 9 0 0 0 3.306 9.67a.75.75 0 1 0 1.45.388Zm15.408 3.352a.75.75 0 0 0-.919.53 7.5 7.5 0 0 1-12.548 3.364l-1.902-1.903h3.183a.75.75 0 0 0 0-1.5H2.984a.75.75 0 0 0-.75.75v4.992a.75.75 0 0 0 1.5 0v-3.18l1.9 1.9a9 9 0 0 0 15.059-4.035.75.75 0 0 0-.53-.918Z" clip-rule="evenodd" />
+                        </svg>
+                        Refresh
+                    </button>
+                </div>
+            </div>
+
+            <div class="settings-group">
+                <h2>
+                    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor">
+                        <path fill-rule="evenodd" d="M9 2.25a.75.75 0 0 1 .75.75v1.506a49.384 49.384 0 0 1 5.343.371.75.75 0 1 1-.186 1.489c-.66-.083-1.323-.151-1.99-.206a18.67 18.67 0 0 1-2.97 6.323c.318.384.65.753 1 1.107a.75.75 0 0 1-1.07 1.052A18.902 18.902 0 0 1 9 13.687a18.823 18.823 0 0 1-5.656 4.482.75.75 0 0 1-.688-1.333 17.323 17.323 0 0 0 5.396-4.353A18.72 18.72 0 0 1 5.89 8.598a.75.75 0 0 1 1.388-.568A17.21 17.21 0 0 0 9 11.224a17.168 17.168 0 0 0 2.391-5.165 48.04 48.04 0 0 0-8.298.307.75.75 0 0 1-.186-1.489 49.159 49.159 0 0 1 5.343-.371V3A.75.75 0 0 1 9 2.25ZM15.75 9a.75.75 0 0 1 .68.433l5.25 11.25a.75.75 0 1 1-1.36.634l-1.198-2.567h-6.744l-1.198 2.567a.75.75 0 0 1-1.36-.634l5.25-11.25A.75.75 0 0 1 15.75 9Zm-2.672 8.25h5.344l-2.672-5.726-2.672 5.726Z" clip-rule="evenodd" />
+                    </svg>
+                    AI Translation
+                </h2>
+                <p>Override Gemini AI translation settings.</p>
+                <div class="container">
+                    <span>Custom AI Prompt</span>
+                    <label>
+                        <input type="checkbox" id="overrideGeminiPrompt" />
+                        <span class="checkmark"></span>
+                    </label>
+                </div>
+                <div class="container" id="customGeminiPromptGroup" style="display: none;">
+                    <textarea id="customGeminiPrompt" class="text-input" placeholder="Enter custom Gemini AI prompt..." rows="3"></textarea>
+                </div>
+            </div>
+        </div>
+
+        <div id="status"></div>
     </div>
 
-    <div class="m3-snackbar" id="statusSnackbar">
-        <span class="snackbar-text"></span>
-    </div>
+    <button id="reloadExtension" class="full-width-btn">
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor">
+            <path fill-rule="evenodd" d="M4.755 10.059a7.5 7.5 0 0 1 12.548-3.364l1.903 1.903h-3.183a.75.75 0 1 0 0 1.5h4.992a.75.75 0 0 0 .75-.75V4.356a.75.75 0 0 0-1.5 0v3.18l-1.9-1.9A9 9 0 0 0 3.306 9.67a.75.75 0 1 0 1.45.388Zm15.408 3.352a.75.75 0 0 0-.919.53 7.5 7.5 0 0 1-12.548 3.364l-1.902-1.903h3.183a.75.75 0 0 0 0-1.5H2.984a.75.75 0 0 0-.75.75v4.992a.75.75 0 0 0 1.5 0v-3.18l1.9 1.9a9 9 0 0 0 15.059-4.035.75.75 0 0 0-.53-.918Z" clip-rule="evenodd" />
+        </svg>
+        Reload Extension
+    </button>
+
+    <a href="../settings/index.html" target="_blank" class="full-width-btn btn-secondary">
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor">
+            <path fill-rule="evenodd" d="M11.078 2.25c-.917 0-1.699.663-1.85 1.567L9.05 4.889c-.02.12-.115.26-.297.348a7.493 7.493 0 0 0-.986.57c-.166.115-.334.126-.45.083L6.3 5.508a1.875 1.875 0 0 0-2.282.819l-.922 1.597a1.875 1.875 0 0 0 .432 2.385l.84.692c.095.078.17.229.154.43a7.598 7.598 0 0 0 0 1.139c.015.2-.059.352-.153.43l-.841.692a1.875 1.875 0 0 0-.432 2.385l.922 1.597a1.875 1.875 0 0 0 2.282.818l1.019-.382c.115-.043.283-.031.45.082.312.214.641.405.985.57.182.088.277.228.297.35l.178 1.071c.151.904.933 1.567 1.85 1.567h1.844c.916 0 1.699-.663 1.85-1.567l.178-1.072c.02-.12.114-.26.297-.349.344-.165.673-.356.985-.57.167-.114.335-.125.45-.082l1.02.382a1.875 1.875 0 0 0 2.28-.819l.923-1.597a1.875 1.875 0 0 0-.432-2.385l-.84-.692c-.095-.078-.17-.229-.154-.43a7.614 7.614 0 0 0 0-1.139c-.016-.2.059-.352.153-.43l.84-.692c.708-.582.891-1.59.433-2.385l-.922-1.597a1.875 1.875 0 0 0-2.282-.818l-1.02.382c-.114.043-.282.031-.449-.083a7.49 7.49 0 0 0-.985-.57c-.183-.087-.277-.227-.297-.348l-.179-1.072a1.875 1.875 0 0 0-1.85-1.567h-1.843ZM12 15.75a3.75 3.75 0 1 0 0-7.5 3.75 3.75 0 0 0 0 7.5Z" clip-rule="evenodd" />
+        </svg>
+        More Settings
+    </a>
 
     <script src="ui.js" defer></script>
 </body>
