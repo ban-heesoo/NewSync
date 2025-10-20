@@ -120,10 +120,13 @@ function applyDynamicPlayerClass() {
         return;
     }
 
-    // Check current UI state from layout element
+    // Check if we're in fullscreen mode by looking at player page element
+    const playerPageElement = document.querySelector('ytmusic-player-page');
+    const isFullscreen = playerPageElement && playerPageElement.hasAttribute('player-fullscreened');
+    
+    // Check if player page is open by looking at layout element's player-ui-state
     const playerUiState = layoutElement.getAttribute('player-ui-state');
     const isPlayerPageOpen = playerUiState === 'PLAYER_PAGE_OPEN' || playerUiState === 'MINIPLAYER_IN_PLAYER_PAGE';
-    const isFullscreen = playerUiState === 'FULLSCREEN';
     
     // Apply dynamic background based on current mode
     const shouldEnableDynamic = isFullscreen ? 
@@ -155,16 +158,27 @@ function applyDynamicPlayerClass() {
  */
 function setupDynamicBackgroundListener() {
     const layoutElement = document.getElementById('layout');
+    const playerPageElement = document.querySelector('ytmusic-player-page');
+    
     if (!layoutElement) return;
 
     const observer = new MutationObserver(() => {
         applyDynamicPlayerClass();
     });
 
+    // Watch layout element for player-ui-state changes
     observer.observe(layoutElement, {
         attributes: true,
         attributeFilter: ['player-ui-state']
     });
+    
+    // Also watch player page element for fullscreen changes
+    if (playerPageElement) {
+        observer.observe(playerPageElement, {
+            attributes: true,
+            attributeFilter: ['player-fullscreened']
+        });
+    }
 }
 
 // Initialize the listener when settings are loaded

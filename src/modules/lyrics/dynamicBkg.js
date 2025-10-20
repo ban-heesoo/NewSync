@@ -253,9 +253,13 @@ function LYPLUS_setupBlurEffect() {
         const layoutElement = document.querySelector('#layout');
         if (!layoutElement) return;
         
+        // Check if we're in fullscreen mode by looking at player page element
+        const playerPageElement = document.querySelector('ytmusic-player-page');
+        const isFullscreen = playerPageElement && playerPageElement.hasAttribute('player-fullscreened');
+        
+        // Check if player page is open by looking at layout element's player-ui-state
         const playerUiState = layoutElement.getAttribute('player-ui-state');
         const isPlayerPageOpen = playerUiState === 'PLAYER_PAGE_OPEN' || playerUiState === 'MINIPLAYER_IN_PLAYER_PAGE';
-        const isFullscreen = playerUiState === 'FULLSCREEN';
         
         const shouldEnableDynamic = isFullscreen ? 
             currentSettings.dynamicPlayerFullscreen : 
