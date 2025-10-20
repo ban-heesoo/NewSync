@@ -250,17 +250,21 @@ function LYPLUS_setupBlurEffect() {
     
     if (typeof currentSettings !== 'undefined') {
         // Check current mode and apply appropriate setting
-        const playerPageElement = document.querySelector('ytmusic-player-page');
-        const isFullscreen = playerPageElement && playerPageElement.hasAttribute('player-fullscreened');
+        const layoutElement = document.querySelector('#layout');
+        if (!layoutElement) return;
+        
+        const playerUiState = layoutElement.getAttribute('player-ui-state');
+        const isPlayerPageOpen = playerUiState === 'PLAYER_PAGE_OPEN' || playerUiState === 'MINIPLAYER_IN_PLAYER_PAGE';
+        const isFullscreen = playerUiState === 'FULLSCREEN';
+        
         const shouldEnableDynamic = isFullscreen ? 
             currentSettings.dynamicPlayerFullscreen : 
-            currentSettings.dynamicPlayerPage;
+            (isPlayerPageOpen ? currentSettings.dynamicPlayerPage : false);
             
-        const layoutElement = document.querySelector('#layout');
         if (shouldEnableDynamic) {
-            layoutElement?.classList.add("dynamic-player");
+            layoutElement.classList.add("dynamic-player");
         } else {
-            layoutElement?.classList.remove("dynamic-player");
+            layoutElement.classList.remove("dynamic-player");
         }
     }
 
