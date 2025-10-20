@@ -2458,6 +2458,8 @@ window.addEventListener('message', (event) => {
     if (event.data.type === 'UPDATE_DYNAMIC_BG') {
         if (typeof window.applyDynamicPlayerClass === 'function') {
             window.applyDynamicPlayerClass();
+            // Also apply with a small delay to ensure DOM is ready
+            setTimeout(() => { window.applyDynamicPlayerClass(); }, 50);
         }
         return;
     }

@@ -143,8 +143,10 @@ if (typeof chrome !== 'undefined' && chrome.runtime && chrome.runtime.onMessage)
                 if (onlyDynamicChanged) {
                     // Apply dynamic background only, do not refresh lyrics
                     window.postMessage({ type: 'UPDATE_DYNAMIC_BG' }, '*');
+                    // Apply immediately and also with a small delay to ensure DOM is ready
                     if (typeof window.applyDynamicPlayerClass === 'function') {
-                        setTimeout(() => { window.applyDynamicPlayerClass(); }, 100);
+                        window.applyDynamicPlayerClass();
+                        setTimeout(() => { window.applyDynamicPlayerClass(); }, 50);
                     }
                 } else {
                     // Send full settings update to injected scripts

@@ -97,10 +97,11 @@ function updateSettings(newSettings) {
     currentSettings = { ...currentSettings, ...newSettings };
     console.log('NewSync: Updated currentSettings:', currentSettings);
     
-    // Apply dynamic background with a small delay to ensure DOM is ready
+    // Apply dynamic background immediately and with a small delay to ensure DOM is ready
+    applyDynamicPlayerClass();
     setTimeout(() => {
         applyDynamicPlayerClass();
-    }, 100);
+    }, 50);
     
     pBrowser.runtime.sendMessage({
         type: 'SETTINGS_CHANGED',
