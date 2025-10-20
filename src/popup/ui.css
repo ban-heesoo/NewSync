@@ -182,7 +182,8 @@ select {
 }
 
 select option {
-	color: black;
+	color: white;
+	background-color: #1f1f1f;
 }
 
 .select {
