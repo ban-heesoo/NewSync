@@ -43,7 +43,7 @@ NewSync is a feature-rich browser extension that brings synchronized lyrics to Y
 ### Requirements:
 - install [git scm](https://github.com/git-for-windows/git/releases/download/v2.51.0.windows.1/Git-2.51.0-64-bit.exe)
 
-### For Chrome, Edge, Vivaldi, Opera, Brave
+### For Chrome, Vivaldi, Opera, and Brave
 
 1.  **Clone or Download the Repository:**
     ```bash
@@ -51,7 +51,7 @@ NewSync is a feature-rich browser extension that brings synchronized lyrics to Y
     ```
 2.  Alternatively, you can download the latest release from [Github Releases](https://github.com/ban-heesoo/NewSync/releases/latest) and extract the zip file.
 3.  **Open Extensions Page:**
-    Navigate to `chrome://extensions/` (same for Edge, Vivaldi, Opera, Brave)
+    Navigate to `chrome://extensions/` (same for Vivaldi, Opera, and Brave)
 4.  **Enable Developer Mode:**
     Toggle the "Developer mode" switch in the top right corner.
 5.  **Load Unpacked Extension:**
@@ -77,7 +77,8 @@ NewSync is a feature-rich browser extension that brings synchronized lyrics to Y
 For the safest and easiest experience, install NewSync directly from your browser's web store. This ensures you get automatic updates and a verified version of the extension.
 
 <p float="left">
-<a href="https://addons.mozilla.org/en-US/firefox/addon/newsync/" target="_blank"><img src="https://blog.mozilla.org/addons/files/2020/04/get-the-addon-fx-apr-2020.svg" alt="Firefox Add-ons" height="60"/></a>
+<a href="https://addons.mozilla.org/en-US/firefox/addon/newsync/" target="_blank"><img src="https://hivicode.github.io/newsync/firefox.svg" alt="Firefox Add-ons" height="60"/></a>
+<a href="https://microsoftedge.microsoft.com/addons/detail/newsync/abdllbamaomfdbfiipnpljdiljojmnoe" target="_blank"><img src="https://hivicode.github.io/newsync/edge.svg" alt="Microsoft Edge Add-ons" height="60"/></a>
 
 ## Updating
 
