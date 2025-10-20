@@ -23,25 +23,17 @@ nav {
 
 .nav-container a {
 	all: unset;
-	background: rgba(0, 0, 0, 0.2);
+	background: rgb(15, 15, 15);
 	height: 2rem;
 	width: 2rem;
 	display: grid;
 	place-items: center;
-	border-radius: 0.5rem;
+	border-radius: 0.575rem;
 	cursor: pointer;
-}
-
-.nav-container a:hover {
-	background: rgba(0, 0, 0, 0.3);
 }
 
 .nav-container .discord-btn {
 	background: #5865F2;
-}
-
-.nav-container .discord-btn:hover {
-	background: #4752C4;
 }
 
 h1 {
