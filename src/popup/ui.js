@@ -175,11 +175,20 @@ document.addEventListener('DOMContentLoaded', () => {
             'translationProvider', 'geminiModel', 'overrideGeminiPrompt', 'customGeminiPrompt'
         ];
         
+        // Check if any dynamic background settings have changed
+        const dynamicBackgroundSettings = [
+            'dynamicPlayerPage', 'dynamicPlayerFullscreen'
+        ];
+        
         const requiresReload = settingsRequiringReload.some(key => {
             return currentSettings[key] !== newSettings[key];
         });
         
         const promptChanged = promptSettings.some(key => {
+            return currentSettings[key] !== newSettings[key];
+        });
+        
+        const dynamicBackgroundChanged = dynamicBackgroundSettings.some(key => {
             return currentSettings[key] !== newSettings[key];
         });
         
@@ -197,6 +206,18 @@ document.addEventListener('DOMContentLoaded', () => {
                     }
                 } catch (error) {
                     console.warn('Failed to clear translation cache:', error);
+                }
+            }
+            
+            // Send dynamic background update if only dynamic background changed
+            if (dynamicBackgroundChanged && !requiresReload && !promptChanged) {
+                try {
+                    const response = await pBrowser.runtime.sendMessage({ type: 'UPDATE_DYNAMIC_BG_ONLY' });
+                    if (response && response.success) {
+                        console.log('Dynamic background updated');
+                    }
+                } catch (error) {
+                    console.warn('Failed to update dynamic background:', error);
                 }
             }
             

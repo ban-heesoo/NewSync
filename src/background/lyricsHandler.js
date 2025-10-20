@@ -23,7 +23,8 @@ const MESSAGE_TYPES = {
     UPDATE_LOCAL_LYRICS: 'UPDATE_LOCAL_LYRICS',
     FETCH_LOCAL_LYRICS: 'FETCH_LOCAL_LYRICS',
     SETTINGS_UPDATED_FROM_PAGE: 'SETTINGS_UPDATED_FROM_PAGE',
-    CLEAR_TRANSLATION_CACHE: 'CLEAR_TRANSLATION_CACHE'
+    CLEAR_TRANSLATION_CACHE: 'CLEAR_TRANSLATION_CACHE',
+    UPDATE_DYNAMIC_BG_ONLY: 'UPDATE_DYNAMIC_BG_ONLY'
 };
 
 const CACHE_STRATEGIES = {
@@ -227,6 +228,11 @@ pBrowser.runtime.onMessage.addListener((message, sender, sendResponse) => {
 
         case MESSAGE_TYPES.CLEAR_TRANSLATION_CACHE:
             handleClearTranslationCache(sendResponse);
+            return true;
+
+        case MESSAGE_TYPES.UPDATE_DYNAMIC_BG_ONLY:
+            // Forward to content script to apply dynamic background
+            sendResponse({ success: true });
             return true;
 
         case MESSAGE_TYPES.GET_CACHED_SIZE:

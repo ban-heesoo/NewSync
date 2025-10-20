@@ -164,6 +164,14 @@ if (typeof chrome !== 'undefined' && chrome.runtime && chrome.runtime.onMessage)
                     settings: window.currentSettings
                 }, '*');
             }
+        } else if (message.type === 'UPDATE_DYNAMIC_BG_ONLY') {
+            // Handle dynamic background only update from popup
+            console.log('NewSync: Received UPDATE_DYNAMIC_BG_ONLY from popup');
+            window.postMessage({ type: 'UPDATE_DYNAMIC_BG' }, '*');
+            if (typeof window.applyDynamicPlayerClass === 'function') {
+                setTimeout(() => { window.applyDynamicPlayerClass(); }, 100);
+            }
+            sendResponse({ success: true });
         }
     });
 }

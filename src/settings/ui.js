@@ -67,6 +67,20 @@ function setupAutoSaveListeners() {
                 currentSettings = { ...currentSettings, ...newSetting };
                 saveSettings();
                 
+                // Check if dynamic background settings changed
+                const dynamicBackgroundSettings = [
+                    'dynamic-player-page', 'dynamic-player-fullscreen'
+                ];
+                
+                if (dynamicBackgroundSettings.includes(control.id)) {
+                    // Apply dynamic background immediately without reload
+                    if (typeof window.applyDynamicPlayerClass === 'function') {
+                        window.applyDynamicPlayerClass();
+                    }
+                    showStatusMessage('Setting saved!', false, control.id);
+                    return;
+                }
+                
                 // Only show reload notification for settings that require page reload
                 const settingsRequiringReload = [
                     'default-provider', 'custom-kpoe-url', 'sponsor-block', 
@@ -79,6 +93,8 @@ function setupAutoSaveListeners() {
                 
                 if (settingsRequiringReload.includes(control.id)) {
                     showReloadNotification();
+                } else {
+                    showStatusMessage('Setting saved!', false, control.id);
                 }
 
                 // Handle UI visibility toggles for specific controls
