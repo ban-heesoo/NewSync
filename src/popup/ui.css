@@ -15,6 +15,39 @@ nav {
 	margin-bottom: 1.5rem;
 }
 
+.nav-container {
+	display: flex;
+	align-items: center;
+	gap: 0.5rem;
+}
+
+.nav-container a {
+	display: flex;
+	align-items: center;
+	justify-content: center;
+	width: 32px;
+	height: 32px;
+	border-radius: 0.375rem;
+	background: rgba(255, 255, 255, 0.05);
+	border: 1px solid rgba(255, 255, 255, 0.1);
+	color: rgba(255, 255, 255, 0.7);
+	text-decoration: none;
+	transition: all 0.2s ease;
+}
+
+.nav-container a:hover {
+	background: rgba(255, 255, 255, 0.1);
+	border-color: rgba(255, 255, 255, 0.2);
+	color: white;
+	transform: translateY(-1px);
+}
+
+.nav-container .discord-btn:hover {
+	background: #5865F2;
+	border-color: #5865F2;
+	color: white;
+}
+
 h1 {
 	margin: 0;
 	display: flex;
@@ -477,54 +510,6 @@ input:checked + .checkmark:before {
 	height: 1rem;
 }
 
-.social-buttons {
-	display: flex;
-	gap: 0.5rem;
-	margin-top: 1rem;
-	padding-top: 1rem;
-	border-top: 1px solid rgba(255, 255, 255, 0.1);
-}
-
-.social-btn {
-	display: flex;
-	align-items: center;
-	gap: 0.5rem;
-	padding: 0.5rem 0.75rem;
-	border-radius: 0.375rem;
-	border: 1px solid rgba(255, 255, 255, 0.1);
-	background: rgba(255, 255, 255, 0.05);
-	color: rgba(255, 255, 255, 0.8);
-	font-size: 0.75rem;
-	font-weight: 500;
-	text-decoration: none;
-	transition: all 0.2s ease;
-	flex: 1;
-	justify-content: center;
-}
-
-.social-btn:hover {
-	background: rgba(255, 255, 255, 0.1);
-	border-color: rgba(255, 255, 255, 0.2);
-	color: white;
-	transform: translateY(-1px);
-}
-
-.social-btn svg {
-	width: 0.875rem;
-	height: 0.875rem;
-}
-
-.discord-btn:hover {
-	background: #5865F2;
-	border-color: #5865F2;
-	color: white;
-}
-
-.github-btn:hover {
-	background: #333;
-	border-color: #333;
-	color: white;
-}
 
 /* Scrollbar */
 ::-webkit-scrollbar {
