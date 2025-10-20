@@ -4,7 +4,7 @@ class LyricsPlusRenderer {
    * Constructor for the LyricsPlusRenderer.
    * Initializes state variables and sets up the initial environment for the lyrics display.
    */
-  constructor() {
+  constructor(uiConfig = {}) {
     // --- State Variables ---
     this.lyricsAnimationFrameId = null;
     this.currentPrimaryActiveLine = null;
@@ -864,9 +864,49 @@ class LyricsPlusRenderer {
     // Re-apply display mode classes
     this._applyDisplayModeClasses(container, displayMode);
 
-    // Re-apply general settings that affect rendering
-    container.classList.toggle('use-song-palette-fullscreen', !!currentSettings.useSongPaletteFullscreen);
-    container.classList.toggle('use-song-palette-all-modes', !!currentSettings.useSongPaletteAllModes);
+    // Re-apply settings that affect lyrics display
+    // Word-by-word and lightweight settings
+    const isWordByWordMode = lyrics.type === "Word" && currentSettings.wordByWord;
+    container.classList.toggle('word-by-word-mode', isWordByWordMode);
+    container.classList.toggle('line-by-line-mode', !isWordByWordMode);
+    container.classList.toggle('lightweight-mode', !!currentSettings.lightweight);
+
+    // Larger text mode
+    this.largerTextMode = currentSettings.largerTextMode;
+    container.classList.toggle('romanized-big-mode', this.largerTextMode === "romanization");
+
+    // Blur and fade settings
+    container.classList.toggle('blur-inactive-enabled', !!currentSettings.blurInactive);
+    const isVideoFullscreen = this._isVideoFullscreen?.() ?? this.__detectVideoFullscreen();
+    container.classList.toggle('fade-past-lines', !!currentSettings.fadePastLines && !isVideoFullscreen);
+    
+    // Hide offscreen and compatibility settings
+    container.classList.toggle('hide-offscreen', !!currentSettings.hideOffscreen);
+    container.classList.toggle('compability-wipe', !!currentSettings.compabilityWipe);
+    
+    // Font size if available
+    if (currentSettings.fontSize) {
+        container.style.setProperty('--lyrics-font-size', `${currentSettings.fontSize}px`);
+    }
+    
+    // Dynamic background settings - apply immediately (but don't refresh lyrics)
+    if (currentSettings.dynamicPlayerPage !== undefined || currentSettings.dynamicPlayerFullscreen !== undefined) {
+        console.log('NewSync: Applying dynamic background settings...', {
+            dynamicPlayerPage: currentSettings.dynamicPlayerPage,
+            dynamicPlayerFullscreen: currentSettings.dynamicPlayerFullscreen,
+            functionAvailable: typeof window.applyDynamicPlayerClass === 'function'
+        });
+        
+        // Trigger dynamic background update by calling the function from settings.js
+        // This only affects the visual background, not the lyrics content
+        if (typeof window.applyDynamicPlayerClass === 'function') {
+            window.applyDynamicPlayerClass();
+        } else {
+            console.warn('NewSync: applyDynamicPlayerClass function not available');
+        }
+    }
+    
+    // Note: AI translation settings are not refreshed here as they require API fetch
 
     if (currentSettings.overridePaletteColor) {
       container.classList.add('override-palette-color');
@@ -893,10 +933,6 @@ class LyricsPlusRenderer {
 
     const playerPageElement = document.querySelector('ytmusic-player-page');
     container.classList.toggle('fullscreen', playerPageElement && playerPageElement.hasAttribute('player-fullscreened'));
-    const isWordByWordMode = lyrics.type === "Word" && currentSettings.wordByWord;
-    container.classList.toggle('word-by-word-mode', isWordByWordMode);
-    container.classList.toggle('line-by-line-mode', !isWordByWordMode);
-    container.classList.toggle('romanized-big-mode', this.largerTextMode === "romanization");
 
     // Re-determine text direction and dual-side layout (copied from displayLyrics)
     let hasRTL = false, hasLTR = false;
@@ -2409,33 +2445,106 @@ class LyricsPlusRenderer {
   }
 }
 
+// Create the renderer instance with default config
 const lyricsRendererInstance = new LyricsPlusRenderer();
 
+// Track last applied settings to detect what changed between updates
+let __lastAppliedSettingsSnapshot = null;
 
-// 2. Create a controlled, global API object to bridge the manager and the renderer.
-// This is much cleaner than putting many functions on `window` directly. The manager
-// will interact with this single `LyricsPlusAPI` object.
+// Listen for settings updates to refresh display
+window.addEventListener('message', (event) => {
+    if (event.source !== window || !event.data) return;
+    
+    if (event.data.type === 'UPDATE_DYNAMIC_BG') {
+        if (typeof window.applyDynamicPlayerClass === 'function') {
+            window.applyDynamicPlayerClass();
+        }
+        return;
+    }
+
+    if (event.data.type === 'UPDATE_SETTINGS') {
+        console.log('NewSync: Received settings update in lyricsRenderer', event.data.settings);
+
+        // Determine if only dynamic background settings changed
+        try {
+            const previous = __lastAppliedSettingsSnapshot || {};
+            const current = event.data.settings || {};
+            const keys = new Set([...Object.keys(previous), ...Object.keys(current)]);
+
+            const dynamicOnlyKeys = new Set([
+                'dynamicPlayerPage',
+                'dynamicPlayerFullscreen',
+                'useSongPaletteFullscreen',
+                'useSongPaletteAllModes',
+                'overridePaletteColor'
+            ]);
+
+            let changedKeys = [];
+            keys.forEach(k => {
+                if (previous[k] !== current[k]) changedKeys.push(k);
+            });
+
+            const onlyDynamicChanged = changedKeys.length > 0 && changedKeys.every(k => dynamicOnlyKeys.has(k));
+
+            if (onlyDynamicChanged) {
+                // Apply dynamic background without refreshing lyrics
+                if (typeof window.applyDynamicPlayerClass === 'function') {
+                    window.applyDynamicPlayerClass();
+                }
+                __lastAppliedSettingsSnapshot = { ...current };
+                return;
+            }
+
+            // Store snapshot for next comparison
+            __lastAppliedSettingsSnapshot = { ...current };
+        } catch (e) {
+            // If comparison fails, fall through to default behavior
+            console.warn('NewSync: Failed to diff settings; proceeding with default handling', e);
+        }
+        
+        // Check if lyrics are currently displayed
+        const lyricsContainer = document.querySelector('#lyrics-plus-container');
+        if (!lyricsContainer || lyricsContainer.classList.contains('lyrics-plus-message')) {
+            console.log('NewSync: No lyrics currently displayed, skipping refresh');
+            return; // No lyrics currently displayed
+        }
+        
+        // Check if we have stored lyrics data
+        if (typeof window.lastFetchedLyrics !== 'undefined' && window.lastFetchedLyrics) {
+            console.log('NewSync: Refreshing lyrics display with new settings...', {
+                wordByWord: event.data.settings.wordByWord,
+                lightweight: event.data.settings.lightweight,
+                largerTextMode: event.data.settings.largerTextMode,
+                blurInactive: event.data.settings.blurInactive,
+                fadePastLines: event.data.settings.fadePastLines,
+                hideOffscreen: event.data.settings.hideOffscreen,
+                compabilityWipe: event.data.settings.compabilityWipe,
+                dynamicPlayerPage: event.data.settings.dynamicPlayerPage,
+                dynamicPlayerFullscreen: event.data.settings.dynamicPlayerFullscreen
+            });
+            
+            // Get current display mode
+            const currentDisplayMode = window.currentDisplayMode || 'none';
+            
+            // Refresh the display with new settings
+            lyricsRendererInstance.updateDisplayMode(
+                window.lastFetchedLyrics, 
+                currentDisplayMode, 
+                event.data.settings
+            );
+        } else {
+            console.log('NewSync: No stored lyrics data available for refresh');
+        }
+    }
+});
+
+// Create the global API for other modules to use
 const LyricsPlusAPI = {
-  /**
-   * Forwards the call to the renderer instance's displayLyrics method.
-   * The arrow function `(...args) => ...` preserves the correct `this` context.
-   */
   displayLyrics: (...args) => lyricsRendererInstance.displayLyrics(...args),
-
-  /**
-   * Forwards the call to the renderer instance's method to show a "not found" message.
-   */
   displaySongNotFound: () => lyricsRendererInstance.displaySongNotFound(),
-
-  /**
-   * Forwards the call to the renderer instance's method to show an error message.
-   */
   displaySongError: () => lyricsRendererInstance.displaySongError(),
-
-  /**
-   * Forwards the call to the renderer instance's cleanup method.
-   */
-  cleanupLyrics: () => lyricsRendererInstance.cleanupLyrics()
+  cleanupLyrics: () => lyricsRendererInstance.cleanupLyrics(),
+  updateDisplayMode: (...args) => lyricsRendererInstance.updateDisplayMode(...args)
 };
 
 // ==========================================================================

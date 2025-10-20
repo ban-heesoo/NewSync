@@ -61,7 +61,7 @@ button {
 }
 
 * {
-	font-family: 'Satoshi', -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto,
+	font-family: 'SF Pro Display', 'Satoshi', -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto,
 		Oxygen, Ubuntu, Cantarell, "Open Sans", "Helvetica Neue", sans-serif;
 	font-weight: 400;
 }
@@ -376,7 +376,7 @@ input:checked + .checkmark:before {
 
 .text-group > p > span:not(.text-group__title) {
 	font-weight: 600;
-	font-family: 'Satoshi', monospace;
+	font-family: 'SF Pro Display', 'Satoshi', monospace;
 	text-align: right;
 	flex-shrink: 0;
 	color: rgba(255, 255, 255, 0.9);
@@ -411,7 +411,7 @@ input:checked + .checkmark:before {
 	border: 1px solid rgba(255, 255, 255, 0.1);
 	border-radius: 0.5rem;
 	color: #fff;
-	font-family: 'Satoshi', sans-serif;
+	font-family: 'SF Pro Display', 'Satoshi', sans-serif;
 	font-size: 0.8125rem;
 	line-height: 1.5;
 	resize: vertical;

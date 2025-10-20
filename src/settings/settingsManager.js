@@ -99,11 +99,24 @@ export function loadSettings(callback) {
 export function saveSettings() {
     storageLocalSet(currentSettings).then(() => {
         console.log("Saving settings:", currentSettings);
+        
+        // Send to local window (for settings page)
         if (typeof window.postMessage === 'function') {
             window.postMessage({
                 type: 'UPDATE_SETTINGS',
                 settings: currentSettings
             }, '*');
+        }
+        
+        // Send to background script to notify content scripts (send all settings like popup)
+        if (pBrowser && pBrowser.runtime && typeof pBrowser.runtime.sendMessage === 'function') {
+            // Send all settings like popup does, not just display-relevant ones
+            pBrowser.runtime.sendMessage({
+                type: 'SETTINGS_UPDATED_FROM_PAGE',
+                settings: currentSettings
+            }).catch(error => {
+                console.warn("Error sending settings update to background:", error);
+            });
         }
     }).catch(error => {
         console.error("Error saving settings:", error);

@@ -66,7 +66,20 @@ function setupAutoSaveListeners() {
                 updateSettings(newSetting);
                 currentSettings = { ...currentSettings, ...newSetting };
                 saveSettings();
-                showReloadNotification();
+                
+                // Only show reload notification for settings that require page reload
+                const settingsRequiringReload = [
+                    'default-provider', 'custom-kpoe-url', 'sponsor-block', 
+                    'translation-provider', 'gemini-model', 'romanization-provider', 
+                    'gemini-romanization-model', 'override-translate-target', 
+                    'custom-translate-target', 'override-gemini-prompt', 
+                    'custom-gemini-prompt', 'override-gemini-romanize-prompt', 
+                    'custom-gemini-romanize-prompt'
+                ];
+                
+                if (settingsRequiringReload.includes(control.id)) {
+                    showReloadNotification();
+                }
 
                 // Handle UI visibility toggles for specific controls
                 if (control.id === 'default-provider') {

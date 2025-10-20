@@ -1,5 +1,8 @@
 // This script is the bridge between the generic renderer and the YouTube Music UI
 
+// Browser compatibility - use window to avoid conflicts
+window.pBrowser = window.pBrowser || chrome || browser;
+
 // 1. Platform-specific implementations
 const uiConfig = {
     player: 'video',
@@ -11,33 +14,22 @@ const uiConfig = {
         ]
 };
 
-// 2. Create the renderer instance
-const lyricsRendererInstance = new LyricsPlusRenderer(uiConfig);
-
-// 3. Create the global API for other modules to use
-const LyricsPlusAPI = {
-  displayLyrics: (...args) => lyricsRendererInstance.displayLyrics(...args),
-  displaySongNotFound: () => lyricsRendererInstance.displaySongNotFound(),
-  displaySongError: () => lyricsRendererInstance.displaySongError(),
-  cleanupLyrics: () => lyricsRendererInstance.cleanupLyrics(),
-  updateDisplayMode: (...args) => lyricsRendererInstance.updateDisplayMode(...args)
-};
+// Note: lyricsRendererInstance and LyricsPlusAPI are now defined in src/modules/lyrics/lyricsRenderer.js
 
 function injectPlatformCSS() {
     if (document.querySelector('link[data-lyrics-plus-platform-style]')) return;
     const linkElement = document.createElement('link');
     linkElement.rel = 'stylesheet';
     linkElement.type = 'text/css';
-    linkElement.href = pBrowser.runtime.getURL('src/modules/ytmusic/style.css');
+    linkElement.href = window.pBrowser.runtime.getURL('src/modules/ytmusic/style.css');
     linkElement.setAttribute('data-lyrics-plus-platform-style', 'true');
     document.head.appendChild(linkElement);
 }
 
 // Function to inject the DOM script
 function injectDOMScript() {
-    const pBrowser = chrome || browser;
     const script = document.createElement('script');
-    script.src = pBrowser.runtime.getURL('src/inject/ytmusic/songTracker.js');
+    script.src = window.pBrowser.runtime.getURL('src/inject/ytmusic/songTracker.js');
     script.onload = function () {
         this.remove();
     };

@@ -1,102 +1,63 @@
 /* ==========================================================================
-   PRODUCT SANS FONT DECLARATIONS - ONLINE CDN
+   SF PRO DISPLAY FONT DECLARATIONS - ONLINE CDN
    ========================================================================== */
-@import url('https://fonts.googleapis.com/css2?family=Product+Sans:wght@300;400;500;600;700&display=swap');
-
-/* Fallback font declarations using CDN */
-@font-face {
-    font-family: 'Product Sans';
-    src: url('https://fonts.gstatic.com/s/productsans/v5/HYvgU2fE2nRJvZ5JFAumwegdm0LZdjqr5-oayXSOefg.woff2') format('woff2');
-    font-weight: 400;
-    font-style: normal;
-    font-display: swap;
-}
-
-@font-face {
-    font-family: 'Product Sans';
-    src: url('https://fonts.gstatic.com/s/productsans/v5/HYvgU2fE2nRJvZ5JFAumwegdm0LZdjqr5-oayXSOefg.woff2') format('woff2');
-    font-weight: 300;
-    font-style: normal;
-    font-display: swap;
-}
-
-@font-face {
-    font-family: 'Product Sans';
-    src: url('https://fonts.gstatic.com/s/productsans/v5/HYvgU2fE2nRJvZ5JFAumwegdm0LZdjqr5-oayXSOefg.woff2') format('woff2');
-    font-weight: 500;
-    font-style: normal;
-    font-display: swap;
-}
-
-@font-face {
-    font-family: 'Product Sans';
-    src: url('https://fonts.gstatic.com/s/productsans/v5/HYvgU2fE2nRJvZ5JFAumwegdm0LZdjqr5-oayXSOefg.woff2') format('woff2');
-    font-weight: 600;
-    font-style: normal;
-    font-display: swap;
-}
-
-@font-face {
-    font-family: 'Product Sans';
-    src: url('https://fonts.gstatic.com/s/productsans/v5/HYvgU2fE2nRJvZ5JFAumwegdm0LZdjqr5-oayXSOefg.woff2') format('woff2');
-    font-weight: 700;
-    font-style: normal;
-    font-display: swap;
-}
+@import url('https://fonts.cdnfonts.com/css/sf-pro-display');
 
 :root {
-    --md-sys-color-primary: rgb(130 170 255);
-    --md-sys-color-surface-tint: rgb(130 170 255);
-    --md-sys-color-on-primary: rgb(22 30 86);
-    --md-sys-color-primary-container: rgb(42 52 115);
-    --md-sys-color-on-primary-container: rgb(212 218 255);
-    --md-sys-color-secondary: rgb(182 189 231);
-    --md-sys-color-on-secondary: rgb(37 41 68);
-    --md-sys-color-secondary-container: rgb(59 63 93);
-    --md-sys-color-on-secondary-container: rgb(212 218 255);
-    --md-sys-color-tertiary: rgb(140 196 222);
-    --md-sys-color-on-tertiary: rgb(4 46 62);
-    --md-sys-color-tertiary-container: rgb(25 68 86);
-    --md-sys-color-on-tertiary-container: rgb(166 223 251);
-    --md-sys-color-error: rgb(255 180 171);
-    --md-sys-color-on-error: rgb(105 0 5);
-    --md-sys-color-error-container: rgb(147 0 10);
-    --md-sys-color-on-error-container: rgb(255 218 214);
-    --md-sys-color-background: rgb(8 9 18);
-    --md-sys-color-on-background: rgb(220 223 241);
-    --md-sys-color-surface: rgb(8 9 18);
-    --md-sys-color-on-surface: rgb(220 223 241);
-    --md-sys-color-surface-variant: rgb(45 47 63);
-    --md-sys-color-on-surface-variant: rgb(190 194 216);
-    --md-sys-color-outline: rgb(137 140 160);
-    --md-sys-color-outline-variant: rgb(45 47 63);
-    --md-sys-color-shadow: rgb(0 0 0);
-    --md-sys-color-scrim: rgb(0 0 0);
-    --md-sys-color-inverse-surface: rgb(220 223 241);
-    --md-sys-color-inverse-on-surface: rgb(44 46 57);
-    --md-sys-color-inverse-primary: rgb(64 75 144);
-    --md-sys-color-primary-fixed: rgb(212 218 255);
-    --md-sys-color-on-primary-fixed: rgb(5 9 58);
-    --md-sys-color-primary-fixed-dim: rgb(168 180 255);
-    --md-sys-color-on-primary-fixed-variant: rgb(42 52 115);
-    --md-sys-color-secondary-fixed: rgb(212 218 255);
-    --md-sys-color-on-secondary-fixed: rgb(18 21 44);
-    --md-sys-color-secondary-fixed-dim: rgb(182 189 231);
-    --md-sys-color-on-secondary-fixed-variant: rgb(59 63 93);
-    --md-sys-color-tertiary-fixed: rgb(166 223 251);
-    --md-sys-color-on-tertiary-fixed: rgb(0 26 37);
-    --md-sys-color-tertiary-fixed-dim: rgb(140 196 222);
-    --md-sys-color-on-tertiary-fixed-variant: rgb(25 68 86);
-    --md-sys-color-surface-dim: rgb(8 9 18);
-    --md-sys-color-surface-bright: rgb(33 35 46);
-    --md-sys-color-surface-container-lowest: rgb(4 5 12);
-    --md-sys-color-surface-container-low: rgb(12 13 20);
-    --md-sys-color-surface-container: rgb(16 17 24);
-    --md-sys-color-surface-container-high: rgb(24 25 32);
-    --md-sys-color-surface-container-highest: rgb(32 33 40);
+    /* Better Lyrics Popup Palette */
+    --md-sys-color-title: #ffffff;
+    --md-sys-color-primary: #fa233b;
+    --md-sys-color-surface-tint: #fa233b;
+    --md-sys-color-on-primary: #ffffff;
+    --md-sys-color-primary-container: #fa233b;
+    --md-sys-color-on-primary-container: #ffffff;
+    --md-sys-color-secondary: #fa233b;
+    --md-sys-color-on-secondary: #ffffff;
+    --md-sys-color-secondary-container: rgba(255, 255, 255, 0.1);
+    --md-sys-color-on-secondary-container: #ffffff;
+    --md-sys-color-tertiary: #fa233b;
+    --md-sys-color-on-tertiary: #ffffff;
+    --md-sys-color-tertiary-container: rgba(255, 255, 255, 0.1);
+    --md-sys-color-on-tertiary-container: #ffffff;
+    --md-sys-color-error: #fa233b;
+    --md-sys-color-on-error: #ffffff;
+    --md-sys-color-error-container: #fa233b;
+    --md-sys-color-on-error-container: #ffffff;
+    --md-sys-color-background: #1f1f1f;
+    --md-sys-color-on-background: #ffffff;
+    --md-sys-color-surface: #1f1f1f;
+    --md-sys-color-on-surface: #ffffff;
+    --md-sys-color-surface-variant: rgba(255, 255, 255, 0.1);
+    --md-sys-color-on-surface-variant: rgba(255, 255, 255, 0.7);
+    --md-sys-color-outline: rgba(255, 255, 255, 0.1);
+    --md-sys-color-outline-variant: rgba(255, 255, 255, 0.05);
+    --md-sys-color-shadow: #000000;
+    --md-sys-color-scrim: #000000;
+    --md-sys-color-inverse-surface: #ffffff;
+    --md-sys-color-inverse-on-surface: #1f1f1f;
+    --md-sys-color-inverse-primary: #fa233b;
+    --md-sys-color-primary-fixed: #fa233b;
+    --md-sys-color-on-primary-fixed: #ffffff;
+    --md-sys-color-primary-fixed-dim: #ff344c;
+    --md-sys-color-on-primary-fixed-variant: #fa233b;
+    --md-sys-color-secondary-fixed: #fa233b;
+    --md-sys-color-on-secondary-fixed: #ffffff;
+    --md-sys-color-secondary-fixed-dim: #ff344c;
+    --md-sys-color-on-secondary-fixed-variant: rgba(255, 255, 255, 0.1);
+    --md-sys-color-tertiary-fixed: #fa233b;
+    --md-sys-color-on-tertiary-fixed: #ffffff;
+    --md-sys-color-tertiary-fixed-dim: #ff344c;
+    --md-sys-color-on-tertiary-fixed-variant: rgba(255, 255, 255, 0.1);
+    --md-sys-color-surface-dim: #1f1f1f;
+    --md-sys-color-surface-bright: rgba(255, 255, 255, 0.05);
+    --md-sys-color-surface-container-lowest: rgba(255, 255, 255, 0.05);
+    --md-sys-color-surface-container-low: rgba(255, 255, 255, 0.05);
+    --md-sys-color-surface-container: rgba(255, 255, 255, 0.05);
+    --md-sys-color-surface-container-high: rgba(255, 255, 255, 0.08);
+    --md-sys-color-surface-container-highest: rgba(255, 255, 255, 0.1);
 
-    --md-ref-typeface-brand: 'Product Sans', 'Roboto', 'Segoe UI', system-ui, sans-serif;
-    --md-ref-typeface-plain: 'Product Sans', 'Roboto', 'Segoe UI', system-ui, sans-serif;
+    --md-ref-typeface-brand: 'SF Pro Display', 'Satoshi', -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Oxygen, Ubuntu, Cantarell, "Open Sans", "Helvetica Neue", sans-serif;
+    --md-ref-typeface-plain: 'SF Pro Display', 'Satoshi', -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Oxygen, Ubuntu, Cantarell, "Open Sans", "Helvetica Neue", sans-serif;
 
     --md-sys-elevation-level-0: none;
     --md-sys-elevation-level-1: 0px 1px 3px 1px rgba(0, 0, 0, 0.15), 0px 1px 2px 0px rgba(0, 0, 0, 0.30);
@@ -120,6 +81,7 @@
     box-sizing: border-box;
     margin: 0;
     padding: 0;
+    font-family: 'SF Pro Display', 'Satoshi', -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Oxygen, Ubuntu, Cantarell, "Open Sans", "Helvetica Neue", sans-serif !important;
 }
 
 html {
@@ -128,7 +90,7 @@ html {
 }
 
 body {
-    font-family: var(--md-ref-typeface-plain);
+    font-family: 'SF Pro Display', 'Satoshi', -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Oxygen, Ubuntu, Cantarell, "Open Sans", "Helvetica Neue", sans-serif !important;
     background-color: var(--md-sys-color-background);
     color: var(--md-sys-color-on-background);
     display: flex;
@@ -335,7 +297,7 @@ body {
     font-size: 1.25rem;
     /* 20px */
     font-weight: 500;
-    color: var(--md-sys-color-primary);
+    color: var(--md-sys-color-title);
     margin-bottom: 24px;
     padding-bottom: 12px;
     border-bottom: 1px solid var(--md-sys-color-outline-variant);
@@ -364,7 +326,7 @@ body {
     font-weight: 700;
     text-transform: uppercase;
     letter-spacing: 0.05em;
-    color: var(--md-sys-color-primary);
+    color: #ff6577;
     margin-bottom: 20px;
 }
 

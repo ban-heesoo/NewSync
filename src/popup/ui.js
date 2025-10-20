@@ -165,11 +165,47 @@ document.addEventListener('DOMContentLoaded', () => {
             customGeminiPrompt: customGeminiPromptTextarea ? customGeminiPromptTextarea.value : '',
         };
         
+        // Check if any setting that requires reload has changed
+        const settingsRequiringReload = [
+            'lyricsProvider', 'useSponsorBlock', 'isEnabled'
+        ];
+        
+        // Check if any prompt settings have changed
+        const promptSettings = [
+            'translationProvider', 'geminiModel', 'overrideGeminiPrompt', 'customGeminiPrompt'
+        ];
+        
+        const requiresReload = settingsRequiringReload.some(key => {
+            return currentSettings[key] !== newSettings[key];
+        });
+        
+        const promptChanged = promptSettings.some(key => {
+            return currentSettings[key] !== newSettings[key];
+        });
+        
         currentSettings = { ...currentSettings, ...newSettings };
 
         try {
             await storageLocalSet(currentSettings);
-            showStatus('Settings saved!');
+            
+            // Clear translation cache if prompt settings changed
+            if (promptChanged) {
+                try {
+                    const response = await pBrowser.runtime.sendMessage({ type: 'CLEAR_TRANSLATION_CACHE' });
+                    if (response && response.success) {
+                        console.log('Translation cache cleared due to prompt change');
+                    }
+                } catch (error) {
+                    console.warn('Failed to clear translation cache:', error);
+                }
+            }
+            
+            if (requiresReload) {
+                showStatus('Settings saved! Please reload YouTube Music tab.');
+            } else {
+                showStatus('Settings saved!');
+            }
+            
             notifyContentScripts(currentSettings);
         } catch (error) {
             console.error("NewSync: Error saving settings:", error);

@@ -12,7 +12,7 @@ window.addEventListener('message', (event) => {
 
 let currentSettings = {
     lyricsProvider: 'kpoe', // Can be 'kpoe' or 'lrclib'
-    lyricsSourceOrder: 'lyricsplus,apple,musixmatch,spotify,musixmatch-word', // For KPoe provider
+    lyricsSourceOrder: 'apple,lyricsplus,musixmatch,spotify,musixmatch-word', // For KPoe provider
     wordByWord: true,
     lightweight: false,
     isEnabled: true,
@@ -87,8 +87,21 @@ After ensuring the meaning is preserved, try to make the translation sound natur
 }
 
 function updateSettings(newSettings) {
-    currentSettings = newSettings;
-    applyDynamicPlayerClass();
+    console.log('NewSync: Updating settings in settings.js:', newSettings);
+    console.log('NewSync: Dynamic background settings being updated:', {
+        dynamicPlayerPage: newSettings.dynamicPlayerPage,
+        dynamicPlayerFullscreen: newSettings.dynamicPlayerFullscreen
+    });
+    
+    // Merge new settings with existing settings instead of replacing
+    currentSettings = { ...currentSettings, ...newSettings };
+    console.log('NewSync: Updated currentSettings:', currentSettings);
+    
+    // Apply dynamic background with a small delay to ensure DOM is ready
+    setTimeout(() => {
+        applyDynamicPlayerClass();
+    }, 100);
+    
     pBrowser.runtime.sendMessage({
         type: 'SETTINGS_CHANGED',
         settings: currentSettings
@@ -101,7 +114,10 @@ function updateSettings(newSettings) {
  */
 function applyDynamicPlayerClass() {
     const layoutElement = document.getElementById('layout');
-    if (!layoutElement) return;
+    if (!layoutElement) {
+        console.warn('NewSync: Layout element not found for dynamic background');
+        return;
+    }
 
     // Check if we're in fullscreen mode
     const playerPageElement = document.querySelector('ytmusic-player-page');
@@ -112,10 +128,20 @@ function applyDynamicPlayerClass() {
         currentSettings.dynamicPlayerFullscreen : 
         currentSettings.dynamicPlayerPage;
 
+    console.log('NewSync: Dynamic background check:', {
+        isFullscreen,
+        dynamicPlayerPage: currentSettings.dynamicPlayerPage,
+        dynamicPlayerFullscreen: currentSettings.dynamicPlayerFullscreen,
+        shouldEnableDynamic,
+        currentClass: layoutElement.classList.contains('dynamic-player')
+    });
+
     if (shouldEnableDynamic) {
         layoutElement.classList.add('dynamic-player');
+        console.log('NewSync: Dynamic background enabled');
     } else {
         layoutElement.classList.remove('dynamic-player');
+        console.log('NewSync: Dynamic background disabled');
     }
 }
 

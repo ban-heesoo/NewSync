@@ -224,6 +224,10 @@ async function fetchAndDisplayLyrics(currentSong, isNewSong = false, forceReload
       artist: lyricsObjectToDisplay.metadata.artist || currentSong.artist,
       album: lyricsObjectToDisplay.metadata.album || currentSong.album
     };
+    
+    // Update exposed variables for content script access
+    window.lastFetchedLyrics = lastFetchedLyrics;
+    window.currentDisplayMode = currentDisplayMode;
 
     if (LyricsPlusAPI.displayLyrics) {
       LyricsPlusAPI.displayLyrics(
@@ -245,6 +249,9 @@ async function fetchAndDisplayLyrics(currentSong, isNewSong = false, forceReload
 
     lastKnownSongInfo = enrichedSongInfo; // Update last known song info with enriched metadata
     lastProcessedDisplayMode = finalDisplayModeForRenderer; // Update after successful display
+    
+    // Update exposed variables for content script access
+    window.lastKnownSongInfo = lastKnownSongInfo;
 
   } catch (error) {
     console.warn('Error in fetchAndDisplayLyrics:', error);
@@ -305,3 +312,8 @@ setCurrentDisplayModeAndRender = async (mode, songInfoForRefetch) => {
     }
   }
 };
+
+// Expose variables for content script access
+window.lastFetchedLyrics = lastFetchedLyrics;
+window.lastKnownSongInfo = lastKnownSongInfo;
+window.currentDisplayMode = currentDisplayMode;

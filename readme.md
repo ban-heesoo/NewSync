@@ -1,17 +1,17 @@
 # NewSync
 
 <p align="center">
-<img src="https://hivicode.github.io/assets/newsync/fullscreened-omg.jpg" alt="Artwork Fullscreen Screenshot">
+<img src="https://hivicode.github.io/newsync/Cover.png" alt="Cover">
 </p>
 
 <details>
-<summary>More Screenshots</summary>
+<summary>Screenshots</summary>
 <p align="center">
-<img src="https://hivicode.github.io/assets/newsync/mainscreen.jpg" alt="Main Screen Screenshot">
-<img src="https://hivicode.github.io/assets/newsync/mainscreen-hurt.jpg" alt="Main Lyrics Screenshot">
-<img src="https://hivicode.github.io/assets/newsync/fullscreened-hurt.jpg" alt="Artwork Fullscreen Screenshot">
-<img src="https://hivicode.github.io/assets/newsync/mainscreen-bubblegum.jpg" alt="Main Lyrics Screenshot">
-<img src="https://hivicode.github.io/assets/newsync/videofullscreened-bubblegum.jpg" alt="Video Fullscreen Screenshot">
+<img src="https://hivicode.github.io/newsync/pvspecial.png" alt="Player Page Screenshot">
+<img src="https://hivicode.github.io/newsync/pv1.png" alt="Artwork Fullscreen Screenshot 1">
+<img src="https://hivicode.github.io/newsync/pv2.png" alt="Artwork Fullscreen Screenshot 2">
+<img src="https://hivicode.github.io/newsync/pv3.png" alt="Artwork Fullscreen Screenshot 3">
+<img src="https://hivicode.github.io/newsync/pv4.png" alt="Artwork Fullscreen Screenshot 4">
 </p>
 </details>
 

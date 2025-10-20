@@ -21,7 +21,9 @@ const MESSAGE_TYPES = {
     GET_LOCAL_LYRICS_LIST: 'GET_LOCAL_LYRICS_LIST',
     DELETE_LOCAL_LYRICS: 'DELETE_LOCAL_LYRICS',
     UPDATE_LOCAL_LYRICS: 'UPDATE_LOCAL_LYRICS',
-    FETCH_LOCAL_LYRICS: 'FETCH_LOCAL_LYRICS'
+    FETCH_LOCAL_LYRICS: 'FETCH_LOCAL_LYRICS',
+    SETTINGS_UPDATED_FROM_PAGE: 'SETTINGS_UPDATED_FROM_PAGE',
+    CLEAR_TRANSLATION_CACHE: 'CLEAR_TRANSLATION_CACHE'
 };
 
 const CACHE_STRATEGIES = {
@@ -223,6 +225,10 @@ pBrowser.runtime.onMessage.addListener((message, sender, sendResponse) => {
             handleResetCache(sendResponse);
             return true;
 
+        case MESSAGE_TYPES.CLEAR_TRANSLATION_CACHE:
+            handleClearTranslationCache(sendResponse);
+            return true;
+
         case MESSAGE_TYPES.GET_CACHED_SIZE:
             handleGetCacheSize(sendResponse);
             return true;
@@ -253,6 +259,10 @@ pBrowser.runtime.onMessage.addListener((message, sender, sendResponse) => {
 
         case MESSAGE_TYPES.FETCH_LOCAL_LYRICS:
             handleFetchLocalLyrics(message.songId, sendResponse);
+            return true;
+
+        case MESSAGE_TYPES.SETTINGS_UPDATED_FROM_PAGE:
+            handleSettingsUpdatedFromPage(message.settings, sendResponse);
             return true;
 
         default:
@@ -287,6 +297,54 @@ async function handleResetCache(sendResponse) {
         ongoingFetches.clear();
         await clearCacheDB();
         sendResponse({ success: true, message: "Cache reset successfully" });
+    } catch (error) {
+        sendResponse({ success: false, error: error.message });
+    }
+}
+
+async function handleClearTranslationCache(sendResponse) {
+    try {
+        // Clear only translation/romanization cache entries from memory
+        const keysToDelete = [];
+        for (const [key, value] of lyricsCache.entries()) {
+            if (key.includes(' - translate -') || key.includes(' - romanize -')) {
+                keysToDelete.push(key);
+            }
+        }
+        keysToDelete.forEach(key => lyricsCache.delete(key));
+        
+        // Clear translation cache from IndexedDB
+        const db = await openDB();
+        const transaction = db.transaction([LYRICS_OBJECT_STORE], "readwrite");
+        const store = transaction.objectStore(LYRICS_OBJECT_STORE);
+        
+        const clearPromise = new Promise((resolve, reject) => {
+            const request = store.getAll();
+            request.onsuccess = async (event) => {
+                const allItems = event.target.result;
+                const deletePromises = allItems
+                    .filter(item => item.key.includes(' - translate -') || item.key.includes(' - romanize -'))
+                    .map(item => {
+                        return new Promise((resolveDelete, rejectDelete) => {
+                            const deleteRequest = store.delete(item.key);
+                            deleteRequest.onsuccess = () => resolveDelete();
+                            deleteRequest.onerror = () => rejectDelete(deleteRequest.error);
+                        });
+                    });
+                
+                try {
+                    await Promise.all(deletePromises);
+                    resolve();
+                } catch (error) {
+                    reject(error);
+                }
+            };
+            request.onerror = () => reject(request.error);
+        });
+        
+        await clearPromise;
+        
+        sendResponse({ success: true, message: "Translation cache cleared successfully" });
     } catch (error) {
         sendResponse({ success: false, error: error.message });
     }
@@ -479,7 +537,28 @@ async function getOrFetchLyrics(songInfo, forceReload = false) {
 
 async function getOrFetchTranslatedLyrics(songInfo, action, targetLang, forceReload = false) {
     const originalLyricsCacheKey = `${songInfo.title} - ${songInfo.artist} - ${songInfo.album}`;
-    const translatedLyricsCacheKey = `${originalLyricsCacheKey} - ${action} - ${targetLang}`;
+    
+    // Get settings first to include prompt settings in cache key
+    const settings = await storageLocalGet({
+        'translationProvider': PROVIDERS.GOOGLE,
+        'romanizationProvider': PROVIDERS.GOOGLE,
+        'geminiApiKey': '',
+        'geminiModel': 'gemini-pro',
+        'geminiRomanizationModel': 'gemini-pro',
+        'overrideTranslateTarget': false,
+        'customTranslateTarget': '',
+        'overrideGeminiPrompt': false,
+        'customGeminiPrompt': '',
+        'overrideGeminiRomanizePrompt': false,
+        'customGeminiRomanizePrompt': '',
+    });
+    
+    // Include prompt settings in cache key to ensure cache invalidation when prompts change
+    const promptHash = action === 'translate' 
+        ? `${settings.translationProvider}-${settings.overrideGeminiPrompt ? settings.customGeminiPrompt : 'default'}-${settings.overrideTranslateTarget ? settings.customTranslateTarget : targetLang}`
+        : `${settings.romanizationProvider}-${settings.overrideGeminiRomanizePrompt ? settings.customGeminiRomanizePrompt : 'default'}`;
+    
+    const translatedLyricsCacheKey = `${originalLyricsCacheKey} - ${action} - ${targetLang} - ${promptHash}`;
 
     if (!forceReload) {
         if (lyricsCache.has(translatedLyricsCacheKey)) return lyricsCache.get(translatedLyricsCacheKey);
@@ -494,20 +573,6 @@ async function getOrFetchTranslatedLyrics(songInfo, action, targetLang, forceRel
     if (isEmptyLyrics(originalLyrics)) {
         throw new Error('Original lyrics not found or empty, cannot perform translation/romanization.');
     }
-
-    const settings = await storageLocalGet({
-        'translationProvider': PROVIDERS.GOOGLE,
-        'romanizationProvider': PROVIDERS.GOOGLE,
-        'geminiApiKey': '',
-        'geminiModel': 'gemini-pro',
-        'geminiRomanizationModel': 'gemini-pro',
-        'overrideTranslateTarget': false,
-        'customTranslateTarget': '',
-        'overrideGeminiPrompt': false,
-        'customGeminiPrompt': '',
-        'overrideGeminiRomanizePrompt': false,
-        'customGeminiRomanizePrompt': '',
-    });
 
     let translatedData;
     const actualTargetLang = settings.overrideTranslateTarget && settings.customTranslateTarget ? settings.customTranslateTarget : targetLang;
@@ -1591,5 +1656,45 @@ async function fetchSponsorSegments(videoId) {
     } catch (error) {
         console.error("Error fetching SponsorBlock segments:", error);
         return [];
+    }
+}
+
+// Handle settings update from settings page
+function handleSettingsUpdatedFromPage(settings, sendResponse) {
+    console.log('Settings updated from settings page:', settings);
+    
+    try {
+        // Send settings update to all YouTube Music tabs
+        pBrowser.tabs.query({ url: ["*://*.music.youtube.com/*"] }, (tabs) => {
+            if (pBrowser.runtime.lastError) {
+                console.error("Error querying tabs:", pBrowser.runtime.lastError);
+                sendResponse({ success: false, error: pBrowser.runtime.lastError.message });
+                return;
+            }
+            
+            if (tabs.length === 0) {
+                console.log('No YouTube Music tabs found');
+                sendResponse({ success: true, message: 'No tabs to update' });
+                return;
+            }
+            
+            // Send message to each tab
+            tabs.forEach(tab => {
+                if (tab.id && pBrowser.tabs.sendMessage) {
+                    pBrowser.tabs.sendMessage(tab.id, {
+                        type: 'NEWSYNC_SETTINGS_UPDATED',
+                        settings: settings
+                    }).catch(error => {
+                        console.warn(`Failed to send message to tab ${tab.id}:`, error);
+                    });
+                }
+            });
+            
+            console.log(`Sent settings update to ${tabs.length} tab(s)`);
+            sendResponse({ success: true, tabsUpdated: tabs.length });
+        });
+    } catch (error) {
+        console.error("Error handling settings update:", error);
+        sendResponse({ success: false, error: error.message });
     }
 }
