@@ -73,9 +73,24 @@ function setupAutoSaveListeners() {
                 ];
                 
                 if (dynamicBackgroundSettings.includes(control.id)) {
-                    // Apply dynamic background immediately without reload
-                    if (typeof window.applyDynamicPlayerClass === 'function') {
-                        window.applyDynamicPlayerClass();
+                    // Send settings update to YouTube Music tab to apply dynamic background
+                    try {
+                        if (typeof chrome !== 'undefined' && chrome.tabs) {
+                            chrome.tabs.query({ url: "*://music.youtube.com/*" }, (tabs) => {
+                                if (tabs && tabs.length > 0) {
+                                    tabs.forEach(tab => {
+                                        chrome.tabs.sendMessage(tab.id, {
+                                            type: 'NEWSYNC_SETTINGS_UPDATED',
+                                            settings: currentSettings
+                                        }).catch(() => {
+                                            // Tab might not be ready, ignore error
+                                        });
+                                    });
+                                }
+                            });
+                        }
+                    } catch (error) {
+                        console.warn('Failed to notify YouTube Music tab:', error);
                     }
                     showStatusMessage('Setting saved!', false, control.id);
                     return;

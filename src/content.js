@@ -114,6 +114,7 @@ if (typeof chrome !== 'undefined' && chrome.runtime && chrome.runtime.onMessage)
             
             // Update current settings and reapply dynamic background
             const previousEnabled = window.currentSettings.isEnabled;
+            const previousSettings = window.currentSettings || {};
             window.currentSettings = message.settings;
             
             // Note: Enable/disable toggle now requires page reload
@@ -124,7 +125,6 @@ if (typeof chrome !== 'undefined' && chrome.runtime && chrome.runtime.onMessage)
             
             // Decide whether only dynamic background settings changed
             try {
-                const previousSettings = (typeof window.previousSettingsSnapshot === 'object') ? window.previousSettingsSnapshot : {};
                 const currentSettings = window.currentSettings || {};
                 const keys = new Set([...Object.keys(previousSettings), ...Object.keys(currentSettings)]);
                 const dynamicOnlyKeys = new Set([

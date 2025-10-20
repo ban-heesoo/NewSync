@@ -211,10 +211,21 @@ document.addEventListener('DOMContentLoaded', () => {
             
             // Send dynamic background update if only dynamic background changed
             if (dynamicBackgroundChanged && !requiresReload && !promptChanged) {
+                // Send settings update to YouTube Music tabs
                 try {
-                    const response = await pBrowser.runtime.sendMessage({ type: 'UPDATE_DYNAMIC_BG_ONLY' });
-                    if (response && response.success) {
-                        console.log('Dynamic background updated');
+                    if (pBrowser.tabs && pBrowser.tabs.query) {
+                        pBrowser.tabs.query({ url: "*://music.youtube.com/*" }, (tabs) => {
+                            if (tabs && tabs.length > 0) {
+                                tabs.forEach(tab => {
+                                    pBrowser.tabs.sendMessage(tab.id, {
+                                        type: 'NEWSYNC_SETTINGS_UPDATED',
+                                        settings: currentSettings
+                                    }).catch(() => {
+                                        // Tab might not be ready, ignore error
+                                    });
+                                });
+                            }
+                        });
                     }
                 } catch (error) {
                     console.warn('Failed to update dynamic background:', error);
