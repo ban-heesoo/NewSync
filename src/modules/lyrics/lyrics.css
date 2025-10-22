@@ -633,7 +633,13 @@ ytmusic-player-page[player-fullscreened] body .lyrics-song-info {
 }
 .lyrics-plus-integrated .text-not-found {
     opacity: 0.7;
-    animation: fadeInUp 0.6s ease-out;
+    animation: none !important; /* prevent first-appear flick */
+    transform: none !important; /* avoid residual translate from animations */
+    will-change: opacity; /* hint, but no layout shift */
+}
+/* Fade-out for not-found message only in fullscreen video mode when auto-hide is applied */
+ytmusic-player-page[video-mode][player-fullscreened] .lyrics-plus-integrated.lyrics-plus-message .text-not-found.auto-hide {
+    opacity: 0;
 }
 .lyrics-plus-integrated .text-loading {
     opacity: 0.8;
@@ -1281,6 +1287,44 @@ ytmusic-app #layout.dynamic-player[player-ui-state="FULLSCREEN"] .lyplus-blur-co
         box-shadow: 0 1em 3em #00000038;
         mask-image: none !important;
         transform: translate(-60%, -50%);
+    }
+    /* Disable transitions on artwork and related elements to prevent animation on fullscreen toggle */
+    #player.ytmusic-player-page,
+    .av.ytmusic-player-page,
+    ytmusic-player-page #side-panel {
+        transition: none !important;
+    }
+    /* Not-found delayed center animation (fullscreen, artwork mode) */
+    /* Initial not-found: keep default artwork position, show message centered */
+    ytmusic-player-page:not([video-mode])[player-fullscreened] .lyrics-plus-integrated.lyrics-plus-message .text-not-found {
+        position: absolute; /* match loading */
+        top: 30%;
+        left: 0;
+        transform: none;
+        width: 100%;
+        text-align: center;
+        z-index: 3;
+        transition: opacity .6s ease;
+    }
+    /* When animation class is added, slide artwork to center and fade out text */
+    ytmusic-player-page:not([video-mode]):not([is-video-truncation-fix-enabled])[player-fullscreened]:has(.lyrics-plus-integrated.lyrics-plus-message.animate-not-found-center) #player.ytmusic-player-page {
+        left: 50% !important;
+        transform: translate(-50%, -50%) !important;
+        transition: left .6s ease, transform .6s ease !important;
+    }
+    ytmusic-player-page:not([video-mode])[player-fullscreened] .lyrics-plus-integrated.lyrics-plus-message.animate-not-found-center .text-not-found {
+        opacity: 0;
+    }
+    /* Ensure artwork returns to normal position when lyrics are actually displayed */
+    ytmusic-player-page:not([video-mode]):not([is-video-truncation-fix-enabled])[player-fullscreened]:has(.lyrics-plus-integrated[style*="display: block"]):not(:has(.lyrics-plus-integrated.lyrics-plus-message)) #player.ytmusic-player-page,
+    ytmusic-player-page:not([video-mode]):not([is-video-truncation-fix-enabled])[player-fullscreened]:has(.lyrics-plus-integrated[style*="display: block"] .lyrics-line) #player.ytmusic-player-page {
+        left: 30% !important;
+        transform: translate(-60%, -50%) !important;
+    }
+    /* Force artwork back to left when loading new song (overrides not-found center) */
+    ytmusic-player-page:not([video-mode]):not([is-video-truncation-fix-enabled])[player-fullscreened]:has(.lyrics-plus-integrated[style*="display: block"] .text-loading) #player.ytmusic-player-page {
+        left: 30% !important;
+        transform: translate(-60%, -50%) !important;
     }
     ytmusic-app-layout:not([is-mweb-modernization-enabled])[player-fullscreened] > [slot="player-page"] {
         width: 100% !important;

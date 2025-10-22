@@ -1158,6 +1158,17 @@ class LyricsPlusRenderer {
     const container = this._getContainer();
     if (!container) return;
 
+    // Reset any pending/not-found animation state when real lyrics are about to be shown
+    if (this._notFoundCenterTimer) {
+      clearTimeout(this._notFoundCenterTimer);
+      this._notFoundCenterTimer = null;
+    }
+    if (this._notFoundAutoHideTimer) {
+      clearTimeout(this._notFoundAutoHideTimer);
+      this._notFoundAutoHideTimer = null;
+    }
+    container.classList.remove('animate-not-found-center');
+
     // Ensure any previous user-scroll state does not suppress effects on new song
     container.classList.remove('not-focused', 'user-scrolling', 'touch-scrolling', 'wheel-scrolling');
     this.isUserControllingScroll = false;
@@ -1304,6 +1315,32 @@ class LyricsPlusRenderer {
       const isVideoFullscreen = this._isVideoFullscreen();
       const shouldEnableFade = !!currentSettings?.fadePastLines && !isVideoFullscreen;
       container.classList.toggle('fade-past-lines', shouldEnableFade);
+
+      // Handle not-found auto-hide behavior on fullscreen transitions
+      const isNotFoundState = container.classList.contains('lyrics-plus-message') && !!container.querySelector('.text-not-found');
+      const notFoundMsg = container.querySelector('.text-not-found');
+
+      // Exiting fullscreen: ensure not-found text is visible again
+      if (!isVideoFullscreen) {
+        if (this._notFoundAutoHideTimer) {
+          clearTimeout(this._notFoundAutoHideTimer);
+          this._notFoundAutoHideTimer = null;
+        }
+        if (notFoundMsg) notFoundMsg.classList.remove('auto-hide');
+        return;
+      }
+
+      // Entering fullscreen video with not-found state: schedule fade-out if not already scheduled/applied
+      if (isVideoFullscreen && isNotFoundState && notFoundMsg && !notFoundMsg.classList.contains('auto-hide') && !this._notFoundAutoHideTimer) {
+        this._notFoundAutoHideTimer = setTimeout(() => {
+          const c = this._getContainer();
+          const msg = c?.querySelector?.('.text-not-found');
+          if (c && c.classList.contains('lyrics-plus-message') && msg) {
+            msg.classList.add('auto-hide');
+          }
+          this._notFoundAutoHideTimer = null;
+        }, 2000);
+      }
     });
     this._playerStateObserver.observe(page, { attributes: true });
   }
@@ -1326,6 +1363,16 @@ class LyricsPlusRenderer {
   displaySongNotFound() {
     const container = this._getContainer();
     if (container) {
+      // Clear any pending not-found center timers
+      if (this._notFoundCenterTimer) {
+        clearTimeout(this._notFoundCenterTimer);
+        this._notFoundCenterTimer = null;
+      }
+      // Clear any pending auto-hide timers
+      if (this._notFoundAutoHideTimer) {
+        clearTimeout(this._notFoundAutoHideTimer);
+        this._notFoundAutoHideTimer = null;
+      }
       // Fully reset internal state to avoid any stale lyrics lingering
       this.cleanupLyrics();
       // Also remove any leftover song-info overlay tied to previous track
@@ -1339,6 +1386,34 @@ class LyricsPlusRenderer {
       if (refreshedContainer) {
         refreshedContainer.innerHTML = `<span class="text-not-found">${t("notFound")}</span>`;
         refreshedContainer.classList.add('lyrics-plus-message');
+        // Ensure the animated class is reset before scheduling
+        refreshedContainer.classList.remove('animate-not-found-center');
+        // Ensure player observer is active so we respond to fullscreen toggles
+        try { this._setupPlayerStateObserver?.({}); } catch (_) {}
+        // After a short delay, trigger the center animation and fade-out the message
+        this._notFoundCenterTimer = setTimeout(() => {
+          const latestContainer = this._getContainer();
+          if (latestContainer && latestContainer.classList.contains('lyrics-plus-message')) {
+            latestContainer.classList.add('animate-not-found-center');
+          }
+          this._notFoundCenterTimer = null;
+        }, 2000);
+
+        // Check initial state: if already in fullscreen video, schedule auto-hide
+        try {
+          const page = document.querySelector('ytmusic-player-page');
+          const isFullscreenVideo = !!(page && page.hasAttribute('video-mode') && page.hasAttribute('player-fullscreened'));
+          if (isFullscreenVideo && !this._notFoundAutoHideTimer) {
+            this._notFoundAutoHideTimer = setTimeout(() => {
+              const c = this._getContainer();
+              const msg = c?.querySelector?.('.text-not-found');
+              if (c && c.classList.contains('lyrics-plus-message') && msg) {
+                msg.classList.add('auto-hide');
+              }
+              this._notFoundAutoHideTimer = null;
+            }, 2000);
+          }
+        } catch (_) {}
       }
       // Keep refresh button and translation button hidden when lyrics not found
       if (this.reloadButton) {
@@ -1356,6 +1431,15 @@ class LyricsPlusRenderer {
   displaySongError() {
     const container = this._getContainer();
     if (container) {
+      if (this._notFoundAutoHideTimer) {
+        clearTimeout(this._notFoundAutoHideTimer);
+        this._notFoundAutoHideTimer = null;
+      }
+      if (this._notFoundCenterTimer) {
+        clearTimeout(this._notFoundCenterTimer);
+        this._notFoundCenterTimer = null;
+      }
+      container.classList.remove('animate-not-found-center');
       container.innerHTML = `<span class="text-not-found">${t("notFoundError")}</span>`;
       container.classList.add('lyrics-plus-message');
       // Hide refresh button and translation button when there's an error
