@@ -275,14 +275,15 @@ ytmusic-player-page:not([player-fullscreened]) .lyrics-plus-integrated.blur-inac
     filter: blur(0.035em);
 }
 
-/* --- Offscreen Performance Optimization --- */
-.lyrics-plus-integrated.hide-offscreen .lyrics-line.viewport-hidden * {
+/* --- Offscreen Performance Optimization - DISABLED --- */
+/* Hide offscreen functionality removed due to issues in fullscreen mode */
+/* .lyrics-plus-integrated.hide-offscreen .lyrics-line.viewport-hidden * {
     visibility: hidden;
     background: none;
     animation: none !important;
     transition: none !important;
     will-change: auto !important;
-}
+} */
 
 /* --- Directionality & Text Alignment --- */
 /* For mixed LTR/RTL lyrics, align based on singer class, not text direction alone */

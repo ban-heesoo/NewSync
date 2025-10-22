@@ -12,7 +12,6 @@ let currentSettings = {
     autoHideLyrics: false,
     cacheStrategy: 'aggressive',
     fontSize: 16,
-    hideOffscreen: true, // New compatibility setting
     fadePastLines: true,
     compabilityWipe: false, // New compatibility setting
     blurInactive: false,
