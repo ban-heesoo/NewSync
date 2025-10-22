@@ -10,39 +10,8 @@ window.addEventListener('message', (event) => {
     }
 });
 
-let currentSettings = {
-    lyricsProvider: 'kpoe', // Can be 'kpoe' or 'lrclib'
-    lyricsSourceOrder: 'apple,lyricsplus,musixmatch,spotify,musixmatch-word', // For KPoe provider
-    wordByWord: true,
-    lightweight: false,
-    isEnabled: true,
-    useSponsorBlock: false,
-    autoHideLyrics: false,
-    cacheStrategy: 'aggressive',
-    fontSize: 16,
-    hideOffscreen: true, // New compatibility setting
-    fadePastLines: true,
-    compabilityWipe: false, // New compatibility setting
-    blurInactive: false,
-    dynamicPlayerPage: true,
-    dynamicPlayerFullscreen: true,
-    customCSS: '',
-    // Translation settings
-    translationProvider: 'google', // 'google' or 'gemini'
-    geminiApiKey: '',
-    geminiModel: 'gemini-2.5-flash', // NewSync enhancement - updated default model
-    overrideTranslateTarget: false,
-    customTranslateTarget: '',
-    overrideGeminiPrompt: false,
-    customGeminiPrompt: `You are a professional translator for song lyrics.
-Translate the following lines into {targetLang}.
-Your most important task is to preserve the original meaning, emotion, and tone of each line.
-After ensuring the meaning is preserved, try to make the translation sound natural in {targetLang}.`,
-    // New settings for translation/romanization toggle
-    translationEnabled: false,
-    romanizationEnabled: false,
-    largerTextMode: "lyrics" // "lyrics" or "romanization"
-};
+// Initialize with empty object - settings will be loaded from storage
+let currentSettings = {};
 
 function loadSettings(callback) {
     storageLocalGet({
@@ -181,10 +150,29 @@ function setupDynamicBackgroundListener() {
     }
 }
 
-// Initialize the listener when settings are loaded
-if (typeof currentSettings !== 'undefined') {
+// Load settings and initialize
+loadSettings(() => {
+    console.log('NewSync: Settings loaded in settings.js:', currentSettings);
     setupDynamicBackgroundListener();
-}
+    
+    // Apply dynamic background after settings are loaded
+    if (typeof window.applyDynamicPlayerClass === 'function') {
+        window.applyDynamicPlayerClass();
+    }
+    
+    // Also call LYPLUS_setupBlurEffect if it exists
+    if (typeof window.LYPLUS_setupBlurEffect === 'function') {
+        window.LYPLUS_setupBlurEffect();
+    }
+});
 
 // Expose applyDynamicPlayerClass globally for content script
 window.applyDynamicPlayerClass = applyDynamicPlayerClass;
+
+// Also expose LYPLUS_setupBlurEffect if it exists
+if (typeof window.LYPLUS_setupBlurEffect === 'undefined') {
+    // Import from dynamicBkg.js if available
+    window.LYPLUS_setupBlurEffect = () => {
+        console.log('LYPLUS_setupBlurEffect not available yet');
+    };
+}

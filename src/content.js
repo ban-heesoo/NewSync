@@ -4,38 +4,67 @@ console.log('NewSync: Content script loading...');
 console.log('NewSync: Extension is running!');
 
 // Use window to avoid conflicts with other scripts
-window.currentSettings = window.currentSettings || {
-    lyricsProvider: 'kpoe',
-    wordByWord: true,
-    lightweight: false,
-    isEnabled: true,
-    useSponsorBlock: false,
-    largerTextMode: 'lyrics',
-    dynamicPlayerPage: true,
-    dynamicPlayerFullscreen: true,
-    overrideGeminiPrompt: false,
-    customGeminiPrompt: '',
-};
+// Initialize with empty object - settings will be loaded from storage
+window.currentSettings = window.currentSettings || {};
 
 // Simple load settings function
 function loadSettings(callback) {
     try {
         const pBrowser = chrome || browser;
         if (typeof pBrowser !== 'undefined' && pBrowser.storage) {
-            pBrowser.storage.local.get(window.currentSettings, (result) => {
+            // Define default settings that will only be used if no saved settings exist
+            const defaultSettings = {
+                lyricsProvider: 'kpoe',
+                wordByWord: true,
+                lightweight: false,
+                isEnabled: true,
+                useSponsorBlock: false,
+                largerTextMode: 'lyrics',
+                dynamicPlayerPage: true,
+                dynamicPlayerFullscreen: true,
+                overrideGeminiPrompt: false,
+                customGeminiPrompt: '',
+            };
+            
+            pBrowser.storage.local.get(defaultSettings, (result) => {
                 if (pBrowser.runtime.lastError) {
                     console.error("Error loading settings:", pBrowser.runtime.lastError);
-                    if (callback) callback(window.currentSettings);
+                    if (callback) callback(defaultSettings);
                 } else {
                     if (callback) callback(result);
                 }
             });
         } else {
-            if (callback) callback(window.currentSettings);
+            // Fallback to default settings if browser storage is not available
+            const defaultSettings = {
+                lyricsProvider: 'kpoe',
+                wordByWord: true,
+                lightweight: false,
+                isEnabled: true,
+                useSponsorBlock: false,
+                largerTextMode: 'lyrics',
+                dynamicPlayerPage: true,
+                dynamicPlayerFullscreen: true,
+                overrideGeminiPrompt: false,
+                customGeminiPrompt: '',
+            };
+            if (callback) callback(defaultSettings);
         }
     } catch (error) {
         console.error("Error in loadSettings:", error);
-        if (callback) callback(window.currentSettings);
+        const defaultSettings = {
+            lyricsProvider: 'kpoe',
+            wordByWord: true,
+            lightweight: false,
+            isEnabled: true,
+            useSponsorBlock: false,
+            largerTextMode: 'lyrics',
+            dynamicPlayerPage: true,
+            dynamicPlayerFullscreen: true,
+            overrideGeminiPrompt: false,
+            customGeminiPrompt: '',
+        };
+        if (callback) callback(defaultSettings);
     }
 }
 

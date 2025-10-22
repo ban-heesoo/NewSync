@@ -248,7 +248,7 @@ function getDefaultMasterPalette() {
 function LYPLUS_setupBlurEffect() {
     console.log("LYPLUS: Setting up WebGL with GPU blur...");
     
-    if (typeof currentSettings !== 'undefined') {
+    if (typeof currentSettings !== 'undefined' && currentSettings && Object.keys(currentSettings).length > 0) {
         // Check current mode and apply appropriate setting
         const layoutElement = document.querySelector('#layout');
         if (!layoutElement) return;
@@ -270,6 +270,8 @@ function LYPLUS_setupBlurEffect() {
         } else {
             layoutElement.classList.remove("dynamic-player");
         }
+    } else {
+        console.log("LYPLUS: Settings not loaded yet, skipping dynamic background setup");
     }
 
     const existingContainer = document.querySelector('.lyplus-blur-container');
