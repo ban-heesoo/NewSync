@@ -9,7 +9,7 @@
     "48": "icons/binky big/icon48.png",
     "128": "icons/binky big/icon128.png"
   },
-  "permissions": ["activeTab", "storage", "scripting", "tabs"],
+  "permissions": ["activeTab", "storage", "scripting", "tabs", "management"],
   "host_permissions": ["*://*.music.youtube.com/*"],
   "action": {
     "default_popup": "src/popup/ui.html",

@@ -2,6 +2,23 @@
 const pBrowser = chrome || browser;
 console.log('Service Worker is active.');
 
+// Listen for extension enable/disable events
+pBrowser.management.onEnabled.addListener((info) => {
+    if (info.id === pBrowser.runtime.id) {
+        console.log('NewSync extension was enabled');
+        // Reset isEnabled setting to true when extension is enabled
+        pBrowser.storage.local.set({ isEnabled: true }, () => {
+            console.log('isEnabled setting reset to true');
+        });
+    }
+});
+
+pBrowser.management.onDisabled.addListener((info) => {
+    if (info.id === pBrowser.runtime.id) {
+        console.log('NewSync extension was disabled');
+    }
+});
+
 /* =================== CONSTANTS =================== */
 const CACHE_DB_NAME = "LyricsCacheDB";
 const CACHE_DB_VERSION = 1;
@@ -17,14 +34,15 @@ const MESSAGE_TYPES = {
     GET_CACHED_SIZE: 'GET_CACHED_SIZE',
     TRANSLATE_LYRICS: 'TRANSLATE_LYRICS',
     FETCH_SPONSOR_SEGMENTS: 'FETCH_SPONSOR_SEGMENTS',
-    UPLOAD_LOCAL_LYRICS: 'UPLOAD_LOCAL_LYRICS',
+    UPLOAD_LOCAL_LYRICS: 'UPLOAD_LYRICS',
     GET_LOCAL_LYRICS_LIST: 'GET_LOCAL_LYRICS_LIST',
     DELETE_LOCAL_LYRICS: 'DELETE_LOCAL_LYRICS',
     UPDATE_LOCAL_LYRICS: 'UPDATE_LOCAL_LYRICS',
     FETCH_LOCAL_LYRICS: 'FETCH_LOCAL_LYRICS',
     SETTINGS_UPDATED_FROM_PAGE: 'SETTINGS_UPDATED_FROM_PAGE',
     CLEAR_TRANSLATION_CACHE: 'CLEAR_TRANSLATION_CACHE',
-    UPDATE_DYNAMIC_BG_ONLY: 'UPDATE_DYNAMIC_BG_ONLY'
+    UPDATE_DYNAMIC_BG_ONLY: 'UPDATE_DYNAMIC_BG_ONLY',
+    DISABLE_EXTENSION: 'DISABLE_EXTENSION'
 };
 
 const CACHE_STRATEGIES = {
@@ -269,6 +287,10 @@ pBrowser.runtime.onMessage.addListener((message, sender, sendResponse) => {
 
         case MESSAGE_TYPES.SETTINGS_UPDATED_FROM_PAGE:
             handleSettingsUpdatedFromPage(message.settings, sendResponse);
+            return true;
+
+        case MESSAGE_TYPES.DISABLE_EXTENSION:
+            handleDisableExtension(sendResponse);
             return true;
 
         default:
@@ -1701,6 +1723,35 @@ function handleSettingsUpdatedFromPage(settings, sendResponse) {
         });
     } catch (error) {
         console.error("Error handling settings update:", error);
+        sendResponse({ success: false, error: error.message });
+    }
+}
+
+// Handle extension disable request
+function handleDisableExtension(sendResponse) {
+    console.log('Disabling NewSync extension...');
+    
+    try {
+        // Get current extension ID
+        const extensionId = pBrowser.runtime.id;
+        
+        if (!extensionId) {
+            sendResponse({ success: false, error: 'Extension ID not found' });
+            return;
+        }
+        
+        // Disable the extension
+        pBrowser.management.setEnabled(extensionId, false, () => {
+            if (pBrowser.runtime.lastError) {
+                console.error("Error disabling extension:", pBrowser.runtime.lastError);
+                sendResponse({ success: false, error: pBrowser.runtime.lastError.message });
+            } else {
+                console.log('NewSync extension disabled successfully');
+                sendResponse({ success: true, message: 'Extension disabled' });
+            }
+        });
+    } catch (error) {
+        console.error("Error disabling extension:", error);
         sendResponse({ success: false, error: error.message });
     }
 }

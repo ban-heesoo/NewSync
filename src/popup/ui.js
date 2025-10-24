@@ -165,6 +165,11 @@ document.addEventListener('DOMContentLoaded', () => {
             customGeminiPrompt: customGeminiPromptTextarea ? customGeminiPromptTextarea.value : '',
         };
         
+        // Check if isEnabled changed from true to false (extension being disabled)
+        const wasEnabled = currentSettings.isEnabled;
+        const isNowDisabled = !newSettings.isEnabled;
+        const extensionBeingDisabled = wasEnabled && isNowDisabled;
+        
         // Check if any setting that requires reload has changed
         const settingsRequiringReload = [
             'lyricsProvider', 'useSponsorBlock', 'isEnabled'
@@ -196,6 +201,29 @@ document.addEventListener('DOMContentLoaded', () => {
 
         try {
             await storageLocalSet(currentSettings);
+            
+            // If extension is being disabled, disable it completely
+            if (extensionBeingDisabled) {
+                try {
+                    showStatus('Disabling NewSync extension...');
+                    const response = await pBrowser.runtime.sendMessage({ type: 'DISABLE_EXTENSION' });
+                    if (response && response.success) {
+                        showStatus('NewSync extension disabled!', false);
+                        // Close popup after a short delay
+                        setTimeout(() => {
+                            window.close();
+                        }, 2000);
+                        return;
+                    } else {
+                        showStatus('Failed to disable extension.', true);
+                        return;
+                    }
+                } catch (error) {
+                    console.error('Failed to disable extension:', error);
+                    showStatus('Error disabling extension.', true);
+                    return;
+                }
+            }
             
             // Clear translation cache if prompt settings changed
             if (promptChanged) {
@@ -425,20 +453,59 @@ document.addEventListener('DOMContentLoaded', () => {
     if (typeof pBrowser !== 'undefined' && pBrowser.storage && pBrowser.storage.onChanged) {
         pBrowser.storage.onChanged.addListener((changes, namespace) => {
             if (namespace === 'local') {
+                let settingsChanged = false;
                 Object.keys(changes).forEach(key => {
                     if (currentSettings.hasOwnProperty(key)) {
                         const newValue = changes[key].newValue;
                         if (currentSettings[key] !== newValue) {
                             currentSettings[key] = newValue;
+                            settingsChanged = true;
                         }
                     }
                 });
-                loadSettingsUI();
+                
+                if (settingsChanged) {
+                    loadSettingsUI();
+                    // Show status if isEnabled was changed externally
+                    if (changes.isEnabled) {
+                        showStatus('Extension status updated!');
+                    }
+                }
             }
         });
+    }
+
+    // --- Check Extension Status ---
+    async function checkExtensionStatus() {
+        try {
+            if (typeof pBrowser !== 'undefined' && pBrowser.management) {
+                const extensionId = pBrowser.runtime.id;
+                const extensionInfo = await new Promise((resolve, reject) => {
+                    pBrowser.management.get(extensionId, (info) => {
+                        if (pBrowser.runtime.lastError) {
+                            reject(pBrowser.runtime.lastError);
+                        } else {
+                            resolve(info);
+                        }
+                    });
+                });
+                
+                // If extension is enabled but isEnabled setting is false, reset it
+                if (extensionInfo.enabled && !currentSettings.isEnabled) {
+                    console.log('Extension is enabled but isEnabled setting is false, resetting...');
+                    currentSettings.isEnabled = true;
+                    await storageLocalSet({ isEnabled: true });
+                    loadSettingsUI();
+                    showStatus('Extension re-enabled!');
+                }
+            }
+        } catch (error) {
+            console.warn('Could not check extension status:', error);
+        }
     }
 
     // --- Initial Load ---
     fetchAndLoadSettings();
     updateCacheDisplay();
+    checkExtensionStatus();
 });
