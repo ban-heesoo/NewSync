@@ -92,3 +92,12 @@ Once installed, simply open [YouTube Music](https://music.youtube.com/) and play
 
 -   **Quick Settings:** Access quick toggles by clicking the NewSync icon in your browser's toolbar.
 -   **Full Settings:** For comprehensive customization, click **"More Settings"** from the popup to open the dedicated settings page.
+
+## Acknowledgments
+
+This project is inspired by and built upon the work of talented developers:
+
+- **Base Project:** NewSync is based on the work by [@ibratabian17](https://github.com/ibratabian17). Special thanks for the foundation and inspiration.
+- **Popup Style:** The popup style is inspired by the work of [@boidushya](https://github.com/boidushya), known for creating the Better Lyrics extension for YouTube Music.
+
+We are grateful for their contributions to the open-source community.
