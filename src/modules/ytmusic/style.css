@@ -365,7 +365,15 @@ ytmusic-player-bar #play-pause-button[aria-label="Pause"] svg path,
 ytmusic-player-bar yt-icon-button[aria-label="Pause"] yt-icon svg path,
 ytmusic-player-bar button[aria-label="Pause"] yt-icon svg path,
 ytmusic-player-bar yt-icon[aria-label="Pause"] svg path,
-ytmusic-player-bar [aria-label="Pause"] svg path {
+ytmusic-player-bar[aria-label="Pause"] svg path {
+    d: path("M14.4263 20.9154V3.34026L14.7572 3H19.169L19.4999 3.34026V20.5754L19.169 20.9154H14.4263ZM4.5 20.9154V3.34026L4.8309 3H9.24301L9.57392 3.34026V20.5754L9.24301 20.9154H4.5Z") !important;
+}
+ytmusic-play-button-renderer[state="playing"][icon="PAUSE"] yt-icon svg path,
+ytmusic-play-button-renderer[state="playing"][icon="PAUSE"] svg path,
+ytmusic-play-button-renderer yt-icon-button[state="playing"][icon="PAUSE"] yt-icon svg path,
+ytmusic-play-button-renderer button[state="playing"][icon="PAUSE"] yt-icon svg path,
+ytmusic-play-button-renderer yt-icon[state="playing"][icon="PAUSE"] svg path,
+ytmusic-play-button-renderer[state="playing"][icon="PAUSE"] svg path {
     d: path("M14.4263 20.9154V3.34026L14.7572 3H19.169L19.4999 3.34026V20.5754L19.169 20.9154H14.4263ZM4.5 20.9154V3.34026L4.8309 3H9.24301L9.57392 3.34026V20.5754L9.24301 20.9154H4.5Z") !important;
 }
 
@@ -376,6 +384,22 @@ ytmusic-player-bar yt-icon-button[aria-label="Play"] yt-icon svg path,
 ytmusic-player-bar button[aria-label="Play"] yt-icon svg path,
 ytmusic-player-bar yt-icon[aria-label="Play"] svg path,
 ytmusic-player-bar [aria-label="Play"] svg path {
+    d: path("M5 22.4604V1L22 11.7302L5 22.4604Z") !important;
+}
+ytmusic-play-button-renderer[state="paused"][icon="PLAY_ARROW"] yt-icon svg path,
+ytmusic-play-button-renderer[state="paused"][icon="PLAY_ARROW"] svg path,
+ytmusic-play-button-renderer yt-icon-button[state="paused"][icon="PLAY_ARROW"] yt-icon svg path,
+ytmusic-play-button-renderer button[state="paused"][icon="PLAY_ARROW"] yt-icon svg path,
+ytmusic-play-button-renderer yt-icon[state="paused"][icon="PLAY_ARROW"] svg path,
+ytmusic-play-button-renderer[state="paused"][icon="PLAY_ARROW"] svg path {
+    d: path("M5 22.4604V1L22 11.7302L5 22.4604Z") !important;
+}
+ytmusic-play-button-renderer[state="default"][icon="PLAY_ARROW"] yt-icon svg path,
+ytmusic-play-button-renderer[state="default"][icon="PLAY_ARROW"] svg path,
+ytmusic-play-button-renderer yt-icon-button[state="default"][icon="PLAY_ARROW"] yt-icon svg path,
+ytmusic-play-button-renderer button[state="default"][icon="PLAY_ARROW"] yt-icon svg path,
+ytmusic-play-button-renderer yt-icon[state="default"][icon="PLAY_ARROW"] svg path,
+ytmusic-play-button-renderer[state="default"][icon="PLAY_ARROW"] svg path {
     d: path("M5 22.4604V1L22 11.7302L5 22.4604Z") !important;
 }
 
@@ -467,7 +491,7 @@ ytmusic-menu-renderer [aria-label="Dislike"][aria-pressed="true"] svg path {
     d: path("M17.5072 2.64038V13.7647L10.713 20.9514C10.0138 21.5482 8.46944 21.5514 7.85275 20.8571C6.5797 19.4241 9.01592 15.4236 9.03883 13.6662H3.81998C3.49895 13.6662 2.37816 12.7901 2.24807 12.4811C2.04135 11.9896 2.11748 10.9962 2.16996 10.4413C2.27689 9.31091 3.20797 4.99505 3.62287 4.01839C3.81431 3.56776 4.78974 2.64014 5.19848 2.64014H17.507L17.5072 2.64038ZM21.8399 2.64014H18.689V13.666H21.8399V2.64014Z") !important;
 }
 
-/* Mute button icon */
+/*Volume icon */
 ytmusic-player-bar #play-pause-button[aria-label="Mute"] yt-icon svg path,
 ytmusic-player-bar #play-pause-button[aria-label="Mute"] svg path,
 ytmusic-player-bar yt-icon-button[aria-label="Mute"] yt-icon svg path,
@@ -476,6 +500,16 @@ ytmusic-player-bar yt-icon[aria-label="Mute"] svg path,
 ytmusic-player-bar [aria-label="Mute"] svg path {
     d: path("M12.0632 20.9805L6.24226 15.2661H2V8.53154H6.43975L12.0632 2.81744V20.9805ZM14.235 22L14.2568 19.5744C21.6536 17.288 21.5655 6.6221 14.2671 4.21234L14.234 2C17.7263 2.20686 21.424 6.44105 21.8783 9.91062C22.6428 15.7494 19.7721 20.5484 14.235 22ZM14.2338 16.4907V7.30699C17.9448 8.99326 17.9959 14.8427 14.2338 16.4907Z") !important;
 }
+ytmusic-play-button-renderer[state="playing"][icon="VOLUME_UP"] yt-icon svg path,
+ytmusic-play-button-renderer[state="playing"][icon="VOLUME_UP"] svg path,
+ytmusic-play-button-renderer yt-icon-button[state="playing"][icon="VOLUME_UP"] yt-icon svg path,
+ytmusic-play-button-renderer button[state="playing"][icon="VOLUME_UP"] yt-icon svg path,
+ytmusic-play-button-renderer yt-icon[state="playing"][icon="VOLUME_UP"] svg path,
+ytmusic-play-button-renderer [state="playing"][icon="VOLUME_UP"] svg path {
+    d: path("M12.0632 20.9805L6.24226 15.2661H2V8.53154H6.43975L12.0632 2.81744V20.9805ZM14.235 22L14.2568 19.5744C21.6536 17.288 21.5655 6.6221 14.2671 4.21234L14.234 2C17.7263 2.20686 21.424 6.44105 21.8783 9.91062C22.6428 15.7494 19.7721 20.5484 14.235 22ZM14.2338 16.4907V7.30699C17.9448 8.99326 17.9959 14.8427 14.2338 16.4907Z") !important;
+}
+
+
 /* Unmute button icon */
 ytmusic-player-bar #play-pause-button[aria-label="Unmute"] yt-icon svg path,
 ytmusic-player-bar #play-pause-button[aria-label="Unmute"] svg path,
