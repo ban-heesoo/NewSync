@@ -2,6 +2,89 @@
 const pBrowser = chrome || browser;
 console.log('Service Worker is active.');
 
+// Extension state monitoring
+let isExtensionEnabled = true;
+
+// Monitor extension state changes
+if (pBrowser.management) {
+    // Get initial state
+    pBrowser.management.getSelf().then(extension => {
+        isExtensionEnabled = extension.enabled;
+        console.log('NewSync: Extension enabled state:', isExtensionEnabled);
+    }).catch(error => {
+        console.warn('NewSync: Could not get extension state:', error);
+    });
+
+    // Listen for state changes
+    if (pBrowser.management.onEnabled) {
+        pBrowser.management.onEnabled.addListener((extension) => {
+            if (extension.id === pBrowser.runtime.id) {
+                isExtensionEnabled = true;
+                console.log('NewSync: Extension enabled');
+                notifyContentScriptsAboutStateChange(true);
+            }
+        });
+    }
+
+    if (pBrowser.management.onDisabled) {
+        pBrowser.management.onDisabled.addListener((extension) => {
+            if (extension.id === pBrowser.runtime.id) {
+                isExtensionEnabled = false;
+                console.log('NewSync: Extension disabled');
+                notifyContentScriptsAboutStateChange(false);
+            }
+        });
+    }
+}
+
+// Notify content scripts about extension state changes
+function notifyContentScriptsAboutStateChange(enabled) {
+    try {
+        if (pBrowser.tabs && pBrowser.tabs.query) {
+            pBrowser.tabs.query({ url: "*://*.music.youtube.com/*" }, (tabs) => {
+                if (pBrowser.runtime.lastError) return;
+                if (tabs.length === 0) return;
+                
+                tabs.forEach(tab => {
+                    if (tab.id && pBrowser.tabs.sendMessage) {
+                        pBrowser.tabs.sendMessage(tab.id, {
+                            type: 'NEWSYNC_EXTENSION_STATE_CHANGED',
+                            enabled: enabled
+                        }).catch(() => {
+                            // Tab might not be ready, ignore error
+                        });
+                    }
+                });
+            });
+        }
+    } catch (error) {
+        console.warn("NewSync: Error notifying content scripts about state change:", error);
+    }
+}
+
+// Handle extension state toggle
+function handleToggleExtensionState(enabled, sendResponse) {
+    try {
+        if (pBrowser.management && pBrowser.management.setEnabled) {
+            pBrowser.management.setEnabled(pBrowser.runtime.id, enabled, () => {
+                if (pBrowser.runtime.lastError) {
+                    console.error('NewSync: Error toggling extension:', pBrowser.runtime.lastError);
+                    sendResponse({ success: false, error: pBrowser.runtime.lastError.message });
+                } else {
+                    isExtensionEnabled = enabled;
+                    console.log('NewSync: Extension state toggled to:', enabled);
+                    sendResponse({ success: true, enabled: enabled });
+                }
+            });
+        } else {
+            sendResponse({ success: false, error: 'Management API not available' });
+        }
+    } catch (error) {
+        console.error('NewSync: Error in handleToggleExtensionState:', error);
+        sendResponse({ success: false, error: error.message });
+    }
+}
+
 /* =================== CONSTANTS =================== */
 const CACHE_DB_NAME = "LyricsCacheDB";
 const CACHE_DB_VERSION = 1;
@@ -233,6 +316,14 @@ pBrowser.runtime.onMessage.addListener((message, sender, sendResponse) => {
         case MESSAGE_TYPES.UPDATE_DYNAMIC_BG_ONLY:
             // Forward to content script to apply dynamic background
             sendResponse({ success: true });
+            return true;
+
+        case 'TOGGLE_EXTENSION_STATE':
+            handleToggleExtensionState(message.enabled, sendResponse);
+            return true;
+
+        case 'GET_EXTENSION_STATE':
+            sendResponse({ enabled: isExtensionEnabled });
             return true;
 
         case MESSAGE_TYPES.GET_CACHED_SIZE:

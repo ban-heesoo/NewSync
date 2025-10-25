@@ -126,6 +126,76 @@ document.addEventListener('DOMContentLoaded', () => {
         toggleCustomGeminiPromptVisibility();
     }
 
+    // --- Extension Toggle Synchronization ---
+    async function syncExtensionToggle() {
+        try {
+            // Get current extension enabled state from background script
+            const response = await pBrowser.runtime.sendMessage({
+                type: 'GET_EXTENSION_STATE'
+            });
+            
+            if (response && typeof response.enabled === 'boolean') {
+                const isExtensionEnabled = response.enabled;
+                
+                // Update UI to match extension state
+                if (lyEnabledSwitchInput.checked !== isExtensionEnabled) {
+                    lyEnabledSwitchInput.checked = isExtensionEnabled;
+                    currentSettings.isEnabled = isExtensionEnabled;
+                    
+                    // Save the state to storage
+                    await storageLocalSet({ isEnabled: isExtensionEnabled });
+                }
+            }
+        } catch (error) {
+            console.error('NewSync: Error syncing extension toggle:', error);
+            // Fallback to management API if background script fails
+            try {
+                const isExtensionEnabled = await pBrowser.management.getSelf().then(extension => extension.enabled);
+                if (lyEnabledSwitchInput.checked !== isExtensionEnabled) {
+                    lyEnabledSwitchInput.checked = isExtensionEnabled;
+                    currentSettings.isEnabled = isExtensionEnabled;
+                    await storageLocalSet({ isEnabled: isExtensionEnabled });
+                }
+            } catch (fallbackError) {
+                console.error('NewSync: Fallback sync also failed:', fallbackError);
+            }
+        }
+    }
+
+    // --- Toggle Extension State ---
+    async function toggleExtensionState() {
+        try {
+            const currentState = lyEnabledSwitchInput.checked;
+            
+            // Send message to background script to toggle extension
+            const response = await pBrowser.runtime.sendMessage({
+                type: 'TOGGLE_EXTENSION_STATE',
+                enabled: currentState
+            });
+            
+            if (response && response.success) {
+                // Update settings
+                currentSettings.isEnabled = currentState;
+                await storageLocalSet({ isEnabled: currentState });
+                
+                if (currentState) {
+                    showStatus('Extension enabled!');
+                } else {
+                    showStatus('Extension disabled!');
+                }
+            } else {
+                throw new Error(response?.error || 'Unknown error');
+            }
+            
+        } catch (error) {
+            console.error('NewSync: Error toggling extension:', error);
+            showStatus('Error toggling extension!', true);
+            
+            // Revert UI state on error
+            lyEnabledSwitchInput.checked = !lyEnabledSwitchInput.checked;
+        }
+    }
+
     async function fetchAndLoadSettings() {
         try {
             const defaultSettings = {
@@ -269,7 +339,6 @@ document.addEventListener('DOMContentLoaded', () => {
     const switchInputs = [
         wordByWordSwitchInput, 
         lightweightSwitchInput, 
-        lyEnabledSwitchInput, 
         sponsorBlockSwitchInput, 
         dynamicPlayerPageSwitchInput, 
         dynamicPlayerFullscreenSwitchInput, 
@@ -286,6 +355,13 @@ document.addEventListener('DOMContentLoaded', () => {
             });
         }
     });
+
+    // Special handling for Enable NewSync toggle
+    if (lyEnabledSwitchInput) {
+        lyEnabledSwitchInput.addEventListener('change', (e) => {
+            toggleExtensionState();
+        });
+    }
 
     // --- Status Display ---
     function showStatus(message, isError = false) {
@@ -438,7 +514,43 @@ document.addEventListener('DOMContentLoaded', () => {
         });
     }
 
+    // --- Extension State Monitoring ---
+    function setupExtensionMonitoring() {
+        // Listen for messages from background script
+        if (pBrowser.runtime && pBrowser.runtime.onMessage) {
+            pBrowser.runtime.onMessage.addListener((message, sender, sendResponse) => {
+                if (message.type === 'NEWSYNC_EXTENSION_STATE_CHANGED') {
+                    // Update UI when extension state changes
+                    if (lyEnabledSwitchInput.checked !== message.enabled) {
+                        lyEnabledSwitchInput.checked = message.enabled;
+                        currentSettings.isEnabled = message.enabled;
+                        storageLocalSet({ isEnabled: message.enabled });
+                    }
+                }
+            });
+        }
+        
+        // Monitor extension state changes (fallback)
+        if (pBrowser.management && pBrowser.management.onEnabled) {
+            pBrowser.management.onEnabled.addListener((extension) => {
+                if (extension.id === pBrowser.runtime.id) {
+                    syncExtensionToggle();
+                }
+            });
+        }
+        
+        if (pBrowser.management && pBrowser.management.onDisabled) {
+            pBrowser.management.onDisabled.addListener((extension) => {
+                if (extension.id === pBrowser.runtime.id) {
+                    syncExtensionToggle();
+                }
+            });
+        }
+    }
+
     // --- Initial Load ---
     fetchAndLoadSettings();
     updateCacheDisplay();
+    syncExtensionToggle();
+    setupExtensionMonitoring();
 });
