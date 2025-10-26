@@ -1415,6 +1415,13 @@ class LyricsPlusRenderer {
           }
         } catch (_) {}
       }
+      
+      // Try to get song info from DOM and display it even when lyrics not found
+      // Add a small delay to ensure DOM is ready
+      setTimeout(() => {
+        this._addSongInfoFromDOM();
+      }, 100);
+      
       // Keep refresh button and translation button hidden when lyrics not found
       if (this.reloadButton) {
         this.reloadButton.style.display = 'none';
@@ -1442,6 +1449,13 @@ class LyricsPlusRenderer {
       container.classList.remove('animate-not-found-center');
       container.innerHTML = `<span class="text-not-found">${t("notFoundError")}</span>`;
       container.classList.add('lyrics-plus-message');
+      
+      // Try to get song info from DOM and display it even when there's an error
+      // Add a small delay to ensure DOM is ready
+      setTimeout(() => {
+        this._addSongInfoFromDOM();
+      }, 100);
+      
       // Hide refresh button and translation button when there's an error
       if (this.reloadButton) {
         this.reloadButton.style.display = 'none';
@@ -2286,6 +2300,223 @@ class LyricsPlusRenderer {
   }
 
   /**
+   * Extracts song information directly from YouTube Music DOM
+   * @private
+   */
+  _getSongInfoFromDOM() {
+    try {
+      // Use the same approach as the existing songTracker
+      const titleElement = document.querySelector('.title.style-scope.ytmusic-player-bar');
+      const byline = document.querySelector('.byline.style-scope.ytmusic-player-bar');
+      
+      // Debug: Check all possible title elements
+      const allTitleElements = document.querySelectorAll('[class*="title"]');
+      console.log('LYPLUS: All title elements found:', Array.from(allTitleElements).map(el => ({
+        className: el.className,
+        textContent: el.textContent,
+        tagName: el.tagName
+      })));
+      
+      // Debug: Check if there are other title selectors
+      const ytFormattedTitle = document.querySelector('yt-formatted-string.title');
+      console.log('LYPLUS: yt-formatted-string.title found:', {
+        exists: !!ytFormattedTitle,
+        textContent: ytFormattedTitle?.textContent
+      });
+      
+      console.log('LYPLUS: DOM elements found:', { 
+        titleElement: !!titleElement, 
+        byline: !!byline,
+        titleText: titleElement?.textContent,
+        bylineText: byline?.textContent,
+        titleElementHTML: titleElement?.outerHTML,
+        bylineHTML: byline?.outerHTML
+      });
+      
+      if (!titleElement || !byline) {
+        console.log('LYPLUS: Title or byline not found in DOM');
+        return null;
+      }
+      
+      const title = titleElement.textContent.trim();
+      if (!title) {
+        console.log('LYPLUS: Title is empty');
+        return null;
+      }
+      
+      // Extract artist and album from byline using the same logic as songTracker
+      let artists = [];
+      let album = "";
+      
+      const links = byline.querySelectorAll('a');
+      console.log('LYPLUS: Found links in byline:', links.length);
+      
+      for (const link of links) {
+        const href = link.getAttribute('href');
+        const text = link.textContent?.trim();
+        console.log('LYPLUS: Link found:', { href, text });
+        
+        if (href) {
+          if (href.startsWith('channel/')) {
+            // These are artist links
+            artists.push(text);
+          } else if (href.startsWith('browse/')) {
+            // This one is the album
+            album = text;
+          }
+        }
+      }
+      
+      // Properly format the artist names (same as songTracker)
+      let artist = "";
+      if (artists.length === 1) {
+        artist = artists[0];
+      } else if (artists.length === 2) {
+        artist = artists.join(" & ");
+      } else if (artists.length > 2) {
+        artist = artists.slice(0, -1).join(", ") + ", & " + artists[artists.length - 1];
+      }
+      
+      // If no links found, try to extract artist from byline text directly
+      if (!artist && byline.textContent) {
+        const bylineText = byline.textContent.trim();
+        console.log('LYPLUS: No links found, trying to extract from byline text:', bylineText);
+        
+        // Split by common separators and take the first part as artist
+        const parts = bylineText.split(/[•·–—]/);
+        if (parts.length > 0) {
+          artist = parts[0].trim();
+          console.log('LYPLUS: Extracted artist from byline text:', artist);
+        }
+      }
+      
+      // Check if this is a video (no album info)
+      // But don't treat it as video if we have artist info
+      const isVideo = album === '' && artist === '';
+      
+      console.log('LYPLUS: Extracted song info from DOM:', { title, artist, album, isVideo });
+      
+      return {
+        title: title,
+        artist: artist,
+        album: album,
+        isVideo: isVideo,
+        videoId: null // We don't need videoId for display purposes
+      };
+    } catch (error) {
+      console.error('LYPLUS: Error extracting song info from DOM:', error);
+      
+      // Fallback: try to use the existing songTracker functions if available
+      try {
+        if (typeof LYPLUS_getDOMSongInfo === 'function') {
+          console.log('LYPLUS: Trying fallback with LYPLUS_getDOMSongInfo');
+          const fallbackInfo = LYPLUS_getDOMSongInfo();
+          if (fallbackInfo) {
+            console.log('LYPLUS: Fallback successful:', fallbackInfo);
+            return {
+              title: fallbackInfo.title,
+              artist: fallbackInfo.artist,
+              album: fallbackInfo.album,
+              isVideo: fallbackInfo.isVideo,
+              videoId: null
+            };
+          }
+        }
+      } catch (fallbackError) {
+        console.error('LYPLUS: Fallback also failed:', fallbackError);
+      }
+      
+      return null;
+    }
+  }
+
+  /**
+   * Adds song information display from DOM scraping when lyrics are not found
+   * @private
+   */
+  _addSongInfoFromDOM() {
+    console.log('LYPLUS: ===== _addSongInfoFromDOM CALLED =====');
+    console.log('LYPLUS: Adding song info from DOM scraping');
+    
+    // Check if we're in YouTube Music fullscreen mode
+    const playerPage = document.querySelector('ytmusic-player-page');
+    const isFullscreen = playerPage && playerPage.hasAttribute('player-fullscreened');
+    const isVideoMode = playerPage && playerPage.hasAttribute('video-mode');
+    
+    console.log('LYPLUS: Fullscreen check:', { 
+      playerPage: !!playerPage, 
+      isFullscreen, 
+      isVideoMode 
+    });
+    
+    if (!isFullscreen) {
+      console.log('LYPLUS: Not in fullscreen mode, skipping song info from DOM');
+      return;
+    }
+    
+    // Skip in video fullscreen mode
+    if (isVideoMode) {
+      console.log('LYPLUS: Video mode detected, skipping song info from DOM');
+      return;
+    }
+    
+    // Remove existing song info display if it exists
+    const existingSongInfo = document.querySelector('.lyrics-song-info');
+    if (existingSongInfo) {
+      existingSongInfo.remove();
+    }
+    
+    // Get song info from DOM
+    const songInfo = this._getSongInfoFromDOM();
+    if (!songInfo) {
+      console.log('LYPLUS: No song info available from DOM');
+      return;
+    }
+    
+    if (songInfo.isVideo) {
+      console.log('LYPLUS: Song is video content (no artist/album info), skipping song info from DOM');
+      return;
+    }
+    
+    console.log('LYPLUS: Creating song info display with:', songInfo);
+    
+    // Create song info container positioned directly below album art
+    const songInfoContainer = document.createElement('div');
+    songInfoContainer.className = 'lyrics-song-info';
+    songInfoContainer.style.display = 'block';
+    
+    // Create song title (styles from CSS)
+    const titleElement = document.createElement('p');
+    titleElement.id = 'lyrics-song-title';
+    titleElement.textContent = songInfo.title;
+    
+    // Create artist info (styles from CSS)
+    const artistElement = document.createElement('p');
+    artistElement.id = 'lyrics-song-artist';
+    
+    let artistText = songInfo.artist;
+    if (songInfo.album && songInfo.album.trim() !== '') {
+      artistText += ` — ${songInfo.album}`;
+    }
+    
+    artistElement.textContent = artistText;
+    
+    // Append elements to container
+    songInfoContainer.appendChild(titleElement);
+    songInfoContainer.appendChild(artistElement);
+    
+    // Add to body first
+    document.body.appendChild(songInfoContainer);
+    console.log('LYPLUS: Song info container added to body');
+    
+    // Position relative to album artwork and keep it synced
+    this._positionSongInfoRelativeToArtwork(songInfoContainer);
+    this._setupArtworkObservers(songInfoContainer);
+    console.log('LYPLUS: ===== SONG INFO SUCCESSFULLY ADDED TO DOM =====');
+    console.log('LYPLUS: Song info from DOM added and positioned relative to artwork');
+  }
+
+  /**
    * Adds song information display below the album art in fullscreen mode
    * @private
    */
@@ -2319,8 +2550,8 @@ class LyricsPlusRenderer {
       return;
     }
     if (songInfo.isVideo) {
-      // Do not show song info overlay for video contents
-      console.log('LYPLUS: Song is video content, skipping song info');
+      // Do not show song info overlay for video contents (only if no artist info)
+      console.log('LYPLUS: Song is video content (no artist/album info), skipping song info');
       return;
     }
 
@@ -2409,9 +2640,10 @@ class LyricsPlusRenderer {
           const isFullscreen = playerPage.hasAttribute('player-fullscreened');
           console.log('LYPLUS: Fullscreen changed:', isFullscreen);
           
-          if (isFullscreen && !playerPage.hasAttribute('video-mode') && this.lastKnownSongInfo && !this.lastKnownSongInfo.isVideo) {
-            // Add song info when entering fullscreen
-            this._addSongInfoDisplay(null);
+          if (isFullscreen && !playerPage.hasAttribute('video-mode')) {
+            // Add song info immediately when entering fullscreen (don't wait for lyrics)
+            console.log('LYPLUS: Fullscreen detected, adding song info immediately');
+            this._addSongInfoFromDOM();
           } else {
             // Remove song info when exiting fullscreen
             const existingSongInfo = document.querySelector('.lyrics-song-info');
@@ -2485,18 +2717,23 @@ class LyricsPlusRenderer {
       console.log('LYPLUS: Artwork not found, using CSS fallback positioning');
       return;
     }
+    
     const rect = artworkEl.getBoundingClientRect();
+    console.log('LYPLUS: Artwork position:', { left: rect.left, bottom: rect.bottom, width: rect.width });
 
-    // Place left-aligned under the artwork
+    // Place left-aligned under the artwork with better spacing
     const leftX = rect.left;
-    const topY = rect.bottom + 16; // 16px gap below artwork
+    const topY = rect.bottom + 20; // Increased gap below artwork
 
     songInfoContainer.style.position = 'fixed';
     songInfoContainer.style.left = `${leftX}px`;
     songInfoContainer.style.top = `${topY}px`;
     songInfoContainer.style.transform = 'none';
-    songInfoContainer.style.maxWidth = `${Math.max(260, Math.floor(rect.width))}px`;
+    songInfoContainer.style.maxWidth = `${Math.max(300, Math.floor(rect.width))}px`;
     songInfoContainer.style.textAlign = 'left';
+    songInfoContainer.style.zIndex = '1000';
+    
+    console.log('LYPLUS: Song info positioned at:', { left: leftX, top: topY });
   }
 
   /**
@@ -2504,24 +2741,50 @@ class LyricsPlusRenderer {
    */
   _setupArtworkObservers(songInfoContainer) {
     // Reposition on resize/scroll to follow layout changes
-    const reposition = () => this._positionSongInfoRelativeToArtwork(songInfoContainer);
+    const reposition = () => {
+      console.log('LYPLUS: Repositioning song info due to layout change');
+      this._positionSongInfoRelativeToArtwork(songInfoContainer);
+    };
     this._artworkRepositionHandler = reposition;
 
+    // More frequent repositioning for better tracking
     window.addEventListener('resize', reposition, { passive: true });
     window.addEventListener('scroll', reposition, { passive: true });
+    
+    // Also reposition on animation frame for smooth tracking
+    let animationFrameId = null;
+    const smoothReposition = () => {
+      reposition();
+      animationFrameId = requestAnimationFrame(smoothReposition);
+    };
+    
+    // Start smooth repositioning
+    animationFrameId = requestAnimationFrame(smoothReposition);
 
     // Mutation observer to watch player layout changes
     const playerPage = document.querySelector('ytmusic-player-page');
     if (playerPage) {
       if (this._artworkMutationObserver) this._artworkMutationObserver.disconnect();
-      this._artworkMutationObserver = new MutationObserver(() => reposition());
-      this._artworkMutationObserver.observe(playerPage, { attributes: true, childList: true, subtree: true });
+      this._artworkMutationObserver = new MutationObserver(() => {
+        console.log('LYPLUS: Player layout changed, repositioning song info');
+        reposition();
+      });
+      this._artworkMutationObserver.observe(playerPage, { 
+        attributes: true, 
+        childList: true, 
+        subtree: true,
+        attributeFilter: ['player-fullscreened', 'video-mode', 'style']
+      });
     }
 
     // Clean-up hook when leaving fullscreen
     this._cleanupArtworkObservers = () => {
       window.removeEventListener('resize', reposition);
       window.removeEventListener('scroll', reposition);
+      if (animationFrameId) {
+        cancelAnimationFrame(animationFrameId);
+        animationFrameId = null;
+      }
       if (this._artworkMutationObserver) {
         this._artworkMutationObserver.disconnect();
         this._artworkMutationObserver = null;
@@ -2532,6 +2795,9 @@ class LyricsPlusRenderer {
 
 // Create the renderer instance with default config
 const lyricsRendererInstance = new LyricsPlusRenderer();
+
+// Make it globally available for other observers
+window.lyricsRendererInstance = lyricsRendererInstance;
 
 // Track last applied settings to detect what changed between updates
 let __lastAppliedSettingsSnapshot = null;
@@ -2855,6 +3121,25 @@ const observer = new MutationObserver((mutations) => {
     if (mutation.type === 'attributes' && mutation.attributeName === 'player-fullscreened') {
       // Instant redirect - no delay
       autoRedirectToLyricsInFullscreen();
+      
+      // Also show song info immediately when entering fullscreen
+      const playerPage = mutation.target;
+      const isFullscreen = playerPage.hasAttribute('player-fullscreened');
+      const isVideoMode = playerPage.hasAttribute('video-mode');
+      
+      if (isFullscreen && !isVideoMode) {
+        console.log('LYPLUS: Global observer detected fullscreen, adding song info immediately');
+        // Use the renderer instance to add song info
+        if (window.lyricsRendererInstance) {
+          window.lyricsRendererInstance._addSongInfoFromDOM();
+        }
+      } else if (!isFullscreen) {
+        // Remove song info when exiting fullscreen
+        const existingSongInfo = document.querySelector('.lyrics-song-info');
+        if (existingSongInfo) {
+          existingSongInfo.remove();
+        }
+      }
     }
   });
 });
@@ -2897,7 +3182,92 @@ function setupPlayerPageObserver() {
 
 // Setup player page observer when available
 setupPlayerPageObserver();
+
+// Additional immediate fullscreen observer for song info
+function setupImmediateSongInfoObserver() {
+  const playerPage = document.querySelector('ytmusic-player-page');
+  if (playerPage) {
+    console.log('LYPLUS: Setting up immediate song info observer on player page');
+    
+    const immediateObserver = new MutationObserver((mutations) => {
+      console.log('LYPLUS: Mutation detected:', mutations.length, 'mutations');
+      mutations.forEach((mutation) => {
+        console.log('LYPLUS: Mutation details:', {
+          type: mutation.type,
+          attributeName: mutation.attributeName,
+          target: mutation.target.tagName
+        });
+        
+        if (mutation.type === 'attributes' && mutation.attributeName === 'player-fullscreened') {
+          const isFullscreen = mutation.target.hasAttribute('player-fullscreened');
+          const isVideoMode = mutation.target.hasAttribute('video-mode');
+          
+          console.log('LYPLUS: Immediate observer detected fullscreen change:', { isFullscreen, isVideoMode });
+          
+          if (isFullscreen && !isVideoMode) {
+            console.log('LYPLUS: FULLSCREEN DETECTED - Adding song info NOW!');
+            // Add song info immediately - no waiting
+            if (window.lyricsRendererInstance) {
+              console.log('LYPLUS: Calling _addSongInfoFromDOM immediately');
+              window.lyricsRendererInstance._addSongInfoFromDOM();
+            } else {
+              console.error('LYPLUS: lyricsRendererInstance not available!');
+            }
+          } else if (!isFullscreen) {
+            console.log('LYPLUS: Exiting fullscreen - removing song info');
+            // Remove song info immediately when exiting fullscreen
+            const existingSongInfo = document.querySelector('.lyrics-song-info');
+            if (existingSongInfo) {
+              existingSongInfo.remove();
+            }
+          }
+        }
+      });
+    });
+    
+    immediateObserver.observe(playerPage, {
+      attributes: true,
+      attributeFilter: ['player-fullscreened', 'video-mode']
+    });
+    
+    console.log('LYPLUS: Immediate song info observer setup complete');
+  } else {
+    console.log('LYPLUS: Player page not found, retrying in 500ms');
+    // Retry if player page not ready yet
+    setTimeout(setupImmediateSongInfoObserver, 500);
+  }
+}
+
+// Setup immediate observer
+setupImmediateSongInfoObserver();
 setTimeout(setupPlayerPageObserver, 1000); // Retry after delay
+
+// Aggressive fallback: Check for fullscreen every 100ms
+let fullscreenCheckInterval = null;
+function startFullscreenCheck() {
+  if (fullscreenCheckInterval) return; // Already running
+  
+  console.log('LYPLUS: Starting aggressive fullscreen check');
+  fullscreenCheckInterval = setInterval(() => {
+    const playerPage = document.querySelector('ytmusic-player-page');
+    if (playerPage) {
+      const isFullscreen = playerPage.hasAttribute('player-fullscreened');
+      const isVideoMode = playerPage.hasAttribute('video-mode');
+      
+      // Check if we should show song info but it's not there
+      if (isFullscreen && !isVideoMode) {
+        const existingSongInfo = document.querySelector('.lyrics-song-info');
+        if (!existingSongInfo && window.lyricsRendererInstance) {
+          console.log('LYPLUS: AGGRESSIVE CHECK - Fullscreen detected but no song info, adding now!');
+          window.lyricsRendererInstance._addSongInfoFromDOM();
+        }
+      }
+    }
+  }, 100); // Check every 100ms
+}
+
+// Start aggressive check after a delay
+setTimeout(startFullscreenCheck, 2000);
 
 // Additional fallback: Listen for fullscreen events
 document.addEventListener('fullscreenchange', () => {
