@@ -241,37 +241,10 @@ function getDefaultMasterPalette() {
     });
 }
 
-/**
- * Sets up WebGL blur effect for dynamic background
- * Applies dynamic-player class based on current mode (player page vs fullscreen)
- */
 function LYPLUS_setupBlurEffect() {
     console.log("LYPLUS: Setting up WebGL with GPU blur...");
-    
-    if (typeof currentSettings !== 'undefined' && currentSettings && Object.keys(currentSettings).length > 0) {
-        // Check current mode and apply appropriate setting
-        const layoutElement = document.querySelector('#layout');
-        if (!layoutElement) return;
-        
-        // Check if we're in fullscreen mode by looking at player page element
-        const playerPageElement = document.querySelector('ytmusic-player-page');
-        const isFullscreen = playerPageElement && playerPageElement.hasAttribute('player-fullscreened');
-        
-        // Check if player page is open by looking at layout element's player-ui-state
-        const playerUiState = layoutElement.getAttribute('player-ui-state');
-        const isPlayerPageOpen = playerUiState === 'PLAYER_PAGE_OPEN' || playerUiState === 'MINIPLAYER_IN_PLAYER_PAGE';
-        
-        const shouldEnableDynamic = isFullscreen ? 
-            currentSettings.dynamicPlayerFullscreen : 
-            (isPlayerPageOpen ? currentSettings.dynamicPlayerPage : false);
-            
-        if (shouldEnableDynamic) {
-            layoutElement.classList.add("dynamic-player");
-        } else {
-            layoutElement.classList.remove("dynamic-player");
-        }
-    } else {
-        console.log("LYPLUS: Settings not loaded yet, skipping dynamic background setup");
+    if (typeof currentSettings !== 'undefined' && currentSettings.dynamicPlayer) {
+        document.querySelector('#layout')?.classList.add("dynamic-player");
     }
 
     const existingContainer = document.querySelector('.lyplus-blur-container');
