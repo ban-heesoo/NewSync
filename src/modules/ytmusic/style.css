@@ -549,6 +549,14 @@ ytmusic-player-bar yt-icon[aria-label="Repeat off"] svg path,
 ytmusic-player-bar [aria-label="Repeat off"] svg path {
     d: path("M3.97012 7.00357V11.1084H2.00635V5.04047C6.85604 5.06772 11.7118 5.0083 16.5635 5.03108C17.0807 5.03354 18.5 5 18.5 5L16.4791 3.19081L17.805 2L21.9871 6.1759L17.805 10.2932C17.805 10.2932 16.8257 9.36175 16.4791 9.03144L18.5 7L3.97012 7.00357ZM5.93381 19.1394L7.52751 20.8595L6.04748 22.3391L2 18.1578L6.04748 13.9766L7.4909 15.3003L5.93381 17.1763H20.0365V14.1423H22V19.1394H5.93381Z") !important;
 }
+ytmusic-player-bar #play-pause-button[aria-label="Repeat off"]:hover yt-icon svg path,
+ytmusic-player-bar #play-pause-button[aria-label="Repeat off"]:hover svg path,    
+ytmusic-player-bar yt-icon-button[aria-label="Repeat off"]:hover yt-icon svg path,
+ytmusic-player-bar button[aria-label="Repeat off"]:hover yt-icon svg path,
+ytmusic-player-bar yt-icon[aria-label="Repeat off"]:hover svg path,
+ytmusic-player-bar [aria-label="Repeat off"]:hover svg path {
+    fill: #ffffff !important;
+}
 /* Repeat all button icon */
 ytmusic-player-bar #play-pause-button[aria-label="Repeat all"] yt-icon svg path,
 ytmusic-player-bar #play-pause-button[aria-label="Repeat all"] svg path,
@@ -576,6 +584,14 @@ ytmusic-player-bar button[aria-label="Shuffle"] yt-icon svg path,
 ytmusic-player-bar yt-icon[aria-label="Shuffle"] svg path,
 ytmusic-player-bar [aria-label="Shuffle"] svg path {
     d: path("M18.0366 8.00685C16.4433 7.94774 14.5257 8.73232 13.2985 9.73261C11.3676 11.3065 10.6972 13.8503 9.06568 15.6718C7.30217 17.6409 4.66263 19.0187 2 19.0387L2.01942 17.1596C3.8895 16.9517 5.59822 16.2598 7.0032 14.9886C9.1399 13.0553 9.76871 10.0601 12.0918 8.18137C13.8288 6.7766 16.0024 6.08565 18.2092 5.93486L16.6698 4.27534L17.9505 3L21.9996 6.88489L17.927 10.9236L16.6515 9.64309L18.037 8.00706L18.0366 8.00685ZM18.2081 18.8624L18.1229 18.5199C15.3841 18.5074 12.726 17.2368 10.9707 15.1594L12.4096 13.8789C13.9077 15.5835 15.9206 16.5359 18.2096 16.6228L16.6702 14.9633L17.951 13.5249L22 17.5729L17.951 21.6209L16.6702 20.1824L18.2083 18.8627L18.2081 18.8624ZM2 7.48904V5.59114C3.93155 5.44769 5.69226 6.26095 7.22819 7.34775C8.65086 8.35451 10.3229 9.38781 7.94739 10.5492C6.3707 8.99563 4.32891 7.43166 2 7.48904Z") !important;
+}
+ytmusic-player-bar #play-pause-button[aria-label="Shuffle"]:hover yt-icon svg path,
+ytmusic-player-bar #play-pause-button[aria-label="Shuffle"]:hover svg path,
+ytmusic-player-bar yt-icon-button[aria-label="Shuffle"]:hover yt-icon svg path,
+ytmusic-player-bar button[aria-label="Shuffle"]:hover yt-icon svg path,
+ytmusic-player-bar yt-icon[aria-label="Shuffle"]:hover svg path,
+ytmusic-player-bar [aria-label="Shuffle"]:hover svg path {
+    fill: #ffffff !important;
 }
 
 /* Override for settings button */
