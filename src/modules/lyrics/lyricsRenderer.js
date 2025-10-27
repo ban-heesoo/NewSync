@@ -2346,10 +2346,24 @@ class LyricsPlusRenderer {
       
       // Extract artist and album from byline using the same logic as songTracker
       let artists = [];
+      let artistUrls = [];
       let album = "";
+      let albumUrl = "";
       
-      const links = byline.querySelectorAll('a');
+      // Try to find links in byline - first try the complex-string byline which has actual links
+      let links = byline.querySelectorAll('a');
       console.log('LYPLUS: Found links in byline:', links.length);
+      
+      // If no links found in byline, try the byline-wrapper as fallback
+      if (links.length === 0) {
+        const bylineWrapper = document.querySelector('.byline-wrapper');
+        if (bylineWrapper) {
+          links = bylineWrapper.querySelectorAll('a');
+          console.log('LYPLUS: Found links in byline-wrapper:', links.length);
+        }
+      }
+      
+      console.log('LYPLUS: Total links found:', links.length);
       
       for (const link of links) {
         const href = link.getAttribute('href');
@@ -2360,9 +2374,13 @@ class LyricsPlusRenderer {
           if (href.startsWith('channel/')) {
             // These are artist links
             artists.push(text);
+            artistUrls.push(href);
+            console.log('LYPLUS: Artist link:', href);
           } else if (href.startsWith('browse/')) {
             // This one is the album
             album = text;
+            albumUrl = href;
+            console.log('LYPLUS: Album link:', href);
           }
         }
       }
@@ -2394,14 +2412,16 @@ class LyricsPlusRenderer {
       // But don't treat it as video if we have artist info
       const isVideo = album === '' && artist === '';
       
-      console.log('LYPLUS: Extracted song info from DOM:', { title, artist, album, isVideo });
+      console.log('LYPLUS: Extracted song info from DOM:', { title, artist, album, isVideo, artistUrl: artistUrls[0], albumUrl });
       
       return {
         title: title,
         artist: artist,
         album: album,
         isVideo: isVideo,
-        videoId: null // We don't need videoId for display purposes
+        videoId: null, // We don't need videoId for display purposes
+        artistUrl: artistUrls.length > 0 ? artistUrls[0] : null,
+        albumUrl: albumUrl || null
       };
     } catch (error) {
       console.error('LYPLUS: Error extracting song info from DOM:', error);
@@ -2413,12 +2433,34 @@ class LyricsPlusRenderer {
           const fallbackInfo = LYPLUS_getDOMSongInfo();
           if (fallbackInfo) {
             console.log('LYPLUS: Fallback successful:', fallbackInfo);
+            
+            // Try to get URLs from byline
+            const byline = document.querySelector('.byline.style-scope.ytmusic-player-bar');
+            let artistUrl = null;
+            let albumUrl = null;
+            
+            if (byline) {
+              const links = byline.querySelectorAll('a');
+              for (const link of links) {
+                const href = link.getAttribute('href');
+                if (href) {
+                  if (href.startsWith('channel/')) {
+                    artistUrl = href;
+                  } else if (href.startsWith('browse/')) {
+                    albumUrl = href;
+                  }
+                }
+              }
+            }
+            
             return {
               title: fallbackInfo.title,
               artist: fallbackInfo.artist,
               album: fallbackInfo.album,
               isVideo: fallbackInfo.isVideo,
-              videoId: null
+              videoId: null,
+              artistUrl: artistUrl,
+              albumUrl: albumUrl
             };
           }
         }
@@ -2494,12 +2536,60 @@ class LyricsPlusRenderer {
     const artistElement = document.createElement('p');
     artistElement.id = 'lyrics-song-artist';
     
-    let artistText = songInfo.artist;
-    if (songInfo.album && songInfo.album.trim() !== '') {
-      artistText += ` — ${songInfo.album}`;
+    console.log('LYPLUS: Song info URLs:', { artistUrl: songInfo.artistUrl, albumUrl: songInfo.albumUrl });
+    
+    // Create clickable artist and album elements
+    if (songInfo.artistUrl && songInfo.artist) {
+      const artistLink = document.createElement('a');
+      // Use relative path for SPA navigation
+      artistLink.href = `/${songInfo.artistUrl}`;
+      artistLink.textContent = songInfo.artist;
+      artistLink.className = 'lyrics-clickable-artist';
+      artistLink.style.cursor = 'pointer';
+      artistLink.style.textDecoration = 'none';
+      artistLink.style.color = 'inherit';
+      console.log('LYPLUS: Created artist link:', songInfo.artistUrl);
+      
+      // Add proper click handler to open in new tab
+      artistLink.addEventListener('click', (e) => {
+        e.preventDefault();
+        window.open(`/${songInfo.artistUrl}`, '_blank');
+      });
+      
+      artistElement.appendChild(artistLink);
+    } else if (songInfo.artist) {
+      artistElement.textContent = songInfo.artist;
     }
     
-    artistElement.textContent = artistText;
+    // Add album if available
+    if (songInfo.album && songInfo.album.trim() !== '') {
+      if (songInfo.artist) {
+        const separator = document.createTextNode(' — ');
+        artistElement.appendChild(separator);
+      }
+      
+      if (songInfo.albumUrl) {
+        const albumLink = document.createElement('a');
+        // Use relative path for SPA navigation
+        albumLink.href = `/${songInfo.albumUrl}`;
+        albumLink.textContent = songInfo.album;
+        albumLink.className = 'lyrics-clickable-album';
+        albumLink.style.cursor = 'pointer';
+        albumLink.style.textDecoration = 'none';
+        albumLink.style.color = 'inherit';
+        console.log('LYPLUS: Created album link:', songInfo.albumUrl);
+        
+        // Add proper click handler to open in new tab
+        albumLink.addEventListener('click', (e) => {
+          e.preventDefault();
+          window.open(`/${songInfo.albumUrl}`, '_blank');
+        });
+        
+        artistElement.appendChild(albumLink);
+      } else {
+        artistElement.appendChild(document.createTextNode(songInfo.album));
+      }
+    }
     
     // Append elements to container
     songInfoContainer.appendChild(titleElement);
@@ -2544,7 +2634,7 @@ class LyricsPlusRenderer {
       existingSongInfo.remove();
     }
 
-    const songInfo = this.lastKnownSongInfo;
+    let songInfo = this.lastKnownSongInfo;
     if (!songInfo) {
       console.log('LYPLUS: No song info available');
       return;
@@ -2553,6 +2643,18 @@ class LyricsPlusRenderer {
       // Do not show song info overlay for video contents (only if no artist info)
       console.log('LYPLUS: Song is video content (no artist/album info), skipping song info');
       return;
+    }
+
+    // Try to get URLs from DOM if not already present in songInfo
+    if (!songInfo.artistUrl || !songInfo.albumUrl) {
+      const domInfo = this._getSongInfoFromDOM();
+      if (domInfo && domInfo.artistUrl) {
+        songInfo.artistUrl = domInfo.artistUrl;
+      }
+      if (domInfo && domInfo.albumUrl) {
+        songInfo.albumUrl = domInfo.albumUrl;
+      }
+      console.log('LYPLUS: Updated songInfo with URLs from DOM:', { artistUrl: songInfo.artistUrl, albumUrl: songInfo.albumUrl });
     }
 
     // Create song info container positioned directly below album art
@@ -2572,12 +2674,61 @@ class LyricsPlusRenderer {
     const artistElement = document.createElement('p');
     artistElement.id = 'lyrics-song-artist';
     
-    let artistText = songInfo.artist;
-    if (songInfo.album && songInfo.album.trim() !== '') {
-      artistText += ` — ${songInfo.album}`;
+    console.log('LYPLUS: Song info URLs:', { artistUrl: songInfo.artistUrl, albumUrl: songInfo.albumUrl });
+    
+    // Create clickable artist and album elements
+    if (songInfo.artistUrl && songInfo.artist) {
+      const artistLink = document.createElement('a');
+      // Use relative path for SPA navigation
+      artistLink.href = `/${songInfo.artistUrl}`;
+      artistLink.textContent = songInfo.artist;
+      artistLink.className = 'lyrics-clickable-artist';
+      artistLink.style.cursor = 'pointer';
+      artistLink.style.textDecoration = 'none';
+      artistLink.style.color = 'inherit';
+      console.log('LYPLUS: Created artist link:', songInfo.artistUrl);
+      
+      // Add proper click handler to open in new tab
+      artistLink.addEventListener('click', (e) => {
+        e.preventDefault();
+        window.open(`/${songInfo.artistUrl}`, '_blank');
+      });
+      
+      artistElement.appendChild(artistLink);
+    } else if (songInfo.artist) {
+      artistElement.textContent = songInfo.artist;
     }
     
-    artistElement.textContent = artistText;
+    // Add album if available
+    if (songInfo.album && songInfo.album.trim() !== '') {
+      if (songInfo.artist) {
+        const separator = document.createTextNode(' — ');
+        artistElement.appendChild(separator);
+      }
+      
+      if (songInfo.albumUrl) {
+        const albumLink = document.createElement('a');
+        // Use relative path for SPA navigation
+        albumLink.href = `/${songInfo.albumUrl}`;
+        albumLink.textContent = songInfo.album;
+        albumLink.className = 'lyrics-clickable-album';
+        albumLink.style.cursor = 'pointer';
+        albumLink.style.textDecoration = 'none';
+        albumLink.style.color = 'inherit';
+        console.log('LYPLUS: Created album link:', songInfo.albumUrl);
+        
+        // Add proper click handler to open in new tab
+        albumLink.addEventListener('click', (e) => {
+          e.preventDefault();
+          window.open(`/${songInfo.albumUrl}`, '_blank');
+        });
+        
+        artistElement.appendChild(albumLink);
+      } else {
+        artistElement.appendChild(document.createTextNode(songInfo.album));
+      }
+    }
+    
     // All typography from CSS
     artistElement.style.fontFamily = 'SF Pro Display, sans-serif';
     
@@ -2612,12 +2763,58 @@ class LyricsPlusRenderer {
     const artistElement = document.createElement('p');
     artistElement.id = 'lyrics-song-artist';
     
-    let artistText = songInfo.artist;
-    if (songInfo.album && songInfo.album.trim() !== '') {
-      artistText += ` — ${songInfo.album}`;
+    // Create clickable artist and album elements
+    if (songInfo.artistUrl && songInfo.artist) {
+      const artistLink = document.createElement('a');
+      // Use relative path for SPA navigation
+      artistLink.href = `/${songInfo.artistUrl}`;
+      artistLink.textContent = songInfo.artist;
+      artistLink.className = 'lyrics-clickable-artist';
+      artistLink.style.cursor = 'pointer';
+      artistLink.style.textDecoration = 'none';
+      artistLink.style.color = 'inherit';
+      console.log('LYPLUS: Created artist link:', songInfo.artistUrl);
+      
+      // Add proper click handler to open in new tab
+      artistLink.addEventListener('click', (e) => {
+        e.preventDefault();
+        window.open(`/${songInfo.artistUrl}`, '_blank');
+      });
+      
+      artistElement.appendChild(artistLink);
+    } else if (songInfo.artist) {
+      artistElement.textContent = songInfo.artist;
     }
     
-    artistElement.textContent = artistText;
+    // Add album if available
+    if (songInfo.album && songInfo.album.trim() !== '') {
+      if (songInfo.artist) {
+        const separator = document.createTextNode(' — ');
+        artistElement.appendChild(separator);
+      }
+      
+      if (songInfo.albumUrl) {
+        const albumLink = document.createElement('a');
+        // Use relative path for SPA navigation
+        albumLink.href = `/${songInfo.albumUrl}`;
+        albumLink.textContent = songInfo.album;
+        albumLink.className = 'lyrics-clickable-album';
+        albumLink.style.cursor = 'pointer';
+        albumLink.style.textDecoration = 'none';
+        albumLink.style.color = 'inherit';
+        console.log('LYPLUS: Created album link:', songInfo.albumUrl);
+        
+        // Add proper click handler to open in new tab
+        albumLink.addEventListener('click', (e) => {
+          e.preventDefault();
+          window.open(`/${songInfo.albumUrl}`, '_blank');
+        });
+        
+        artistElement.appendChild(albumLink);
+      } else {
+        artistElement.appendChild(document.createTextNode(songInfo.album));
+      }
+    }
     
     songInfoContainer.appendChild(titleElement);
     songInfoContainer.appendChild(artistElement);

@@ -548,7 +548,7 @@ span.lyrics-source-provider {
     transform: translateX(-50%);
     text-align: left;
     z-index: 1000;
-    pointer-events: none;
+    pointer-events: auto; /* Enable pointer events for clickable elements */
     max-width: 25rem;
     width: 100%;
 }
@@ -576,6 +576,26 @@ span.lyrics-source-provider {
     margin: 0;
     /* text-shadow: 0 1px 4px rgba(0, 0, 0, 0.6); */
     line-height: 1.1;
+}
+
+#lyrics-song-artist a.lyrics-clickable-artist,
+#lyrics-song-artist a.lyrics-clickable-album {
+    color: inherit !important;
+    text-decoration: none !important;
+    transition: opacity 0.2s ease;
+    cursor: pointer !important;
+    pointer-events: auto !important;
+    display: inline !important;
+}
+
+#lyrics-song-artist a.lyrics-clickable-artist:hover,
+#lyrics-song-artist a.lyrics-clickable-album:hover {
+    text-decoration: underline !important;
+}
+
+.lyrics-song-info a {
+    color: inherit !important;
+    pointer-events: auto !important;
 }
 
 /* Show song info only in fullscreen mode */
