@@ -605,8 +605,14 @@ function animateWebGLBackground() {
     }
 
     const now = performance.now();
-    const deltaTime = (now - lastFrameTime) / 1000.0;
+    let deltaTime = (now - lastFrameTime) / 1000.0;
     lastFrameTime = now;
+    
+    // Cap deltaTime to prevent inconsistent speeds due to browser lag
+    // Use constant 60fps (1/60 = 0.0167) for consistent animation speed
+    const TARGET_FPS = 60;
+    const MAX_DELTA_TIME = 1.0 / TARGET_FPS;
+    deltaTime = Math.min(deltaTime, MAX_DELTA_TIME * 2); // Allow up to 2x for smooth slowdown during lag
 
     if (songPaletteTransitionProgress < 1.0) {
         songPaletteTransitionProgress = Math.min(1.0, songPaletteTransitionProgress + SONG_PALETTE_TRANSITION_SPEED);
