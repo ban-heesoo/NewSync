@@ -3500,3 +3500,5 @@ setInterval(() => {
     manageUpNextButtons();
   }
 }, 1000); // Check every second
+
+

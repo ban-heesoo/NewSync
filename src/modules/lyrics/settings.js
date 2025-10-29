@@ -16,7 +16,7 @@ let currentSettings = {};
 function loadSettings(callback) {
     storageLocalGet({
         lyricsProvider: 'kpoe',
-        lyricsSourceOrder: 'apple,lyricsplus,musixmatch,spotify,musixmatch-word',
+        lyricsSourceOrder: 'apple,lyricsplus,spotify,musixmatch,musixmatch-word',
         wordByWord: true,
         lineByLine: true,
         lightweight: false,
@@ -162,7 +162,12 @@ loadSettings(() => {
     
     // Also call LYPLUS_setupBlurEffect if it exists
     if (typeof window.LYPLUS_setupBlurEffect === 'function') {
-        window.LYPLUS_setupBlurEffect();
+        const layout = document.querySelector('#layout');
+        const playerUiState = layout && layout.getAttribute('player-ui-state');
+        const isPlayerActive = playerUiState === 'PLAYER_PAGE_OPEN' || playerUiState === 'MINIPLAYER_IN_PLAYER_PAGE' || playerUiState === 'FULLSCREEN';
+        if (currentSettings && currentSettings.dynamicPlayer && isPlayerActive) {
+            window.LYPLUS_setupBlurEffect();
+        }
     }
 });
 
