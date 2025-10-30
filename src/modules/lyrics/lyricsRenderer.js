@@ -545,6 +545,35 @@ class LyricsPlusRenderer {
       return font;
     };
 
+    const calculatePreHighlightDelay = (syllable, font, currentDuration) => {
+      const syllableWidthPx = this._getTextWidth(syllable.textContent, font);
+      const emWidthPx = this._getTextWidth('M', font);
+      const syllableWidthEm = emWidthPx > 0 ? (syllableWidthPx / emWidthPx) : 0;
+
+      const gradientWidth = 0.75;
+      const gradientHalfWidth = gradientWidth / 2;
+      const initialGradientPosition = -gradientHalfWidth;
+      const finalGradientPosition = syllableWidthEm + gradientHalfWidth;
+      const totalAnimationDistance = finalGradientPosition - initialGradientPosition;
+
+      const triggerPointFromTextEnd = gradientHalfWidth;
+      let triggerPosition;
+      if (syllableWidthEm <= gradientWidth) {
+        triggerPosition = -gradientHalfWidth * 0.5;
+      } else {
+        triggerPosition = syllableWidthEm - triggerPointFromTextEnd;
+      }
+
+      const distanceToTrigger = triggerPosition - initialGradientPosition;
+      let triggerTimingFraction = 0;
+      if (totalAnimationDistance > 0) {
+        triggerTimingFraction = distanceToTrigger / totalAnimationDistance;
+      }
+
+      const rawDelayMs = triggerTimingFraction * currentDuration;
+      return Math.max(0, Math.round(rawDelayMs));
+    };
+
     lyrics.data.forEach((line) => {
       let currentLine = elementPool.lines.pop() || document.createElement('div');
       currentLine.innerHTML = '';
@@ -570,6 +599,9 @@ class LyricsPlusRenderer {
       let wordBuffer = [];
       let currentWordStartTime = null;
       let currentWordEndTime = null;
+
+      let pendingSyllable = null;
+      let pendingSyllableFont = null;
 
       const flushWordBuffer = () => {
         if (!wordBuffer.length) return;
@@ -646,14 +678,28 @@ class LyricsPlusRenderer {
           } else {
             if (shouldEmphasize) {
               wordSpan.classList.add('growable');
+              const syllableText = this._getDataText(s);
+              const totalSyllableWidth = this._getTextWidth(syllableText, referenceFont);
+              let cumulativeCharWidth = 0;
               let charIndex = 0;
-              this._getDataText(s).split('').forEach(char => {
+
+              syllableText.split('').forEach(char => {
                 if (char === ' ') {
                   sylSpan.appendChild(document.createTextNode(' '));
                 } else {
                   const charSpan = elementPool.chars.pop() || document.createElement('span');
                   charSpan.textContent = char;
                   charSpan.className = 'char';
+
+                  const charWidth = this._getTextWidth(char, referenceFont);
+                  if (totalSyllableWidth > 0) {
+                    const startPercent = cumulativeCharWidth / totalSyllableWidth;
+                    const durationPercent = charWidth / totalSyllableWidth;
+                    charSpan.dataset.wipeStart = startPercent.toFixed(4);
+                    charSpan.dataset.wipeDuration = durationPercent.toFixed(4);
+                  }
+                  cumulativeCharWidth += charWidth;
+
                   charSpan.dataset.charIndex = charIndex++;
                   charSpan.dataset.syllableCharIndex = characterData.length;
                   characterData.push({ charSpan, syllableSpan: sylSpan, isBackground: s.isBackground });
@@ -677,24 +723,35 @@ class LyricsPlusRenderer {
           wordSpan._cachedChars = characterData.map(cd => cd.charSpan);
         }
 
+        if (pendingSyllable && syllableElements.length > 0) {
+          const nextSyllable = syllableElements[0];
+          const currentDuration = pendingSyllable._durationMs;
+
+          const delayMs = calculatePreHighlightDelay(
+            pendingSyllable,
+            pendingSyllableFont,
+            currentDuration
+          );
+
+          pendingSyllable._nextSyllableInWord = nextSyllable;
+          pendingSyllable._preHighlightDurationMs = Math.max(0, currentDuration - delayMs);
+          pendingSyllable._preHighlightDelayMs = delayMs;
+        }
+
         syllableElements.forEach((syllable, index) => {
           if (index < syllableElements.length - 1) {
             const nextSyllable = syllableElements[index + 1];
-
             const currentDuration = syllable._durationMs;
-            const syllableWidth = this._getTextWidth(syllable.textContent, referenceFont);
-            const emWidth = this._getTextWidth('m', referenceFont);
-            const syllableWidthEm = syllableWidth / emWidth; // convert px → em
-            const totalTravelEm = syllableWidthEm + 0.25; // block 0.5em size
-            const travelUntilEdgeEm = syllableWidthEm; // when touching edge
-            const delayFraction = travelUntilEdgeEm / totalTravelEm;
-            const delayPercent = Math.min(1, Math.max(0, delayFraction));
-            const timingFunction = `cubic-bezier(${delayPercent.toFixed(3)}, 0, 1, 1)`;
 
+            const delayMs = calculatePreHighlightDelay(
+              syllable,
+              referenceFont,
+              currentDuration
+            );
 
             syllable._nextSyllableInWord = nextSyllable;
-            syllable._preHighlightDurationMs = currentDuration;
-            syllable._preHighlightTimingFunction = timingFunction;
+            syllable._preHighlightDurationMs = Math.max(0, currentDuration - delayMs);
+            syllable._preHighlightDelayMs = delayMs;
           }
         });
 
@@ -713,6 +770,14 @@ class LyricsPlusRenderer {
 
         const targetContainer = isCurrentWordBackground ? (backgroundContainer || (backgroundContainer = document.createElement('div'), backgroundContainer.className = 'background-vocal-container', currentLine.appendChild(backgroundContainer))) : mainContainer;
         targetContainer.appendChild(wordSpan);
+        const trailText = combinedText.match(/\s+$/);
+        if (trailText) targetContainer.appendChild(document.createTextNode(trailText));
+
+        pendingSyllable = syllableElements.length > 0
+          ? syllableElements[syllableElements.length - 1]
+          : null;
+        pendingSyllableFont = referenceFont;
+
         wordBuffer = [];
         currentWordStartTime = null;
         currentWordEndTime = null;
@@ -1765,83 +1830,129 @@ class LyricsPlusRenderer {
   _updateSyllableAnimation(syllable, currentTime) {
     if (syllable.classList.contains('highlight')) return;
 
-    // Cache DOM operations
     const classList = syllable.classList;
-    classList.remove('pre-highlight');
-    classList.add('highlight');
-
-    // Cache RTL check result
     const isRTL = classList.contains('rtl-text');
+    const charSpans = syllable._cachedCharSpans;
+    const wordElement = syllable.parentElement;
+    const allWordCharSpans = wordElement?._cachedChars;
+    const isGrowable = wordElement?.classList.contains('growable');
+    const isFirstSyllable = syllable.dataset.syllableIndex === '0';
+    const isGap = syllable.parentElement?.parentElement?.parentElement?.classList.contains('lyrics-gap');
+    const nextSyllable = syllable._nextSyllableInWord;
+
+    const pendingStyleUpdates = [];
+    const charAnimationsMap = new Map();
     const wipeAnimation = isRTL ? 'wipe-rtl' : 'wipe';
 
-    const charSpans = syllable._cachedCharSpans;
+    if (isGrowable && isFirstSyllable && allWordCharSpans) {
+      const spansToAnimate = allWordCharSpans;
+      const finalDuration = syllable._wordDurationMs ?? syllable._durationMs;
+      const baseDelayPerChar = finalDuration * 0.09;
+      const growDurationMs = finalDuration * 1.5;
 
-    if (charSpans && charSpans.length > 0) {
-      const wordElement = syllable.parentElement;
-      const isGrowable = wordElement.classList.contains('growable');
-      const isFirstSyllable = syllable.dataset.syllableIndex === '0';
-
-      // --- Apply GROW animation (only for first syllable of growable words) ---
-      if (isGrowable && isFirstSyllable) {
-        const spansToAnimate = wordElement._cachedChars;
-        if (spansToAnimate) {
-          const finalDuration = syllable._wordDurationMs ?? syllable._durationMs;
-          const baseDelayPerChar = finalDuration * 0.07;
-          const growDurationMs = finalDuration * 1.2;
-
-          // Batch DOM operations
-          spansToAnimate.forEach(span => {
-            const horizontalOffset = parseFloat(span.dataset.horizontalOffset) || 0;
-            const growDelay = baseDelayPerChar * (parseFloat(span.dataset.syllableCharIndex) || 0);
-
-            span.style.setProperty('--char-offset-x', `${horizontalOffset}`);
-            span.style.animation = `grow-dynamic ${growDurationMs}ms ease-in-out ${growDelay}ms forwards`;
-          });
-        }
-      }
-
-      // --- Apply WIPE animation to current syllable's characters ---
-      const syllableDuration = syllable._durationMs;
-      const wipeDurationPerChar = syllableDuration / charSpans.length;
-
-      charSpans.forEach((span, charIndex) => {
-        const wipeDelay = wipeDurationPerChar * charIndex;
-        const preWipeDelay = wipeDurationPerChar * (charIndex - 1);
-
-        // Combine animations in single assignment
-        const wipeAnims = `pre-wipe-char ${wipeDurationPerChar}ms linear ${preWipeDelay}ms, ${wipeAnimation} ${wipeDurationPerChar}ms linear ${wipeDelay}ms forwards`;
-        span.style.animation += `, ${wipeAnims}`;
+      spansToAnimate.forEach(span => {
+        const horizontalOffset = parseFloat(span.dataset.horizontalOffset) || 0;
+        const growDelay = baseDelayPerChar * (parseFloat(span.dataset.syllableCharIndex) || 0);
+        charAnimationsMap.set(span, `grow-dynamic ${growDurationMs}ms ease-in-out ${growDelay}ms forwards`);
+        pendingStyleUpdates.push({
+          element: span,
+          property: '--char-offset-x',
+          value: `${horizontalOffset}`
+        });
       });
-
-    } else {
-      // Handle non-char, simple syllables - check gap class once
-      const isGap = syllable.parentElement?.parentElement?.parentElement?.classList.contains('lyrics-gap');
-      const currentWipeAnimation = isGap ? "fade-gap" : wipeAnimation;
-      syllable.style.animation = `${currentWipeAnimation} ${syllable._durationMs}ms linear forwards`;
     }
 
-    // --- Logic for NEXT syllable's PRE-WIPE ---
-    const nextSyllable = syllable._nextSyllableInWord;
+    if (charSpans && charSpans.length > 0) {
+      const syllableDuration = syllable._durationMs;
+
+      charSpans.forEach((span, charIndex) => {
+        const wipeDelay = syllableDuration * (parseFloat(span.dataset.wipeStart) || 0);
+        const wipeDuration = syllableDuration * (parseFloat(span.dataset.wipeDuration) || 0);
+
+        const existingAnimation = charAnimationsMap.get(span) || span.style.animation;
+        const animationParts = [];
+
+        if (existingAnimation && existingAnimation.includes('grow-dynamic')) {
+          animationParts.push(existingAnimation.split(',')[0].trim());
+        }
+
+        if (charIndex > 0) {
+          const prevChar = charSpans[charIndex - 1];
+          const prevWipeDelay = syllableDuration * (parseFloat(prevChar.dataset.wipeStart) || 0);
+          const prevWipeDuration = syllableDuration * (parseFloat(prevChar.dataset.wipeDuration) || 0);
+
+          if (prevWipeDuration > 0) {
+            animationParts.push(
+              `pre-wipe-char ${prevWipeDuration}ms linear ${prevWipeDelay}ms`
+            );
+          }
+        }
+
+        if (wipeDuration > 0) {
+          animationParts.push(
+            `${wipeAnimation} ${wipeDuration}ms linear ${wipeDelay}ms forwards`
+          );
+        }
+
+        charAnimationsMap.set(span, animationParts.join(', '));
+      });
+    } else {
+      const currentWipeAnimation = isGap ? "fade-gap" : wipeAnimation;
+      const syllableAnimation = `${currentWipeAnimation} ${syllable._durationMs}ms linear forwards`;
+      pendingStyleUpdates.push({
+        element: syllable,
+        property: 'animation',
+        value: syllableAnimation
+      });
+    }
+
     if (nextSyllable) {
       const preHighlightDuration = syllable._preHighlightDurationMs;
-      const timingFunction = syllable._preHighlightTimingFunction;
+      const preHighlightDelay = syllable._preHighlightDelayMs;
+
+      pendingStyleUpdates.push({
+        element: nextSyllable,
+        property: 'class',
+        action: 'add',
+        value: 'pre-highlight'
+      });
+      pendingStyleUpdates.push({
+        element: nextSyllable,
+        property: '--pre-wipe-duration',
+        value: `${preHighlightDuration}ms`
+      });
+      pendingStyleUpdates.push({
+        element: nextSyllable,
+        property: '--pre-wipe-delay',
+        value: `${preHighlightDelay}ms`
+      });
 
       const nextCharSpan = nextSyllable._cachedCharSpans?.[0];
       if (nextCharSpan) {
-        const preWipeAnim = `pre-wipe-char ${preHighlightDuration}ms ${timingFunction} forwards`;
-        const currentAnim = nextCharSpan.style.animation;
-
-        // More efficient string concatenation check
-        nextCharSpan.style.animation = (currentAnim && !currentAnim.includes('pre-wipe-char'))
-          ? `${currentAnim}, ${preWipeAnim}`
+        const preWipeAnim = `pre-wipe-char ${preHighlightDuration}ms linear ${preHighlightDelay}ms forwards`;
+        const existingAnimation = charAnimationsMap.get(nextCharSpan) || nextCharSpan.style.animation || '';
+        const combinedAnimation = existingAnimation && !existingAnimation.includes('pre-wipe-char')
+          ? `${existingAnimation}, ${preWipeAnim}`
           : preWipeAnim;
+        charAnimationsMap.set(nextCharSpan, combinedAnimation);
       }
+    }
 
-      // Batch style updates for next syllable
-      const nextSyllableStyle = nextSyllable.style;
-      nextSyllableStyle.setProperty('--pre-wipe-duration', `${preHighlightDuration}ms`);
-      nextSyllableStyle.setProperty('--pre-wipe-timing-function', timingFunction);
-      nextSyllable.classList.add('pre-highlight');
+    classList.remove('pre-highlight');
+    classList.add('highlight');
+
+    for (const [span, animationString] of charAnimationsMap.entries()) {
+      span.style.animation = animationString;
+    }
+
+    for (const update of pendingStyleUpdates) {
+      if (update.action === 'add') {
+        update.element.classList.add(update.value);
+      } else if (update.property === 'animation') {
+        update.element.style.animation = update.value;
+      } else {
+        update.element.style.setProperty(update.property, update.value);
+      }
     }
   }
 
@@ -1854,7 +1965,7 @@ class LyricsPlusRenderer {
     }
     syllable.classList.remove('highlight', 'finished', 'pre-highlight');
     syllable.style.removeProperty('--pre-wipe-duration');
-    syllable.style.removeProperty('--pre-wipe-timing-function');
+    syllable.style.removeProperty('--pre-wipe-delay');
     syllable.querySelectorAll('span.char').forEach(span => { span.style.animation = ''; });
   }
 
