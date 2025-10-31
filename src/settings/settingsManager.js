@@ -13,7 +13,8 @@ let currentSettings = {
     cacheStrategy: 'aggressive',
     fontSize: 16,
     fadePastLines: true,
-    compabilityWipe: false, // New compatibility setting
+    hideOffscreen: false,
+    compabilityWipe: false,
     blurInactive: false,
     dynamicPlayerPage: true,
     dynamicPlayerFullscreen: true,

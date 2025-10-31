@@ -674,12 +674,12 @@ class LyricsPlusRenderer {
           const charSpansForSyllable = [];
 
           if (s.isBackground) {
-            sylSpan.textContent = this._getDataText(s).replace(/[()]/g, '');
+            sylSpan.textContent = this._getDataText(s).replace(/[()]/g, '').trimEnd();
           } else {
             if (shouldEmphasize) {
 
               wordSpan.classList.add('growable');
-              const syllableText = this._getDataText(s);
+              const syllableText = this._getDataText(s).trimEnd();
               const totalSyllableWidth = this._getTextWidth(syllableText, referenceFont);
               let cumulativeCharWidth = 0;
               let charIndex = 0;
@@ -1730,15 +1730,10 @@ class LyricsPlusRenderer {
 
     this._updateSyllables(currentTime);
 
-    if (this.lyricsContainer && this.lyricsContainer.classList.contains('hide-offscreen')) {
+    const isVideoFullscreen = this._isVideoFullscreen?.() ?? this.__detectVideoFullscreen();
+    if (this.lyricsContainer && this.lyricsContainer.classList.contains('hide-offscreen') && !isVideoFullscreen) {
       if (this._lastVisibilityUpdateSize !== this.visibleLineIds.size) {
-        for (let i = 0; i < this.cachedLyricsLines.length; i++) {
-          const line = this.cachedLyricsLines[i];
-          if (line) {
-            const isOutOfView = !this.visibleLineIds.has(line.id);
-            line.classList.toggle('viewport-hidden', isOutOfView);
-          }
-        }
+        this._batchUpdateViewportVisibility();
         this._lastVisibilityUpdateSize = this.visibleLineIds.size;
       }
     }
@@ -1823,6 +1818,21 @@ class LyricsPlusRenderer {
     this.highlightedSyllableIds = newHighlightedSyllableIds;
   }
 
+  /**
+   * Batch update viewport visibility
+   */
+  _batchUpdateViewportVisibility() {
+    const lines = this.cachedLyricsLines;
+    const visibleIds = this.visibleLineIds;
+
+    for (let i = 0; i < lines.length; i++) {
+      const line = lines[i];
+      if (line) {
+        const isOutOfView = !visibleIds.has(line.id);
+        line.classList.toggle('viewport-hidden', isOutOfView);
+      }
+    }
+  }
 
   _updateSyllableAnimation(syllable, currentTime) {
     if (syllable.classList.contains('highlight')) return;
