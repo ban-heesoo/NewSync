@@ -25,7 +25,7 @@ function loadSettings(callback) {
         autoHideLyrics: false,
         cacheStrategy: 'aggressive',
         fontSize: 16,
-        hideOffscreen: false, // Disabled - causes issues in fullscreen mode
+        hideOffscreen: false,
         fadePastLines: true,
         compabilityWipe: false, // New compatibility setting
         blurInactive: false,

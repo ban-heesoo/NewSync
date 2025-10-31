@@ -677,12 +677,9 @@ class LyricsPlusRenderer {
             sylSpan.textContent = this._getDataText(s).replace(/[()]/g, '');
           } else {
             if (shouldEmphasize) {
+
               wordSpan.classList.add('growable');
-<<<<<<< HEAD
-              const syllableText = this._getDataText(s).trimEnd();
-=======
               const syllableText = this._getDataText(s);
->>>>>>> 17eac0ce00dffda4820a6974af9a1a91a3e4d913
               const totalSyllableWidth = this._getTextWidth(syllableText, referenceFont);
               let cumulativeCharWidth = 0;
               let charIndex = 0;
@@ -949,8 +946,7 @@ class LyricsPlusRenderer {
     const isVideoFullscreen = this._isVideoFullscreen?.() ?? this.__detectVideoFullscreen();
     container.classList.toggle('fade-past-lines', !!currentSettings.fadePastLines && !isVideoFullscreen);
     
-    // Hide offscreen disabled - causes issues in fullscreen mode
-    // container.classList.toggle('hide-offscreen', !!currentSettings.hideOffscreen);
+    container.classList.toggle('hide-offscreen', !!currentSettings.hideOffscreen);
     container.classList.toggle('compability-wipe', !!currentSettings.compabilityWipe);
     
     // Font size if available
@@ -1734,21 +1730,18 @@ class LyricsPlusRenderer {
 
     this._updateSyllables(currentTime);
 
-    // Hide offscreen functionality removed - causes issues in fullscreen mode
-    // Batch viewport-hidden class updates if needed
-    // if (this.lyricsContainer && this.lyricsContainer.classList.contains('hide-offscreen')) {
-    //   // Only update if visibility has changed
-    //   if (this._lastVisibilityUpdateSize !== this.visibleLineIds.size) {
-    //     for (let i = 0; i < this.cachedLyricsLines.length; i++) {
-    //       const line = this.cachedLyricsLines[i];
-    //       if (line) {
-    //         const isOutOfView = !this.visibleLineIds.has(line.id);
-    //         line.classList.toggle('viewport-hidden', isOutOfView);
-    //       }
-    //     }
-    //     this._lastVisibilityUpdateSize = this.visibleLineIds.size;
-    //   }
-    // }
+    if (this.lyricsContainer && this.lyricsContainer.classList.contains('hide-offscreen')) {
+      if (this._lastVisibilityUpdateSize !== this.visibleLineIds.size) {
+        for (let i = 0; i < this.cachedLyricsLines.length; i++) {
+          const line = this.cachedLyricsLines[i];
+          if (line) {
+            const isOutOfView = !this.visibleLineIds.has(line.id);
+            line.classList.toggle('viewport-hidden', isOutOfView);
+          }
+        }
+        this._lastVisibilityUpdateSize = this.visibleLineIds.size;
+      }
+    }
 
     // Apply fade-out class to past lines when enabled - ONLY during programmatic scrolling (auto scroll)
     if (this.lyricsContainer && this.lyricsContainer.classList.contains('fade-past-lines') && this.isProgrammaticScrolling) {
