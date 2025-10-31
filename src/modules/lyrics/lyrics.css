@@ -229,10 +229,10 @@ ytmusic-player-page[player-fullscreened] .lyrics-plus-integrated.fade-past-lines
     opacity: 1;
 }
 
-/* In fade-past-lines mode, keep background vocals expanded/visible only for past lines - ONLY in fullscreen */
+/* In fade-past-lines mode, hide background vocals in past lines - ONLY in fullscreen */
 ytmusic-player-page[player-fullscreened] .lyrics-plus-integrated.fade-past-lines .lyrics-line.past .background-vocal-container {
-    max-height: 10em;
-    opacity: 1;
+    opacity: 0;
+    pointer-events: none;
 }
 
 /* Allow default gap animation to handle scale-down; no forced transform here */
@@ -1584,7 +1584,7 @@ ytmusic-app #layout.dynamic-player[player-ui-state="FULLSCREEN"] .lyplus-blur-co
         filter: drop-shadow(0 0 0 rgba(255, 255, 255, 0));
     }
     25%, 30% {
-        transform: matrix3d(var(--max-scale), 0, 0, 0, 0, var(--max-scale), 0, 0, 0, 0, 1, 0, var(--char-offset-x, 0), var(--translate-y-peak, -1%), 0, 1);
+        transform: matrix3d(var(--max-scale), 0, 0, 0, 0, var(--max-scale), 0, 0, 0, 0, 1, 0, var(--char-offset-x, 0), var(--translate-y-peak, -2%), 0, 1);
         filter: drop-shadow(0 0 0.1em rgba(255, 255, 255, var(--shadow-intensity))); /* Restored bright blur */
     }
     100% {
@@ -1593,11 +1593,11 @@ ytmusic-app #layout.dynamic-player[player-ui-state="FULLSCREEN"] .lyplus-blur-co
 }
 @keyframes grow-static {
     0%, 100% {
-        transform: scale3d(1.01, 1.01, 1.05) translateY(-0.02%); /* Reduced Z-scale and Y-translate */
+        transform: scale3d(1.01, 1.01, 1.05) translateY(-0.05%); /* Reduced Z-scale and Y-translate */
         text-shadow: 0 0 0 rgba(255, 255, 255, 0);
     }
     30%, 40% {
-        transform: scale3d(1.04, 1.04, 1.05) translateY(-0.02%); /* Reduced from 1.10 to 1.04 - much smaller scaling */
+        transform: scale3d(1.04, 1.04, 1.05) translateY(-0.05%); /* Reduced from 1.10 to 1.04 - much smaller scaling */
         text-shadow: 0 0 0.3em rgba(255, 255, 255, 0.5); /* Restored bright text shadow */
     }
 }

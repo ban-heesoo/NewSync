@@ -186,7 +186,7 @@
   }
 
   maintainObservers();
-  setInterval(maintainObservers, 2000);
+  setInterval(maintainObservers, 500);
 
   document.addEventListener('visibilitychange', () => {
     if (!document.hidden) {
