@@ -1,0 +1,13 @@
+Fix: Firefox WebGL NPOT warnings and improve fade-past-lines behavior
+
+Dynamic background (Firefox)
+- Set CLAMP_TO_EDGE on NPOT cell state textures (8x5) in createCellStateTexture()
+- Removes WebGL warnings and prevents solid-color fallback on Gecko
+
+Fade-past-lines UX
+- Defer deactivation of finished line when fade-past-lines is active until next line starts
+- Avoids brief hide between lines; lets previous line fade naturally with the new one
+
+Files touched
+- src/modules/lyrics/dynamicBkg.js
+- src/modules/lyrics/lyricsRenderer.js
