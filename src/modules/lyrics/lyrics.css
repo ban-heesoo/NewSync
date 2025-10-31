@@ -229,10 +229,10 @@ ytmusic-player-page[player-fullscreened] .lyrics-plus-integrated.fade-past-lines
     opacity: 1;
 }
 
-/* In fade-past-lines mode, hide background vocals in past lines - ONLY in fullscreen */
-ytmusic-player-page[player-fullscreened] .lyrics-plus-integrated.fade-past-lines .lyrics-line.past .background-vocal-container {
-    opacity: 0;
-    pointer-events: none;
+/* In fade-past-lines mode, keep background vocals visible and let them fade with parent line - ONLY in fullscreen */
+ytmusic-player-page[player-fullscreened] .lyrics-plus-integrated.fade-past-lines .lyrics-line.active .background-vocal-container {
+    max-height: 10em;
+    opacity: 1;
 }
 
 /* Allow default gap animation to handle scale-down; no forced transform here */
