@@ -678,7 +678,11 @@ class LyricsPlusRenderer {
           } else {
             if (shouldEmphasize) {
               wordSpan.classList.add('growable');
+<<<<<<< HEAD
               const syllableText = this._getDataText(s).trimEnd();
+=======
+              const syllableText = this._getDataText(s);
+>>>>>>> 17eac0ce00dffda4820a6974af9a1a91a3e4d913
               const totalSyllableWidth = this._getTextWidth(syllableText, referenceFont);
               let cumulativeCharWidth = 0;
               let charIndex = 0;
