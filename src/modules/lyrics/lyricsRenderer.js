@@ -611,7 +611,7 @@ class LyricsPlusRenderer {
         let referenceFont = mainContainer.firstChild ? getComputedFont(mainContainer.firstChild) : '400 16px sans-serif';
         const combinedText = wordBuffer.map(s => s.text).join('');
         const totalDuration = currentWordEndTime - currentWordStartTime;
-        const shouldEmphasize = !lightweight && !this._isRTL(combinedText) && !this._isCJK(combinedText) && combinedText.trim().length <= 15 && totalDuration >= 800;
+        const shouldEmphasize = !lightweight && !this._isRTL(combinedText) && !this._isCJK(combinedText) && combinedText.trim().length <= 7 && totalDuration >= 1000;
 
         let maxScale = 1.05; // Subtle but noticeable scale
 
@@ -700,8 +700,8 @@ class LyricsPlusRenderer {
           wordSpan.classList.add('growable');
           wordSpan._cachedChars = characterData.map(cd => cd.charSpan);
 
-          const minDuration = 800;
-          const maxDuration = 3000;
+          const minDuration = 1000;
+          const maxDuration = 2000;
           const easingPower = 3.0;
 
           const progress = Math.min(1, Math.max(0, (totalDuration - minDuration) / (maxDuration - minDuration)));
@@ -712,7 +712,7 @@ class LyricsPlusRenderer {
 
           maxScale = 1.0 + (0.05 + easedProgress * 0.1) * lengthFactor;
 
-          const shadowIntensity = 0.4 + easedProgress * 0.4;
+          const shadowIntensity = 0.5 + easedProgress * 0.5;
           const normalizedGrowth = (maxScale - 1.0) / 0.13;
           const translateYPeak = -normalizedGrowth * 2.5;
 
@@ -917,6 +917,7 @@ class LyricsPlusRenderer {
    */
   updateDisplayMode(lyrics, displayMode, currentSettings) {
     this.currentDisplayMode = displayMode;
+    this._currentSettings = currentSettings;
     const container = this._getContainer();
     if (!container) return;
 
@@ -943,6 +944,9 @@ class LyricsPlusRenderer {
     
     container.classList.toggle('hide-offscreen', !!currentSettings.hideOffscreen);
     container.classList.toggle('compability-wipe', !!currentSettings.compabilityWipe);
+    
+    this._setupPlayerStateObserver?.(currentSettings);
+    this._syncFadePastLinesState?.();
     
     // Font size if available
     if (currentSettings.fontSize) {
@@ -1275,12 +1279,16 @@ class LyricsPlusRenderer {
     const container = this._getContainer();
     if (!container) return;
 
+    this._currentSettings = currentSettings;
+
     // Apply visual settings that are independent of display mode
     container.classList.toggle('use-song-palette-fullscreen', !!currentSettings.useSongPaletteFullscreen);
     container.classList.toggle('use-song-palette-all-modes', !!currentSettings.useSongPaletteAllModes);
     const isVideoFullscreen = this._isVideoFullscreen?.() ?? this.__detectVideoFullscreen();
     container.classList.toggle('fade-past-lines', !!currentSettings.fadePastLines && !isVideoFullscreen);
     this._setupPlayerStateObserver?.(currentSettings);
+    
+    this._syncFadePastLinesState?.();
 
     if (currentSettings.overridePaletteColor) {
       container.classList.add('override-palette-color');
@@ -1373,7 +1381,7 @@ class LyricsPlusRenderer {
 
     this._playerStateObserver = new MutationObserver(() => {
       const isVideoFullscreen = this._isVideoFullscreen();
-      const shouldEnableFade = !!currentSettings?.fadePastLines && !isVideoFullscreen;
+      const shouldEnableFade = !!this._currentSettings?.fadePastLines && !isVideoFullscreen;
       container.classList.toggle('fade-past-lines', shouldEnableFade);
 
       // Handle not-found auto-hide behavior on fullscreen transitions
@@ -1403,6 +1411,15 @@ class LyricsPlusRenderer {
       }
     });
     this._playerStateObserver.observe(page, { attributes: true });
+  }
+
+  _syncFadePastLinesState() {
+    const container = this._getContainer();
+    if (!container) return;
+    
+    const isVideoFullscreen = this._isVideoFullscreen?.() ?? this.__detectVideoFullscreen();
+    const shouldEnableFade = !!this._currentSettings?.fadePastLines && !isVideoFullscreen;
+    container.classList.toggle('fade-past-lines', shouldEnableFade);
   }
 
   /**

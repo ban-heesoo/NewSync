@@ -229,8 +229,8 @@ ytmusic-player-page[player-fullscreened] .lyrics-plus-integrated.fade-past-lines
     opacity: 1;
 }
 
-/* In fade-past-lines mode, keep background vocals visible and let them fade with parent line - ONLY in fullscreen */
-ytmusic-player-page[player-fullscreened] .lyrics-plus-integrated.fade-past-lines .lyrics-line.active .background-vocal-container {
+/* In fade-past-lines mode, keep background vocals expanded for past lines so they fade with the main line - ONLY in fullscreen */
+ytmusic-player-page[player-fullscreened] .lyrics-plus-integrated.fade-past-lines .lyrics-line.past .background-vocal-container {
     max-height: 10em;
     opacity: 1;
 }
@@ -395,7 +395,7 @@ ytmusic-player-page:not([player-fullscreened]) .lyrics-plus-integrated.blur-inac
 
 .lyrics-line.active:not(.lyrics-gap) .lyrics-syllable.highlight,
 .lyrics-word.growable:has(.lyrics-syllable.highlight) .lyrics-syllable {
-    transform: translateY(-1.5%) translateZ(1px); /* Reduced from -4% to -1.5% - less dramatic movement */
+    transform: translateY(-3.5%) translateZ(1px);
 }
 
 .lyrics-line.active:not(.lyrics-gap) .lyrics-syllable.highlight.finished {
