@@ -24,6 +24,7 @@ class LyricsPlusRenderer {
     this.textWidthCanvas = null;
     this.visibilityObserver = null;
     this.resizeObserver = null;
+    this._visibilityChangeHandler = null;
     this._cachedContainerRect = null; // New: Cache for container and parent dimensions
     this._debouncedResizeHandler = this._debounce(this._handleContainerResize, 1); // Initialize debounced handler
 
@@ -1577,7 +1578,21 @@ class LyricsPlusRenderer {
     }
     this.lastTime = videoElement.currentTime * 1000;
 
+    if (this._visibilityChangeHandler) {
+      document.removeEventListener('visibilitychange', this._visibilityChangeHandler);
+    }
+    this._visibilityChangeHandler = () => {
+      if (!document.hidden) {
+        this.lastTime = videoElement.currentTime * 1000;
+      }
+    };
+    document.addEventListener('visibilitychange', this._visibilityChangeHandler);
+
     const sync = () => {
+      if (document.hidden) {
+        this.lyricsAnimationFrameId = requestAnimationFrame(sync);
+        return;
+      }
       const currentTime = videoElement.currentTime * 1000;
       const isForceScroll = Math.abs(currentTime - this.lastTime) > 1000;
       this._updateLyricsHighlight(currentTime, isForceScroll, currentSettings);
@@ -1591,6 +1606,10 @@ class LyricsPlusRenderer {
     return () => {
       if (this.visibilityObserver) this.visibilityObserver.disconnect();
       if (this.resizeObserver) this.resizeObserver.disconnect();
+      if (this._visibilityChangeHandler) {
+        document.removeEventListener('visibilitychange', this._visibilityChangeHandler);
+        this._visibilityChangeHandler = null;
+      }
       if (this.lyricsAnimationFrameId) {
         cancelAnimationFrame(this.lyricsAnimationFrameId);
         this.lyricsAnimationFrameId = null;
