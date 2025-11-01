@@ -77,8 +77,11 @@ NewSync is a feature-rich browser extension that brings synchronized lyrics to Y
 For the safest and easiest experience, install NewSync directly from your browser's web store. This ensures you get automatic updates and a verified version of the extension.
 
 <p float="left">
+Microsoft Edge (Recommended):<br>
+<a href="https://microsoftedge.microsoft.com/addons/detail/newsync/abdllbamaomfdbfiipnpljdiljojmnoe" target="_blank"><img src="https://hivicode.github.io/newsync/edge.svg" alt="Microsoft Edge Add-ons" height="60"/></a><br>
+Firefox (a bit lag):<br>
 <a href="https://addons.mozilla.org/en-US/firefox/addon/newsync/" target="_blank"><img src="https://hivicode.github.io/newsync/firefox.svg" alt="Firefox Add-ons" height="60"/></a>
-<a href="https://microsoftedge.microsoft.com/addons/detail/newsync/abdllbamaomfdbfiipnpljdiljojmnoe" target="_blank"><img src="https://hivicode.github.io/newsync/edge.svg" alt="Microsoft Edge Add-ons" height="60"/></a>
+</p>
 
 ## Updating
 
