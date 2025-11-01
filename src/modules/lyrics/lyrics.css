@@ -220,6 +220,11 @@ ytmusic-player-page[player-fullscreened] .lyrics-plus-integrated.fade-past-lines
     will-change: opacity;
 }
 
+/* Ensure clickable lyrics lines in fullscreen */
+ytmusic-player-page[player-fullscreened] .lyrics-plus-integrated .lyrics-line:not(.past) {
+    pointer-events: auto;
+}
+
 /* In fade-past-lines mode, ensure translation fades uniformly with main lyrics (no extra dimming) - ONLY in fullscreen */
 ytmusic-player-page[player-fullscreened] .lyrics-plus-integrated.fade-past-lines .lyrics-translation-container {
     opacity: 1; /* avoid stacking 0.8 with parent line opacity */

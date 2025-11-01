@@ -50,6 +50,18 @@ class LyricsPlusRenderer {
     // --- Initial Setup ---
     // This call ensures the container is found or created and listeners are attached.
     this._getContainer();
+    
+    // Cleanup function for lyrics sync
+    this._syncCleanup = null;
+    
+    // Flag to skip scroll updates during fullscreen transitions
+    this._isFullscreenTransitioning = false;
+    this._fullscreenTransitionTimer = null;
+    
+    // Throttle scroll updates to reduce lag
+    this._lastScrollUpdateTime = 0;
+    this._scrollUpdateThrottle = 50; // Update scroll max once every 50ms (~20fps instead of 60fps)
+    this._lastScrollLineId = null;
   }
 
   /**
@@ -956,18 +968,12 @@ class LyricsPlusRenderer {
     
     // Dynamic background settings - apply immediately (but don't refresh lyrics)
     if (currentSettings.dynamicPlayerPage !== undefined || currentSettings.dynamicPlayerFullscreen !== undefined) {
-        console.log('NewSync: Applying dynamic background settings...', {
-            dynamicPlayerPage: currentSettings.dynamicPlayerPage,
-            dynamicPlayerFullscreen: currentSettings.dynamicPlayerFullscreen,
-            functionAvailable: typeof window.applyDynamicPlayerClass === 'function'
-        });
         
         // Trigger dynamic background update by calling the function from settings.js
         // This only affects the visual background, not the lyrics content
         if (typeof window.applyDynamicPlayerClass === 'function') {
             window.applyDynamicPlayerClass();
         } else {
-            console.warn('NewSync: applyDynamicPlayerClass function not available');
         }
     }
     
@@ -1107,7 +1113,6 @@ class LyricsPlusRenderer {
     // Add song information display in fullscreen mode
     const playerPageForSongInfo = document.querySelector('ytmusic-player-page');
     const isFullscreen = playerPageForSongInfo && playerPageForSongInfo.hasAttribute('player-fullscreened');
-    console.log('LYPLUS: Fullscreen check - playerPage:', !!playerPageForSongInfo, 'isFullscreen:', isFullscreen, 'hasSongInfo:', !!this.lastKnownSongInfo);
     if (isFullscreen && this.lastKnownSongInfo) {
       this._addSongInfoDisplay(container);
     }
@@ -1331,7 +1336,6 @@ class LyricsPlusRenderer {
     // Add song information display in fullscreen mode
     const playerPageForDisplay = document.querySelector('ytmusic-player-page');
     const isFullscreen = playerPageForDisplay && playerPageForDisplay.hasAttribute('player-fullscreened');
-    console.log('LYPLUS: DisplayLyrics fullscreen check - playerPage:', !!playerPageForDisplay, 'isFullscreen:', isFullscreen, 'hasSongInfo:', !!songInfo);
     if (isFullscreen && songInfo) {
       this._addSongInfoDisplay(container);
     }
@@ -1567,6 +1571,12 @@ class LyricsPlusRenderer {
    * @returns {Function} - A cleanup function to stop the sync.
    */
   _startLyricsSync(currentSettings = {}) {
+    // Cleanup previous sync if exists
+    if (this._syncCleanup) {
+      this._syncCleanup();
+      this._syncCleanup = null;
+    }
+
     const videoElement = document.querySelector('video');
     if (!videoElement) return () => { };
     this._ensureElementIds();
@@ -1575,6 +1585,7 @@ class LyricsPlusRenderer {
 
     if (this.lyricsAnimationFrameId) {
       cancelAnimationFrame(this.lyricsAnimationFrameId);
+      this.lyricsAnimationFrameId = null;
     }
     this.lastTime = videoElement.currentTime * 1000;
 
@@ -1603,9 +1614,16 @@ class LyricsPlusRenderer {
 
     this._setupResizeObserver();
 
-    return () => {
-      if (this.visibilityObserver) this.visibilityObserver.disconnect();
-      if (this.resizeObserver) this.resizeObserver.disconnect();
+    // Store cleanup function
+    this._syncCleanup = () => {
+      if (this.visibilityObserver) {
+        this.visibilityObserver.disconnect();
+        this.visibilityObserver = null;
+      }
+      if (this.resizeObserver) {
+        this.resizeObserver.disconnect();
+        this.resizeObserver = null;
+      }
       if (this._visibilityChangeHandler) {
         document.removeEventListener('visibilitychange', this._visibilityChangeHandler);
         this._visibilityChangeHandler = null;
@@ -1615,6 +1633,8 @@ class LyricsPlusRenderer {
         this.lyricsAnimationFrameId = null;
       }
     };
+
+    return this._syncCleanup;
   }
 
   /**
@@ -1704,12 +1724,32 @@ class LyricsPlusRenderer {
     }
 
     // --- 3. DOM & STATE UPDATES (Optimized) ---
-    // Trigger scroll if needed
+    // Trigger scroll if needed - skip if we're in the middle of a fullscreen transition
     if (lineToScroll && (lineToScroll !== this.currentPrimaryActiveLine || isForceScroll)) {
       if (!this.isUserControllingScroll || isForceScroll) {
-        this._updatePositionClassesAndScroll(lineToScroll, isForceScroll);
-        this.lastPrimaryActiveLine = this.currentPrimaryActiveLine;
-        this.currentPrimaryActiveLine = lineToScroll;
+        // During fullscreen transition, only update if forced (to prevent lag)
+        if (this._isFullscreenTransitioning && !isForceScroll) {
+          // Skip updates during transition, but keep track of the line to scroll
+          this.currentPrimaryActiveLine = lineToScroll;
+          return;
+        }
+        
+        // Throttle scroll updates to reduce lag in player page
+        // Use longer throttle during transition recovery period
+        const now = Date.now();
+        const timeSinceLastUpdate = now - this._lastScrollUpdateTime;
+        const throttleDelay = this._isFullscreenTransitioning ? 100 : this._scrollUpdateThrottle;
+        const shouldUpdate = isForceScroll || 
+                             timeSinceLastUpdate >= throttleDelay ||
+                             this._lastScrollLineId !== lineToScroll.id;
+        
+        if (shouldUpdate) {
+          this._updatePositionClassesAndScroll(lineToScroll, isForceScroll);
+          this.lastPrimaryActiveLine = this.currentPrimaryActiveLine;
+          this.currentPrimaryActiveLine = lineToScroll;
+          this._lastScrollUpdateTime = now;
+          this._lastScrollLineId = lineToScroll.id;
+        }
       }
     }
 
@@ -2131,18 +2171,34 @@ class LyricsPlusRenderer {
     const scrollContainer = this.lyricsContainer.parentElement;
     if (!scrollContainer) return;
 
+    // Skip during fullscreen transition to reduce lag
+    if (this._isFullscreenTransitioning && !forceScroll) {
+      return;
+    }
+
     const paddingTop = this._getScrollPaddingTop();
     const targetTranslateY = paddingTop - activeLine.offsetTop;
 
     // Use cached values if available, otherwise get them
-    const containerTop = this._cachedContainerRect ? this._cachedContainerRect.containerTop : this.lyricsContainer.getBoundingClientRect().top;
-    const scrollContainerTop = this._cachedContainerRect ? this._cachedContainerRect.scrollContainerTop : scrollContainer.getBoundingClientRect().top;
+    // Always recalculate during transition to avoid stale cache
+    if (this._isFullscreenTransitioning || !this._cachedContainerRect || forceScroll) {
+      const containerRect = this.lyricsContainer.getBoundingClientRect();
+      const scrollRect = scrollContainer.getBoundingClientRect();
+      this._cachedContainerRect = {
+        containerTop: containerRect.top,
+        scrollContainerTop: scrollRect.top
+      };
+    }
+    
+    const containerTop = this._cachedContainerRect.containerTop;
+    const scrollContainerTop = this._cachedContainerRect.scrollContainerTop;
+    const activeLineTop = activeLine.getBoundingClientRect().top;
 
-    if (!forceScroll && Math.abs((activeLine.getBoundingClientRect().top - scrollContainerTop) - paddingTop) < 5) {
+    // Skip if already close to target (with larger threshold during transition)
+    const threshold = this._isFullscreenTransitioning ? 20 : 5;
+    if (!forceScroll && Math.abs((activeLineTop - scrollContainerTop) - paddingTop) < threshold) {
       return;
     }
-    // Clear the cache after using it, so it's re-calculated on next resize or forced scroll
-    this._cachedContainerRect = null;
 
     this.lyricsContainer.classList.remove('not-focused', 'user-scrolling');
     this.isProgrammaticScrolling = true;
@@ -2458,38 +2514,12 @@ class LyricsPlusRenderer {
       const titleElement = document.querySelector('.title.style-scope.ytmusic-player-bar');
       const byline = document.querySelector('.byline.style-scope.ytmusic-player-bar');
       
-      // Debug: Check all possible title elements
-      const allTitleElements = document.querySelectorAll('[class*="title"]');
-      console.log('LYPLUS: All title elements found:', Array.from(allTitleElements).map(el => ({
-        className: el.className,
-        textContent: el.textContent,
-        tagName: el.tagName
-      })));
-      
-      // Debug: Check if there are other title selectors
-      const ytFormattedTitle = document.querySelector('yt-formatted-string.title');
-      console.log('LYPLUS: yt-formatted-string.title found:', {
-        exists: !!ytFormattedTitle,
-        textContent: ytFormattedTitle?.textContent
-      });
-      
-      console.log('LYPLUS: DOM elements found:', { 
-        titleElement: !!titleElement, 
-        byline: !!byline,
-        titleText: titleElement?.textContent,
-        bylineText: byline?.textContent,
-        titleElementHTML: titleElement?.outerHTML,
-        bylineHTML: byline?.outerHTML
-      });
-      
       if (!titleElement || !byline) {
-        console.log('LYPLUS: Title or byline not found in DOM');
         return null;
       }
       
       const title = titleElement.textContent.trim();
       if (!title) {
-        console.log('LYPLUS: Title is empty');
         return null;
       }
       
@@ -2501,35 +2531,28 @@ class LyricsPlusRenderer {
       
       // Try to find links in byline - first try the complex-string byline which has actual links
       let links = byline.querySelectorAll('a');
-      console.log('LYPLUS: Found links in byline:', links.length);
       
       // If no links found in byline, try the byline-wrapper as fallback
       if (links.length === 0) {
         const bylineWrapper = document.querySelector('.byline-wrapper');
         if (bylineWrapper) {
           links = bylineWrapper.querySelectorAll('a');
-          console.log('LYPLUS: Found links in byline-wrapper:', links.length);
         }
       }
-      
-      console.log('LYPLUS: Total links found:', links.length);
       
       for (const link of links) {
         const href = link.getAttribute('href');
         const text = link.textContent?.trim();
-        console.log('LYPLUS: Link found:', { href, text });
         
         if (href) {
           if (href.startsWith('channel/')) {
             // These are artist links
             artists.push(text);
             artistUrls.push(href);
-            console.log('LYPLUS: Artist link:', href);
           } else if (href.startsWith('browse/')) {
             // This one is the album
             album = text;
             albumUrl = href;
-            console.log('LYPLUS: Album link:', href);
           }
         }
       }
@@ -2547,21 +2570,17 @@ class LyricsPlusRenderer {
       // If no links found, try to extract artist from byline text directly
       if (!artist && byline.textContent) {
         const bylineText = byline.textContent.trim();
-        console.log('LYPLUS: No links found, trying to extract from byline text:', bylineText);
         
         // Split by common separators and take the first part as artist
         const parts = bylineText.split(/[•·–—]/);
         if (parts.length > 0) {
           artist = parts[0].trim();
-          console.log('LYPLUS: Extracted artist from byline text:', artist);
         }
       }
       
       // Check if this is a video (no album info)
       // But don't treat it as video if we have artist info
       const isVideo = album === '' && artist === '';
-      
-      console.log('LYPLUS: Extracted song info from DOM:', { title, artist, album, isVideo, artistUrl: artistUrls[0], albumUrl });
       
       return {
         title: title,
@@ -2573,15 +2592,11 @@ class LyricsPlusRenderer {
         albumUrl: albumUrl || null
       };
     } catch (error) {
-      console.error('LYPLUS: Error extracting song info from DOM:', error);
-      
       // Fallback: try to use the existing songTracker functions if available
       try {
         if (typeof LYPLUS_getDOMSongInfo === 'function') {
-          console.log('LYPLUS: Trying fallback with LYPLUS_getDOMSongInfo');
           const fallbackInfo = LYPLUS_getDOMSongInfo();
           if (fallbackInfo) {
-            console.log('LYPLUS: Fallback successful:', fallbackInfo);
             
             // Try to get URLs from byline
             const byline = document.querySelector('.byline.style-scope.ytmusic-player-bar');
@@ -2614,7 +2629,7 @@ class LyricsPlusRenderer {
           }
         }
       } catch (fallbackError) {
-        console.error('LYPLUS: Fallback also failed:', fallbackError);
+        // Fallback failed, return null
       }
       
       return null;
@@ -2626,28 +2641,17 @@ class LyricsPlusRenderer {
    * @private
    */
   _addSongInfoFromDOM() {
-    console.log('LYPLUS: ===== _addSongInfoFromDOM CALLED =====');
-    console.log('LYPLUS: Adding song info from DOM scraping');
-    
     // Check if we're in YouTube Music fullscreen mode
     const playerPage = document.querySelector('ytmusic-player-page');
     const isFullscreen = playerPage && playerPage.hasAttribute('player-fullscreened');
     const isVideoMode = playerPage && playerPage.hasAttribute('video-mode');
     
-    console.log('LYPLUS: Fullscreen check:', { 
-      playerPage: !!playerPage, 
-      isFullscreen, 
-      isVideoMode 
-    });
-    
     if (!isFullscreen) {
-      console.log('LYPLUS: Not in fullscreen mode, skipping song info from DOM');
       return;
     }
     
     // Skip in video fullscreen mode
     if (isVideoMode) {
-      console.log('LYPLUS: Video mode detected, skipping song info from DOM');
       return;
     }
     
@@ -2660,16 +2664,12 @@ class LyricsPlusRenderer {
     // Get song info from DOM
     const songInfo = this._getSongInfoFromDOM();
     if (!songInfo) {
-      console.log('LYPLUS: No song info available from DOM');
       return;
     }
     
     if (songInfo.isVideo) {
-      console.log('LYPLUS: Song is video content (no artist/album info), skipping song info from DOM');
       return;
     }
-    
-    console.log('LYPLUS: Creating song info display with:', songInfo);
     
     // Create song info container positioned directly below album art
     const songInfoContainer = document.createElement('div');
@@ -2685,7 +2685,6 @@ class LyricsPlusRenderer {
     const artistElement = document.createElement('p');
     artistElement.id = 'lyrics-song-artist';
     
-    console.log('LYPLUS: Song info URLs:', { artistUrl: songInfo.artistUrl, albumUrl: songInfo.albumUrl });
     
     // Create clickable artist and album elements
     if (songInfo.artistUrl && songInfo.artist) {
@@ -2697,7 +2696,6 @@ class LyricsPlusRenderer {
       artistLink.style.cursor = 'pointer';
       artistLink.style.textDecoration = 'none';
       artistLink.style.color = 'inherit';
-      console.log('LYPLUS: Created artist link:', songInfo.artistUrl);
       
       // Add proper click handler to open in new tab
       artistLink.addEventListener('click', (e) => {
@@ -2726,7 +2724,6 @@ class LyricsPlusRenderer {
         albumLink.style.cursor = 'pointer';
         albumLink.style.textDecoration = 'none';
         albumLink.style.color = 'inherit';
-        console.log('LYPLUS: Created album link:', songInfo.albumUrl);
         
         // Add proper click handler to open in new tab
         albumLink.addEventListener('click', (e) => {
@@ -2746,13 +2743,9 @@ class LyricsPlusRenderer {
     
     // Add to body first
     document.body.appendChild(songInfoContainer);
-    console.log('LYPLUS: Song info container added to body');
-    
     // Position relative to album artwork and keep it synced
     this._positionSongInfoRelativeToArtwork(songInfoContainer);
     this._setupArtworkObservers(songInfoContainer);
-    console.log('LYPLUS: ===== SONG INFO SUCCESSFULLY ADDED TO DOM =====');
-    console.log('LYPLUS: Song info from DOM added and positioned relative to artwork');
   }
 
   /**
@@ -2760,20 +2753,16 @@ class LyricsPlusRenderer {
    * @private
    */
   _addSongInfoDisplay(container) {
-    console.log('LYPLUS: Adding song info display, songInfo:', this.lastKnownSongInfo);
-    
     // Check if we're actually in YouTube Music fullscreen mode
     const playerPage = document.querySelector('ytmusic-player-page');
     const isFullscreen = playerPage && playerPage.hasAttribute('player-fullscreened');
     const isVideoMode = playerPage && playerPage.hasAttribute('video-mode');
     
     if (!isFullscreen) {
-      console.log('LYPLUS: Not in fullscreen mode, skipping song info');
       return;
     }
     // Skip in video fullscreen mode
     if (isVideoMode) {
-      console.log('LYPLUS: Video mode detected, skipping song info');
       return;
     }
     
@@ -2785,12 +2774,10 @@ class LyricsPlusRenderer {
 
     let songInfo = this.lastKnownSongInfo;
     if (!songInfo) {
-      console.log('LYPLUS: No song info available');
       return;
     }
     if (songInfo.isVideo) {
       // Do not show song info overlay for video contents (only if no artist info)
-      console.log('LYPLUS: Song is video content (no artist/album info), skipping song info');
       return;
     }
 
@@ -2803,7 +2790,6 @@ class LyricsPlusRenderer {
       if (domInfo && domInfo.albumUrl) {
         songInfo.albumUrl = domInfo.albumUrl;
       }
-      console.log('LYPLUS: Updated songInfo with URLs from DOM:', { artistUrl: songInfo.artistUrl, albumUrl: songInfo.albumUrl });
     }
 
     // Create song info container positioned directly below album art
@@ -2823,7 +2809,6 @@ class LyricsPlusRenderer {
     const artistElement = document.createElement('p');
     artistElement.id = 'lyrics-song-artist';
     
-    console.log('LYPLUS: Song info URLs:', { artistUrl: songInfo.artistUrl, albumUrl: songInfo.albumUrl });
     
     // Create clickable artist and album elements
     if (songInfo.artistUrl && songInfo.artist) {
@@ -2835,7 +2820,6 @@ class LyricsPlusRenderer {
       artistLink.style.cursor = 'pointer';
       artistLink.style.textDecoration = 'none';
       artistLink.style.color = 'inherit';
-      console.log('LYPLUS: Created artist link:', songInfo.artistUrl);
       
       // Add proper click handler to open in new tab
       artistLink.addEventListener('click', (e) => {
@@ -2864,7 +2848,6 @@ class LyricsPlusRenderer {
         albumLink.style.cursor = 'pointer';
         albumLink.style.textDecoration = 'none';
         albumLink.style.color = 'inherit';
-        console.log('LYPLUS: Created album link:', songInfo.albumUrl);
         
         // Add proper click handler to open in new tab
         albumLink.addEventListener('click', (e) => {
@@ -2890,7 +2873,6 @@ class LyricsPlusRenderer {
     // Position relative to album artwork and keep it synced
     this._positionSongInfoRelativeToArtwork(songInfoContainer);
     this._setupArtworkObservers(songInfoContainer);
-    console.log('LYPLUS: Song info added and positioned relative to artwork');
   }
 
   _addSongInfoToContainer(container, songInfo) {
@@ -2922,7 +2904,6 @@ class LyricsPlusRenderer {
       artistLink.style.cursor = 'pointer';
       artistLink.style.textDecoration = 'none';
       artistLink.style.color = 'inherit';
-      console.log('LYPLUS: Created artist link:', songInfo.artistUrl);
       
       // Add proper click handler to open in new tab
       artistLink.addEventListener('click', (e) => {
@@ -2951,7 +2932,6 @@ class LyricsPlusRenderer {
         albumLink.style.cursor = 'pointer';
         albumLink.style.textDecoration = 'none';
         albumLink.style.color = 'inherit';
-        console.log('LYPLUS: Created album link:', songInfo.albumUrl);
         
         // Add proper click handler to open in new tab
         albumLink.addEventListener('click', (e) => {
@@ -2970,7 +2950,6 @@ class LyricsPlusRenderer {
     
     // Add to body to ensure it's visible
     document.body.appendChild(songInfoContainer);
-    console.log('LYPLUS: Song info added to body as fallback');
   }
 
   _setupFullscreenListener() {
@@ -2984,11 +2963,39 @@ class LyricsPlusRenderer {
         if (mutation.type === 'attributes' && mutation.attributeName === 'player-fullscreened') {
           const playerPage = mutation.target;
           const isFullscreen = playerPage.hasAttribute('player-fullscreened');
-          console.log('LYPLUS: Fullscreen changed:', isFullscreen);
+          
+          // Set flag to skip scroll updates during transition (reduces lag)
+          this._isFullscreenTransitioning = true;
+          if (this._fullscreenTransitionTimer) {
+            clearTimeout(this._fullscreenTransitionTimer);
+          }
+          
+          // Clear caches to prevent stale data after transition
+          this._cachedContainerRect = null;
+          this._lastScrollUpdateTime = 0;
+          this._lastScrollLineId = null;
+          
+          // Longer delay for exiting fullscreen (layout takes time to restructure)
+          const transitionDelay = isFullscreen ? 300 : 600; // Longer when exiting fullscreen
+          
+          this._fullscreenTransitionTimer = setTimeout(() => {
+            this._isFullscreenTransitioning = false;
+            this._fullscreenTransitionTimer = null;
+            
+            // Force a scroll update after transition to re-sync
+            // Use requestAnimationFrame to ensure DOM is ready
+            requestAnimationFrame(() => {
+              if (this.currentPrimaryActiveLine) {
+                // Clear cache before forcing scroll to ensure fresh calculations
+                this._cachedContainerRect = null;
+                this._lastScrollUpdateTime = 0;
+                this._scrollToActiveLine(this.currentPrimaryActiveLine, true);
+              }
+            });
+          }, transitionDelay);
           
           if (isFullscreen && !playerPage.hasAttribute('video-mode')) {
             // Add song info immediately when entering fullscreen (don't wait for lyrics)
-            console.log('LYPLUS: Fullscreen detected, adding song info immediately');
             this._addSongInfoFromDOM();
           } else {
             // Remove song info when exiting fullscreen
@@ -3060,12 +3067,10 @@ class LyricsPlusRenderer {
       songInfoContainer.style.transform = '';
       songInfoContainer.style.maxWidth = '';
       songInfoContainer.style.textAlign = '';
-      console.log('LYPLUS: Artwork not found, using CSS fallback positioning');
       return;
     }
     
     const rect = artworkEl.getBoundingClientRect();
-    console.log('LYPLUS: Artwork position:', { left: rect.left, bottom: rect.bottom, width: rect.width });
 
     // Place left-aligned under the artwork with better spacing
     const leftX = rect.left;
@@ -3079,7 +3084,6 @@ class LyricsPlusRenderer {
     songInfoContainer.style.textAlign = 'left';
     songInfoContainer.style.zIndex = '1000';
     
-    console.log('LYPLUS: Song info positioned at:', { left: leftX, top: topY });
   }
 
   /**
@@ -3088,7 +3092,6 @@ class LyricsPlusRenderer {
   _setupArtworkObservers(songInfoContainer) {
     // Reposition on resize/scroll to follow layout changes
     const reposition = () => {
-      console.log('LYPLUS: Repositioning song info due to layout change');
       this._positionSongInfoRelativeToArtwork(songInfoContainer);
     };
     this._artworkRepositionHandler = reposition;
@@ -3112,7 +3115,6 @@ class LyricsPlusRenderer {
     if (playerPage) {
       if (this._artworkMutationObserver) this._artworkMutationObserver.disconnect();
       this._artworkMutationObserver = new MutationObserver(() => {
-        console.log('LYPLUS: Player layout changed, repositioning song info');
         reposition();
       });
       this._artworkMutationObserver.observe(playerPage, { 
@@ -3162,7 +3164,6 @@ window.addEventListener('message', (event) => {
     }
 
     if (event.data.type === 'UPDATE_SETTINGS') {
-        console.log('NewSync: Received settings update in lyricsRenderer', event.data.settings);
 
         // Determine if only dynamic background settings changed
         try {
@@ -3198,41 +3199,30 @@ window.addEventListener('message', (event) => {
             __lastAppliedSettingsSnapshot = { ...current };
         } catch (e) {
             // If comparison fails, fall through to default behavior
-            console.warn('NewSync: Failed to diff settings; proceeding with default handling', e);
         }
         
         // Check if lyrics are currently displayed
         const lyricsContainer = document.querySelector('#lyrics-plus-container');
         if (!lyricsContainer || lyricsContainer.classList.contains('lyrics-plus-message')) {
-            console.log('NewSync: No lyrics currently displayed, skipping refresh');
             return; // No lyrics currently displayed
         }
         
         // Check if we have stored lyrics data
         if (typeof window.lastFetchedLyrics !== 'undefined' && window.lastFetchedLyrics) {
-            console.log('NewSync: Refreshing lyrics display with new settings...', {
-                wordByWord: event.data.settings.wordByWord,
-                lightweight: event.data.settings.lightweight,
-                largerTextMode: event.data.settings.largerTextMode,
-                blurInactive: event.data.settings.blurInactive,
-                fadePastLines: event.data.settings.fadePastLines,
-                hideOffscreen: event.data.settings.hideOffscreen,
-                compabilityWipe: event.data.settings.compabilityWipe,
-                dynamicPlayerPage: event.data.settings.dynamicPlayerPage,
-                dynamicPlayerFullscreen: event.data.settings.dynamicPlayerFullscreen
-            });
-            
-            // Get current display mode
-            const currentDisplayMode = window.currentDisplayMode || 'none';
-            
-            // Refresh the display with new settings
-            lyricsRendererInstance.updateDisplayMode(
-                window.lastFetchedLyrics, 
-                currentDisplayMode, 
-                event.data.settings
+            // Refresh lyrics display with new settings
+            LyricsPlusAPI.displayLyrics(
+                window.lastFetchedLyrics,
+                window.lastFetchedLyrics.metadata?.source || 'Unknown',
+                window.lastFetchedLyrics.type === "Line" ? "Line" : "Word",
+                event.data.settings.lightweight,
+                window.lastFetchedLyrics.metadata?.songWriters,
+                window.lastKnownSongInfo,
+                currentDisplayMode,
+                event.data.settings,
+                window.fetchAndDisplayLyrics,
+                window.setCurrentDisplayModeAndRender,
+                event.data.settings.largerTextMode
             );
-        } else {
-            console.log('NewSync: No stored lyrics data available for refresh');
         }
     }
 });
@@ -3474,7 +3464,6 @@ const observer = new MutationObserver((mutations) => {
       const isVideoMode = playerPage.hasAttribute('video-mode');
       
       if (isFullscreen && !isVideoMode) {
-        console.log('LYPLUS: Global observer detected fullscreen, adding song info immediately');
         // Use the renderer instance to add song info
         if (window.lyricsRendererInstance) {
           window.lyricsRendererInstance._addSongInfoFromDOM();
@@ -3533,34 +3522,18 @@ setupPlayerPageObserver();
 function setupImmediateSongInfoObserver() {
   const playerPage = document.querySelector('ytmusic-player-page');
   if (playerPage) {
-    console.log('LYPLUS: Setting up immediate song info observer on player page');
-    
     const immediateObserver = new MutationObserver((mutations) => {
-      console.log('LYPLUS: Mutation detected:', mutations.length, 'mutations');
       mutations.forEach((mutation) => {
-        console.log('LYPLUS: Mutation details:', {
-          type: mutation.type,
-          attributeName: mutation.attributeName,
-          target: mutation.target.tagName
-        });
-        
         if (mutation.type === 'attributes' && mutation.attributeName === 'player-fullscreened') {
           const isFullscreen = mutation.target.hasAttribute('player-fullscreened');
           const isVideoMode = mutation.target.hasAttribute('video-mode');
           
-          console.log('LYPLUS: Immediate observer detected fullscreen change:', { isFullscreen, isVideoMode });
-          
           if (isFullscreen && !isVideoMode) {
-            console.log('LYPLUS: FULLSCREEN DETECTED - Adding song info NOW!');
             // Add song info immediately - no waiting
             if (window.lyricsRendererInstance) {
-              console.log('LYPLUS: Calling _addSongInfoFromDOM immediately');
               window.lyricsRendererInstance._addSongInfoFromDOM();
-            } else {
-              console.error('LYPLUS: lyricsRendererInstance not available!');
             }
           } else if (!isFullscreen) {
-            console.log('LYPLUS: Exiting fullscreen - removing song info');
             // Remove song info immediately when exiting fullscreen
             const existingSongInfo = document.querySelector('.lyrics-song-info');
             if (existingSongInfo) {
@@ -3576,9 +3549,7 @@ function setupImmediateSongInfoObserver() {
       attributeFilter: ['player-fullscreened', 'video-mode']
     });
     
-    console.log('LYPLUS: Immediate song info observer setup complete');
   } else {
-    console.log('LYPLUS: Player page not found, retrying in 500ms');
     // Retry if player page not ready yet
     setTimeout(setupImmediateSongInfoObserver, 500);
   }
@@ -3593,7 +3564,6 @@ let fullscreenCheckInterval = null;
 function startFullscreenCheck() {
   if (fullscreenCheckInterval) return; // Already running
   
-  console.log('LYPLUS: Starting aggressive fullscreen check');
   fullscreenCheckInterval = setInterval(() => {
     const playerPage = document.querySelector('ytmusic-player-page');
     if (playerPage) {
@@ -3604,7 +3574,6 @@ function startFullscreenCheck() {
       if (isFullscreen && !isVideoMode) {
         const existingSongInfo = document.querySelector('.lyrics-song-info');
         if (!existingSongInfo && window.lyricsRendererInstance) {
-          console.log('LYPLUS: AGGRESSIVE CHECK - Fullscreen detected but no song info, adding now!');
           window.lyricsRendererInstance._addSongInfoFromDOM();
         }
       }
