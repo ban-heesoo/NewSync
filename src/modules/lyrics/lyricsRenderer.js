@@ -1521,8 +1521,6 @@ class LyricsPlusRenderer {
 
     this.updateDisplayMode(lyrics, displayMode, currentSettings);
 
-    this._setupFullscreenListener();
-
     // Control buttons are created once to avoid re-rendering them.
     this._createControlButtons();
     container.classList.toggle(
@@ -1567,9 +1565,8 @@ class LyricsPlusRenderer {
         this._notFoundCenterTimer = null;
       }, 2000);
       
-      setTimeout(() => {
-        this._addSongInfoFromDOM();
-      }, 100);
+      // Song info in fullscreen - NewSync specific feature
+      // Removed to prevent lag during fullscreen transitions
     }
   }
 
@@ -1604,9 +1601,8 @@ class LyricsPlusRenderer {
         this._notFoundCenterTimer = null;
       }, 2000);
       
-      setTimeout(() => {
-        this._addSongInfoFromDOM();
-      }, 100);
+      // Song info in fullscreen - NewSync specific feature
+      // Removed to prevent lag during fullscreen transitions
     }
   }
 
@@ -3176,13 +3172,8 @@ class LyricsPlusRenderer {
     window.addEventListener('resize', reposition, { passive: true });
     window.addEventListener('scroll', reposition, { passive: true });
     
-    let animationFrameId = null;
-    const smoothReposition = () => {
-      reposition();
-      animationFrameId = requestAnimationFrame(smoothReposition);
-    };
-    
-    animationFrameId = requestAnimationFrame(smoothReposition);
+    // Removed continuous requestAnimationFrame loop to prevent lag during fullscreen transitions
+    // Use event-driven repositioning instead
 
     const playerPage = document.querySelector('ytmusic-player-page');
     if (playerPage) {
@@ -3232,62 +3223,4 @@ class LyricsPlusRenderer {
     };
   }
 
-  _setupFullscreenListener() {
-    if (this.fullscreenListenerSetup) return;
-    this.fullscreenListenerSetup = true;
-    
-    const observer = new MutationObserver((mutations) => {
-      mutations.forEach((mutation) => {
-        if (mutation.type === 'attributes' && mutation.attributeName === 'player-fullscreened') {
-          const playerPage = mutation.target;
-          const isFullscreen = playerPage.hasAttribute('player-fullscreened');
-          
-          this._isFullscreenTransitioning = true;
-          if (this._fullscreenTransitionTimer) {
-            clearTimeout(this._fullscreenTransitionTimer);
-          }
-          
-          this._cachedContainerRect = null;
-          this._lastScrollUpdateTime = 0;
-          this._lastScrollLineId = null;
-          
-          const transitionDelay = isFullscreen ? 300 : 600;
-          
-          this._fullscreenTransitionTimer = setTimeout(() => {
-            this._isFullscreenTransitioning = false;
-            this._fullscreenTransitionTimer = null;
-            
-            requestAnimationFrame(() => {
-              if (this.currentPrimaryActiveLine) {
-                this._cachedContainerRect = null;
-                this._lastScrollUpdateTime = 0;
-                this._scrollToActiveLine(this.currentPrimaryActiveLine, true);
-              }
-            });
-          }, transitionDelay);
-          
-          if (isFullscreen && !playerPage.hasAttribute('video-mode')) {
-            this._addSongInfoFromDOM();
-          } else {
-            const existingSongInfo = document.querySelector('.lyrics-song-info');
-            if (existingSongInfo) {
-              existingSongInfo.remove();
-            }
-            if (this._cleanupArtworkObservers) {
-              this._cleanupArtworkObservers();
-              this._cleanupArtworkObservers = null;
-            }
-          }
-        }
-      });
-    });
-    
-    const playerPage = document.querySelector('ytmusic-player-page');
-    if (playerPage) {
-      observer.observe(playerPage, {
-        attributes: true,
-        attributeFilter: ['player-fullscreened']
-      });
-    }
-  }
 }

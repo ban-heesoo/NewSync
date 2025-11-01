@@ -575,17 +575,47 @@ async function deleteTranslationFromDB(key) {
 }
 
 async function clearCacheDB() {
-    const db = await openDB();
-    const transaction = db.transaction([LYRICS_OBJECT_STORE], "readwrite");
-    const store = transaction.objectStore(LYRICS_OBJECT_STORE);
-    store.clear();
+    try {
+        const db = await openDB();
+        if (!db.objectStoreNames.contains(LYRICS_OBJECT_STORE)) {
+            // Object store doesn't exist, nothing to clear
+            return;
+        }
+        return new Promise((resolve, reject) => {
+            const transaction = db.transaction([LYRICS_OBJECT_STORE], "readwrite");
+            const store = transaction.objectStore(LYRICS_OBJECT_STORE);
+            const request = store.clear();
+            request.onsuccess = () => resolve();
+            request.onerror = () => reject(request.error);
+            transaction.onerror = () => reject(transaction.error);
+        });
+    } catch (error) {
+        // If database doesn't exist or can't be opened, that's fine - nothing to clear
+        console.warn("Could not clear cache DB:", error);
+        return;
+    }
 }
 
 async function clearTranslationsDB() {
-    const db = await openTranslationsDB();
-    const transaction = db.transaction([TRANSLATIONS_OBJECT_STORE], "readwrite");
-    const store = transaction.objectStore(TRANSLATIONS_OBJECT_STORE);
-    store.clear();
+    try {
+        const db = await openTranslationsDB();
+        if (!db.objectStoreNames.contains(TRANSLATIONS_OBJECT_STORE)) {
+            // Object store doesn't exist, nothing to clear
+            return;
+        }
+        return new Promise((resolve, reject) => {
+            const transaction = db.transaction([TRANSLATIONS_OBJECT_STORE], "readwrite");
+            const store = transaction.objectStore(TRANSLATIONS_OBJECT_STORE);
+            const request = store.clear();
+            request.onsuccess = () => resolve();
+            request.onerror = () => reject(request.error);
+            transaction.onerror = () => reject(transaction.error);
+        });
+    } catch (error) {
+        // If database doesn't exist or can't be opened, that's fine - nothing to clear
+        console.warn("Could not clear translations DB:", error);
+        return;
+    }
 }
 
 async function estimateDBSizeInKB(dbName, storeName) {

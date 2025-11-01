@@ -188,6 +188,8 @@
   maintainObservers();
   setInterval(maintainObservers, 1000);
 
+  let tabChangeObserver = null;
+
   function autoRedirectToLyricsInFullscreen() {
     const playerPage = document.querySelector('ytmusic-player-page');
     if (!playerPage) {
@@ -221,18 +223,13 @@
     if (tabIndex !== lyricsTabIndex && lyricsTabIndex !== -1) {
       const lyricsTab = allTabs[lyricsTabIndex];
       lyricsTab.click();
-      lyricsTab.dispatchEvent(new MouseEvent('click', {
-        bubbles: true,
-        cancelable: true,
-        view: window
-      }));
     }
   }
 
   function setupFullscreenObserver() {
     const playerPage = document.querySelector('ytmusic-player-page');
     if (!playerPage) {
-      setTimeout(setupFullscreenObserver, 0);
+      setTimeout(setupFullscreenObserver, 100);
       return;
     }
 
@@ -241,9 +238,15 @@
         if (mutation.type === 'attributes' && mutation.attributeName === 'player-fullscreened') {
           const isFullscreen = mutation.target.hasAttribute('player-fullscreened');
           if (isFullscreen) {
-            setTimeout(() => {
+            requestAnimationFrame(() => {
               autoRedirectToLyricsInFullscreen();
-            }, 0);
+              setupTabChangeObserver();
+            });
+          } else {
+            if (tabChangeObserver) {
+              tabChangeObserver.disconnect();
+              tabChangeObserver = null;
+            }
           }
         }
       });
@@ -255,19 +258,31 @@
     });
   }
 
-  setupFullscreenObserver();
-
-  setInterval(() => {
-    const playerPage = document.querySelector('ytmusic-player-page');
-    if (playerPage && playerPage.hasAttribute('player-fullscreened')) {
-      const activeTab = document.querySelector('tp-yt-paper-tab.tab-header.style-scope.ytmusic-player-page.iron-selected');
-      if (activeTab) {
-        const tabText = activeTab.textContent.trim().toLowerCase();
-        if (!tabText.includes('lyrics') && !tabText.includes('lirik')) {
-          autoRedirectToLyricsInFullscreen();
-        }
-      }
+  function setupTabChangeObserver() {
+    if (tabChangeObserver) {
+      tabChangeObserver.disconnect();
     }
-  }, 0);
+
+    const tabs = document.querySelectorAll('tp-yt-paper-tab.tab-header.style-scope.ytmusic-player-page');
+    if (tabs.length === 0) return;
+
+    tabChangeObserver = new MutationObserver((mutations) => {
+      const playerPage = document.querySelector('ytmusic-player-page');
+      if (playerPage && playerPage.hasAttribute('player-fullscreened')) {
+        requestAnimationFrame(() => {
+          autoRedirectToLyricsInFullscreen();
+        });
+      }
+    });
+
+    tabs.forEach((tab) => {
+      tabChangeObserver.observe(tab, {
+        attributes: true,
+        attributeFilter: ['aria-selected', 'class']
+      });
+    });
+  }
+
+  setupFullscreenObserver();
 
 })();
