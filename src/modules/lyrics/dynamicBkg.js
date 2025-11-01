@@ -416,8 +416,7 @@ function handleResize() {
 function createCellStateTexture() {
     const texture = gl.createTexture();
     gl.bindTexture(gl.TEXTURE_2D, texture);
-    // NPOT textures (e.g., 8x5) must use CLAMP_TO_EDGE on both axes in WebGL1
-    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE);
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.REPEAT);
     gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
     gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.NEAREST);
     gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.NEAREST);
@@ -631,12 +630,8 @@ function animateWebGLBackground() {
     }
 
     const now = performance.now();
-    let deltaTime = (now - lastFrameTime) / 1000.0;
+    const deltaTime = (now - lastFrameTime) / 1000.0;
     lastFrameTime = now;
-    // Cap deltaTime to prevent inconsistent speeds due to browser lag
-    const TARGET_FPS = 60;
-    const MAX_DELTA_TIME = 1.0 / TARGET_FPS;
-    deltaTime = Math.min(deltaTime, MAX_DELTA_TIME * 2);
 
     // Update scroll offset
     scrollOffset += SCROLL_SPEED * deltaTime;

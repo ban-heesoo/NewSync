@@ -1,18 +1,17 @@
-/* Better Lyrics Inspired Theme for NewSync */
-
 html {
 	width: 400px;
 	min-width: 400px;
 	max-width: 400px;
-	overflow: auto;
+	max-height: 600px;
+	overflow: hidden;
 }
 
 nav {
 	display: flex;
 	align-items: center;
 	justify-content: space-between;
-	margin-top: 0.75rem;
-	margin-bottom: 1.5rem;
+	margin-top: 0.5rem;
+	margin-bottom: 1rem;
 }
 
 .nav-container {
@@ -43,9 +42,9 @@ h1 {
 	gap: 0.875rem;
 }
 
-h1 img {
-	align-self: center;
-	border-radius: 0.375rem;
+.header-icon {
+	font-size: 1.5rem;
+	color: #ffb4a8;
 }
 
 .heading {
@@ -82,16 +81,18 @@ button {
 }
 
 * {
-	font-family: 'SF Pro Display';
+	font-family: 'SF Pro Display', 'Segoe UI', system-ui, sans-serif;
 	font-weight: 400;
 }
 
 body {
 	background: #1f1f1f;
 	color: #fff;
-	padding: 1.25rem 1.5rem;
-	overflow: hidden;
+	padding: 1rem 1.25rem;
+	overflow: visible;
 	margin: 0;
+	max-height: 600px;
+	box-sizing: border-box;
 }
 
 .container {
@@ -99,8 +100,8 @@ body {
 	align-items: center;
 	gap: 1rem;
 	font-size: 0.9375rem;
-	margin-bottom: 1rem;
-	margin-top: 0.75rem;
+	margin-bottom: 0.75rem;
+	margin-top: 0.5rem;
 	width: 100%;
 	justify-content: space-between;
 }
@@ -112,6 +113,21 @@ body {
 .container:first-of-type {
 	margin-bottom: 1rem;
 	margin-top: 1rem;
+}
+
+.container > div {
+	display: flex;
+	flex-direction: column;
+	gap: 0.25rem;
+	flex: 1;
+}
+
+.setting-description {
+	font-size: 0.75rem;
+	opacity: 0.6;
+	margin: 0;
+	padding: 0;
+	color: rgba(255, 255, 255, 0.7);
 }
 
 button {
@@ -246,9 +262,9 @@ select option {
 }
 
 .settings-group {
-	margin-bottom: 1rem;
+	margin-bottom: 0.75rem;
 	background: rgba(255, 255, 255, 0.05);
-	padding: 1.25rem;
+	padding: 1rem;
 	border-radius: 0.75rem;
 	border: 1px solid rgba(255, 255, 255, 0.1);
 	box-shadow: rgba(0, 0, 0, 0.05) 0px 4px 6px -1px,
@@ -284,7 +300,7 @@ select option {
 .tab-container {
     display: flex;
 	gap: 0.375rem;
-	margin-bottom: 1.5rem;
+	margin-bottom: 1rem;
 	background: rgba(255, 255, 255, 0.05);
 	padding: 0.25rem;
 	border-radius: 0.5rem;
@@ -424,36 +440,10 @@ input:checked + .checkmark:before {
 	gap: 0.5rem;
 }
 
-.text-input {
-	width: 100%;
-	min-height: 70px;
-	padding: 0.75rem;
-	background-color: rgba(255, 255, 255, 0.05);
-	border: 1px solid rgba(255, 255, 255, 0.1);
-	border-radius: 0.5rem;
-	color: #fff;
-	font-family: 'SF Pro Display', 'Satoshi', sans-serif;
-	font-size: 0.8125rem;
-	line-height: 1.5;
-	resize: vertical;
-	transition: border-color 0.2s, background-color 0.2s;
-	box-sizing: border-box;
-}
-
-.text-input:focus {
-	outline: none;
-	border-color: rgba(130, 170, 255, 0.5);
-	background-color: rgba(255, 255, 255, 0.08);
-}
-
-.text-input::placeholder {
-	color: rgba(255, 255, 255, 0.4);
-}
-
 .action-buttons {
 	display: flex;
 	gap: 0.5rem;
-	margin-top: 0.5rem;
+	/* margin-top: -0.5rem; */
 }
 
 .action-btn {
@@ -498,8 +488,6 @@ input:checked + .checkmark:before {
 	height: 1rem;
 }
 
-
-/* Scrollbar */
 ::-webkit-scrollbar {
 	width: 8px;
 }
@@ -518,7 +506,6 @@ input:checked + .checkmark:before {
 	background: rgba(255, 255, 255, 0.3);
 }
 
-/* Animation */
 @keyframes fadeIn {
 	from {
 		opacity: 0;
@@ -532,4 +519,14 @@ input:checked + .checkmark:before {
 
 .tab-content.active {
 	animation: fadeIn 0.2s ease-out;
+}
+
+.material-symbols-outlined {
+	font-variation-settings: 'FILL' 0, 'wght' 400, 'GRAD' 0, 'opsz' 20;
+	vertical-align: middle;
+	line-height: 1;
+}
+
+#options {
+	padding-bottom: 0.5rem;
 }

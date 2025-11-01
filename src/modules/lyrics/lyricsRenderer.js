@@ -1,19 +1,18 @@
 class LyricsPlusRenderer {
-
   /**
    * Constructor for the LyricsPlusRenderer.
    * Initializes state variables and sets up the initial environment for the lyrics display.
+   * @param {object} uiConfig - Configuration for UI element selectors.
    */
-  constructor(uiConfig = {}) {
-    // --- State Variables ---
+  constructor(uiConfig) {
     this.lyricsAnimationFrameId = null;
     this.currentPrimaryActiveLine = null;
-    this.lastPrimaryActiveLine = null; // New: To store the last active line for delay calculation
+    this.lastPrimaryActiveLine = null;
     this.currentFullscreenFocusedLine = null;
     this.lastTime = 0;
     this.lastProcessedTime = 0;
 
-    // --- DOM & Cache ---
+    this.uiConfig = uiConfig;
     this.lyricsContainer = null;
     this.cachedLyricsLines = [];
     this.cachedSyllables = [];
@@ -24,16 +23,17 @@ class LyricsPlusRenderer {
     this.textWidthCanvas = null;
     this.visibilityObserver = null;
     this.resizeObserver = null;
-    this._visibilityChangeHandler = null;
-    this._cachedContainerRect = null; // New: Cache for container and parent dimensions
-    this._debouncedResizeHandler = this._debounce(this._handleContainerResize, 1); // Initialize debounced handler
+    this._cachedContainerRect = null;
+    this._debouncedResizeHandler = this._debounce(
+      this._handleContainerResize,
+      1,
+      { leading: true, trailing: true }
+    );
 
-    // --- UI Elements ---
     this.translationButton = null;
     this.reloadButton = null;
     this.dropdownMenu = null;
 
-    // --- Scrolling & Interaction State ---
     this.isProgrammaticScrolling = false;
     this.endProgrammaticScrollTimer = null;
     this.scrollEventHandlerAttached = false;
@@ -42,26 +42,11 @@ class LyricsPlusRenderer {
     this.isTouching = false;
     this.userScrollIdleTimer = null;
     this.isUserControllingScroll = false;
-    this.userScrollRevertTimer = null; // Timer to revert control to the player
+    this.userScrollRevertTimer = null;
 
-    // --- Settings ---
-    this.largerTextMode = "lyrics"; // Initialize to default
+    this._notFoundCenterTimer = null;
 
-    // --- Initial Setup ---
-    // This call ensures the container is found or created and listeners are attached.
     this._getContainer();
-    
-    // Cleanup function for lyrics sync
-    this._syncCleanup = null;
-    
-    // Flag to skip scroll updates during fullscreen transitions
-    this._isFullscreenTransitioning = false;
-    this._fullscreenTransitionTimer = null;
-    
-    // Throttle scroll updates to reduce lag
-    this._lastScrollUpdateTime = 0;
-    this._scrollUpdateThrottle = 50; // Update scroll max once every 50ms (~20fps instead of 60fps)
-    this._lastScrollLineId = null;
   }
 
   /**
@@ -70,13 +55,74 @@ class LyricsPlusRenderer {
    * @param {number} delay - The debounce delay in milliseconds.
    * @returns {Function} - The debounced function.
    */
-  _debounce(func, delay) {
-    let timeout;
-    return function (...args) {
-      const context = this;
-      clearTimeout(timeout);
-      timeout = setTimeout(() => func.apply(context, args), delay);
+  _debounce(func, delay, { leading = false, trailing = true } = {}) {
+    let timeout = null;
+    let lastArgs = null;
+    let lastThis = null;
+    let result;
+
+    const invoke = () => {
+      timeout = null;
+      if (trailing && lastArgs) {
+        result = func.apply(lastThis, lastArgs);
+        lastArgs = lastThis = null;
+      }
     };
+
+    function debounced(...args) {
+      lastArgs = args;
+      lastThis = this;
+
+      if (timeout) clearTimeout(timeout);
+
+      const callNow = leading && !timeout;
+      timeout = setTimeout(invoke, delay);
+
+      if (callNow) {
+        result = func.apply(lastThis, lastArgs);
+        lastArgs = lastThis = null;
+      }
+
+      return result;
+    }
+
+    debounced.cancel = () => {
+      if (timeout) clearTimeout(timeout);
+      timeout = null;
+      lastArgs = lastThis = null;
+    };
+
+    debounced.flush = () => {
+      if (timeout) {
+        clearTimeout(timeout);
+        invoke();
+      }
+      return result;
+    };
+
+    return debounced;
+  }
+
+  _getDataText(normal, isOriginal = true) {
+    if (!normal) return "";
+
+    if (this.largerTextMode === "romanization") {
+      if (isOriginal) {
+        // Main/background container in romanization mode: show romanized
+        return normal.romanizedText || normal.text || "";
+      } else {
+        // Romanization container in romanization mode: show original
+        return normal.text || "";
+      }
+    } else {
+      if (isOriginal) {
+        // Main/background container in normal mode: show original
+        return normal.text || "";
+      } else {
+        // Romanization container in normal mode: show romanized (if available)
+        return normal.romanizedText || normal.text || "";
+      }
+    }
   }
 
   /**
@@ -84,20 +130,23 @@ class LyricsPlusRenderer {
    * @param {HTMLElement} container - The lyrics container element.
    * @private
    */
-  _handleContainerResize(container) {
-    // Update cached dimensions when the parent container resizes
+  _handleContainerResize(container, rect) {
+    if (!container) return;
+
+    const containerTop =
+      rect && typeof rect.top === "number"
+        ? rect.top
+        : container.getBoundingClientRect().top;
+
     this._cachedContainerRect = {
-      containerTop: container.getBoundingClientRect().top,
-      scrollContainerTop: container.getBoundingClientRect().top
+      containerTop: containerTop - 50,
+      scrollContainerTop: containerTop - 50,
     };
 
-    // Re-evaluate scroll position if not user-controlled
     if (!this.isUserControllingScroll && this.currentPrimaryActiveLine) {
       this._scrollToActiveLine(this.currentPrimaryActiveLine, false);
     }
   }
-
-  // --- Core DOM Manipulation & Setup ---
 
   /**
    * A helper method to determine if a text string contains Right-to-Left characters.
@@ -105,7 +154,9 @@ class LyricsPlusRenderer {
    * @returns {boolean} - True if the text contains RTL characters.
    */
   _isRTL(text) {
-    return /[\u0600-\u06FF\u0750-\u077F\u0590-\u05FF\u08A0-\u08FF\uFB50-\uFDCF\uFDF0-\uFDFF\uFE70-\uFEFF]/.test(text);
+    return /[\u0600-\u06FF\u0750-\u077F\u0590-\u05FF\u08A0-\u08FF\uFB50-\uFDCF\uFDF0-\uFDFF\uFE70-\uFEFF]/.test(
+      text
+    );
   }
 
   /**
@@ -114,7 +165,9 @@ class LyricsPlusRenderer {
    * @returns {boolean} - True if the text contains CJK characters.
    */
   _isCJK(text) {
-    return /[\u4E00-\u9FFF\u3000-\u303F\u3040-\u309F\u30A0-\u30FF\uAC00-\uD7AF]/.test(text);
+    return /[\u4E00-\u9FFF\u3000-\u303F\u3040-\u309F\u30A0-\u30FF\uAC00-\uD7AF]/.test(
+      text
+    );
   }
 
   /**
@@ -126,43 +179,7 @@ class LyricsPlusRenderer {
   _isPurelyLatinScript(text) {
     // This regex checks if the entire string consists ONLY of characters from the Latin Unicode script,
     // numbers, common punctuation, and whitespace.
-    // If any character outside of these categories is found, it means the text is NOT purely Latin script.
-    // \p{Script=Latin} or \p{sc=Latn} matches Latin letters.
-    // \p{N} matches any kind of numeric character.
-    // \p{P} matches any kind of punctuation character.
-    // \p{S} matches any kind of symbol character.
-    // \s matches any whitespace character.
-    // The `u` flag is for Unicode support.
     return /^[\p{Script=Latin}\p{N}\p{P}\p{S}\s]*$/u.test(text);
-  }
-
-  /**
-   * Gets the text content for a lyrics object based on the larger text mode setting.
-   * In romanization mode, it swaps what appears in main container vs romanization container.
-   * @param {object} normal - The lyrics object (line or syllable).
-   * @param {boolean} isOriginal - Whether this is for the original/main container (true) or translation/romanization container (false).
-   * @returns {string} - The appropriate text content.
-   */
-  _getDataText(normal, isOriginal = true) {
-    if (!normal) return ''; // Handle null/undefined 'normal' object
-
-    if (this.largerTextMode === "romanization") {
-      if (isOriginal) {
-        // Main/background container in romanization mode: show romanized
-        return normal.romanizedText || normal.text || '';
-      } else {
-        // Translation/romanization container in romanization mode: show original
-        return normal.text || '';
-      }
-    } else {
-      if (isOriginal) {
-        // Main/background container in lyrics mode: show original
-        return normal.text || '';
-      } else {
-        // Translation/romanization container in lyrics mode: show romanized
-        return normal.romanizedText || normal.text || '';
-      }
-    }
   }
 
   /**
@@ -172,12 +189,16 @@ class LyricsPlusRenderer {
    */
   _getContainer() {
     if (!this.lyricsContainer) {
-      this.lyricsContainer = document.getElementById('lyrics-plus-container');
+      this.lyricsContainer = document.getElementById("lyrics-plus-container");
       if (!this.lyricsContainer) {
         this._createLyricsContainer();
       }
     }
-    if (this.lyricsContainer && this.lyricsContainer.parentElement && !this.scrollEventHandlerAttached) {
+    if (
+      this.lyricsContainer &&
+      this.lyricsContainer.parentElement &&
+      !this.scrollEventHandlerAttached
+    ) {
       this._setupUserScrollListener();
     }
     return this.lyricsContainer;
@@ -188,14 +209,17 @@ class LyricsPlusRenderer {
    * @returns {HTMLElement | null} - The newly created container element.
    */
   _createLyricsContainer() {
-    const originalLyricsSection = document.querySelector('#tab-renderer');
+    const originalLyricsSection = document.querySelector(
+      this.uiConfig.patchParent
+    );
     if (!originalLyricsSection) {
+      console.log("Unable to find " + this.uiConfig.patchParent);
       this.lyricsContainer = null;
       return null;
     }
-    const container = document.createElement('div');
-    container.id = 'lyrics-plus-container';
-    container.classList.add('lyrics-plus-integrated', 'blur-inactive-enabled');
+    const container = document.createElement("div");
+    container.id = "lyrics-plus-container";
+    container.classList.add("lyrics-plus-integrated", "blur-inactive-enabled");
     originalLyricsSection.appendChild(container);
     this.lyricsContainer = container;
     this._setupUserScrollListener();
@@ -214,7 +238,6 @@ class LyricsPlusRenderer {
     const scrollListeningElement = this.lyricsContainer;
     const parentScrollElement = this.lyricsContainer.parentElement;
 
-    // Touch scroll state
     this.touchState = {
       isActive: false,
       startY: 0,
@@ -222,162 +245,182 @@ class LyricsPlusRenderer {
       velocity: 0,
       lastTime: 0,
       momentum: null,
-      samples: [], // For velocity calculation
-      maxSamples: 5
+      samples: [],
+      maxSamples: 5,
     };
 
     if (parentScrollElement) {
-      parentScrollElement.addEventListener('scroll', () => {
-        if (this.isProgrammaticScrolling) {
-          clearTimeout(this.endProgrammaticScrollTimer);
-          this.endProgrammaticScrollTimer = setTimeout(() => {
-            this.isProgrammaticScrolling = false;
-            this.endProgrammaticScrollTimer = null;
-          }, 250);
-          return;
-        }
-        if (this.lyricsContainer) {
-          this.lyricsContainer.classList.add('not-focused');
-        }
-      }, { passive: true });
+      parentScrollElement.addEventListener(
+        "scroll",
+        () => {
+          if (this.isProgrammaticScrolling) {
+            clearTimeout(this.endProgrammaticScrollTimer);
+            this.endProgrammaticScrollTimer = setTimeout(() => {
+              this.isProgrammaticScrolling = false;
+              this.endProgrammaticScrollTimer = null;
+            }, 250);
+            return;
+          }
+          if (this.lyricsContainer) {
+            this.lyricsContainer.classList.add("not-focused");
+          }
+        },
+        { passive: true }
+      );
     }
 
-    // Wheel scrolling (keep existing logic)
-    scrollListeningElement.addEventListener('wheel', (event) => {
-      event.preventDefault();
-      this.isProgrammaticScrolling = false;
-      if (this.lyricsContainer) {
-        this.lyricsContainer.classList.add('not-focused', 'user-scrolling', 'wheel-scrolling');
-        this.lyricsContainer.classList.remove('touch-scrolling');
-        // Remove 'past' class from all lines when user scrolls to prevent fade out
-        this._removePastClassFromAllLines();
-      }
-      const scrollAmount = event.deltaY;
-      this._handleUserScroll(scrollAmount);
-      clearTimeout(this.userScrollIdleTimer);
-      this.userScrollIdleTimer = setTimeout(() => {
+    scrollListeningElement.addEventListener(
+      "wheel",
+      (event) => {
+        event.preventDefault();
+        this.isProgrammaticScrolling = false;
         if (this.lyricsContainer) {
-          this.lyricsContainer.classList.remove('user-scrolling', 'wheel-scrolling');
+          this.lyricsContainer.classList.add(
+            "not-focused",
+            "user-scrolling",
+            "wheel-scrolling"
+          );
+          this.lyricsContainer.classList.remove("touch-scrolling");
         }
-      }, 200);
-    }, { passive: false });
+        const scrollAmount = event.deltaY;
+        this._handleUserScroll(scrollAmount);
+        clearTimeout(this.userScrollIdleTimer);
+        this.userScrollIdleTimer = setTimeout(() => {
+          if (this.lyricsContainer) {
+            this.lyricsContainer.classList.remove(
+              "user-scrolling",
+              "wheel-scrolling"
+            );
+          }
+        }, 200);
+      },
+      { passive: false }
+    );
 
-    // Improved touch handling
-    scrollListeningElement.addEventListener('touchstart', (event) => {
-      const touch = event.touches[0];
-      const now = performance.now();
+    scrollListeningElement.addEventListener(
+      "touchstart",
+      (event) => {
+        const touch = event.touches[0];
+        const now = performance.now();
 
-      // Cancel any ongoing momentum
-      if (this.touchState.momentum) {
-        cancelAnimationFrame(this.touchState.momentum);
-        this.touchState.momentum = null;
-      }
+        if (this.touchState.momentum) {
+          cancelAnimationFrame(this.touchState.momentum);
+          this.touchState.momentum = null;
+        }
 
-      this.touchState.isActive = true;
-      this.touchState.startY = touch.clientY;
-      this.touchState.lastY = touch.clientY;
-      this.touchState.lastTime = now;
-      this.touchState.velocity = 0;
-      this.touchState.samples = [{ y: touch.clientY, time: now }];
+        this.touchState.isActive = true;
+        this.touchState.startY = touch.clientY;
+        this.touchState.lastY = touch.clientY;
+        this.touchState.lastTime = now;
+        this.touchState.velocity = 0;
+        this.touchState.samples = [{ y: touch.clientY, time: now }];
 
-      this.isProgrammaticScrolling = false;
-      if (this.lyricsContainer) {
-        this.lyricsContainer.classList.add('not-focused', 'user-scrolling', 'touch-scrolling');
-        this.lyricsContainer.classList.remove('wheel-scrolling');
-        // Remove 'past' class from all lines when user scrolls to prevent fade out
-        this._removePastClassFromAllLines();
-      }
-      clearTimeout(this.userScrollIdleTimer);
-    }, { passive: true });
+        this.isProgrammaticScrolling = false;
+        if (this.lyricsContainer) {
+          this.lyricsContainer.classList.add(
+            "not-focused",
+            "user-scrolling",
+            "touch-scrolling"
+          );
+          this.lyricsContainer.classList.remove("wheel-scrolling");
+        }
+        clearTimeout(this.userScrollIdleTimer);
+      },
+      { passive: true }
+    );
 
-    scrollListeningElement.addEventListener('touchmove', (event) => {
-      if (!this.touchState.isActive) return;
+    scrollListeningElement.addEventListener(
+      "touchmove",
+      (event) => {
+        if (!this.touchState.isActive) return;
 
-      event.preventDefault();
-      const touch = event.touches[0];
-      const now = performance.now();
-      const currentY = touch.clientY;
-      const deltaY = this.touchState.lastY - currentY;
+        event.preventDefault();
+        const touch = event.touches[0];
+        const now = performance.now();
+        const currentY = touch.clientY;
+        const deltaY = this.touchState.lastY - currentY;
 
-      // Update position
-      this.touchState.lastY = currentY;
+        this.touchState.lastY = currentY;
 
-      // Add sample for velocity calculation
-      this.touchState.samples.push({ y: currentY, time: now });
-      if (this.touchState.samples.length > this.touchState.maxSamples) {
-        this.touchState.samples.shift();
-      }
+        this.touchState.samples.push({ y: currentY, time: now });
+        if (this.touchState.samples.length > this.touchState.maxSamples) {
+          this.touchState.samples.shift();
+        }
 
-      // Apply immediate scroll with reduced sensitivity for smoother feel
-      this._handleUserScroll(deltaY * 0.8); // Reduced from default sensitivity
+        // Apply immediate scroll with reduced sensitivity for smoother feel
+        this._handleUserScroll(deltaY * 0.8);
+      },
+      { passive: false }
+    );
 
-    }, { passive: false });
+    scrollListeningElement.addEventListener(
+      "touchend",
+      (event) => {
+        if (!this.touchState.isActive) return;
 
-    scrollListeningElement.addEventListener('touchend', (event) => {
-      if (!this.touchState.isActive) return;
+        this.touchState.isActive = false;
 
-      this.touchState.isActive = false;
+        const now = performance.now();
+        const samples = this.touchState.samples;
 
-      // Calculate final velocity from recent samples
-      const now = performance.now();
-      const samples = this.touchState.samples;
+        if (samples.length >= 2) {
+          // Use samples from last 100ms for velocity calculation
+          const recentSamples = samples.filter(
+            (sample) => now - sample.time <= 100
+          );
 
-      if (samples.length >= 2) {
-        // Use samples from last 100ms for velocity calculation
-        const recentSamples = samples.filter(sample => now - sample.time <= 100);
+          if (recentSamples.length >= 2) {
+            const newest = recentSamples[recentSamples.length - 1];
+            const oldest = recentSamples[0];
+            const timeDelta = newest.time - oldest.time;
+            const yDelta = oldest.y - newest.y;
 
-        if (recentSamples.length >= 2) {
-          const newest = recentSamples[recentSamples.length - 1];
-          const oldest = recentSamples[0];
-          const timeDelta = newest.time - oldest.time;
-          const yDelta = oldest.y - newest.y; // Inverted for scroll direction
-
-          if (timeDelta > 0) {
-            this.touchState.velocity = yDelta / timeDelta; // pixels per ms
+            if (timeDelta > 0) {
+              this.touchState.velocity = yDelta / timeDelta;
+            }
           }
         }
-      }
 
-      // Start momentum scrolling if velocity is significant
-      const minVelocity = 0.1; // pixels per ms
-      if (Math.abs(this.touchState.velocity) > minVelocity) {
-        this._startMomentumScroll();
-      } else {
-        // No momentum, just clean up
+        const minVelocity = 0.1;
+        if (Math.abs(this.touchState.velocity) > minVelocity) {
+          this._startMomentumScroll();
+        } else {
+          this._endTouchScrolling();
+        }
+      },
+      { passive: true }
+    );
+
+    scrollListeningElement.addEventListener(
+      "touchcancel",
+      () => {
+        this.touchState.isActive = false;
+        if (this.touchState.momentum) {
+          cancelAnimationFrame(this.touchState.momentum);
+          this.touchState.momentum = null;
+        }
         this._endTouchScrolling();
-      }
-    }, { passive: true });
-
-    // Handle touch cancel
-    scrollListeningElement.addEventListener('touchcancel', () => {
-      this.touchState.isActive = false;
-      if (this.touchState.momentum) {
-        cancelAnimationFrame(this.touchState.momentum);
-        this.touchState.momentum = null;
-      }
-      this._endTouchScrolling();
-    }, { passive: true });
+      },
+      { passive: true }
+    );
 
     this.scrollEventHandlerAttached = true;
   }
 
   /**
-   * Starts momentum scrolling after touch end
+   * Starts momentum scrolling after touch end.
    * @private
    */
   _startMomentumScroll() {
-    const deceleration = 0.95; // Deceleration factor per frame
-    const minVelocity = 0.01; // Stop when velocity gets too small
+    const deceleration = 0.95;
+    const minVelocity = 0.01;
 
     const animate = () => {
-      // Apply velocity to scroll
-      const scrollDelta = this.touchState.velocity * 16; // Convert to per-frame (assuming 60fps)
+      const scrollDelta = this.touchState.velocity * 16;
       this._handleUserScroll(scrollDelta);
 
-      // Reduce velocity
       this.touchState.velocity *= deceleration;
 
-      // Continue if velocity is still significant
       if (Math.abs(this.touchState.velocity) > minVelocity) {
         this.touchState.momentum = requestAnimationFrame(animate);
       } else {
@@ -390,15 +433,17 @@ class LyricsPlusRenderer {
   }
 
   /**
-   * Cleans up touch scrolling state
+   * Cleans up touch scrolling state.
    * @private
    */
   _endTouchScrolling() {
     if (this.lyricsContainer) {
-      this.lyricsContainer.classList.remove('user-scrolling', 'touch-scrolling');
+      this.lyricsContainer.classList.remove(
+        "user-scrolling",
+        "touch-scrolling"
+      );
     }
 
-    // Reset touch state
     this.touchState.velocity = 0;
     this.touchState.samples = [];
   }
@@ -409,24 +454,18 @@ class LyricsPlusRenderer {
    * @param {number} delta - The amount to scroll by.
    */
   _handleUserScroll(delta) {
-    // 1. Set the flag to indicate user is in control.
     this.isUserControllingScroll = true;
-
-    // 2. Clear any existing timer. This ensures the timer resets every time the user scrolls.
     clearTimeout(this.userScrollRevertTimer);
 
-    // 3. Set a new timer. After 4 seconds of inactivity, control will be given back to the player.
     this.userScrollRevertTimer = setTimeout(() => {
       this.isUserControllingScroll = false;
-      // When reverting, force a scroll to the currently active line to re-sync the view.
       if (this.currentPrimaryActiveLine) {
         this._scrollToActiveLine(this.currentPrimaryActiveLine, true);
       }
-    }, 4000); // 4-second delay before reverting. Adjust as needed.
+    }, 4000);
 
-    // --- The rest of the original function's logic remains the same ---
     const scrollSensitivity = 0.7;
-    let newScrollOffset = this.currentScrollOffset - (delta * scrollSensitivity);
+    let newScrollOffset = this.currentScrollOffset - delta * scrollSensitivity;
 
     const container = this._getContainer();
     if (!container) {
@@ -434,7 +473,11 @@ class LyricsPlusRenderer {
       return;
     }
 
-    const allScrollableElements = Array.from(container.querySelectorAll('.lyrics-line, .lyrics-plus-metadata, .lyrics-plus-empty'));
+    const allScrollableElements = Array.from(
+      container.querySelectorAll(
+        ".lyrics-line, .lyrics-plus-metadata, .lyrics-plus-empty"
+      )
+    );
     if (allScrollableElements.length === 0) {
       this._animateScroll(newScrollOffset);
       return;
@@ -454,9 +497,13 @@ class LyricsPlusRenderer {
     const lastElement = allScrollableElements[allScrollableElements.length - 1];
 
     if (firstElement && lastElement) {
-      const contentTotalHeight = lastElement.offsetTop + lastElement.offsetHeight - firstElement.offsetTop;
+      const contentTotalHeight =
+        lastElement.offsetTop +
+        lastElement.offsetHeight -
+        firstElement.offsetTop;
       if (contentTotalHeight > containerHeight) {
-        maxAllowedScroll = containerHeight - (lastElement.offsetTop + lastElement.offsetHeight);
+        maxAllowedScroll =
+          containerHeight - (lastElement.offsetTop + lastElement.offsetHeight);
       }
     }
 
@@ -503,26 +550,26 @@ class LyricsPlusRenderer {
 
       if (nextLine.startTime < currentLine.originalEndTime) {
         const overlap = currentLine.originalEndTime - nextLine.startTime;
-        // Only extend if overlap is >= 5ms (0.005 seconds), otherwise don't overlap
-        if (overlap >= 0.005) {
+        if (overlap >= 0.1) {
           currentLine.newEndTime = nextLine.newEndTime;
         } else {
-          // Overlap is less than 5ms, don't extend - keep original end time
           currentLine.newEndTime = currentLine.originalEndTime;
         }
       } else {
         const gap = nextLine.startTime - currentLine.originalEndTime;
         const nextElement = currentLine.element.nextElementSibling;
-        const isFollowedByManualGap = nextElement && nextElement.classList.contains('lyrics-gap');
+        const isFollowedByManualGap =
+          nextElement && nextElement.classList.contains("lyrics-gap");
         if (gap > 0 && !isFollowedByManualGap) {
-          const extension = Math.min(0.5, gap);
+          const extension = Math.min(1.3, gap);
           currentLine.newEndTime = currentLine.originalEndTime + extension;
         }
       }
     }
 
-    linesData.forEach(lineData => {
-      lineData.element.dataset.actualEndTime = lineData.originalEndTime.toFixed(3);
+    linesData.forEach((lineData) => {
+      lineData.element.dataset.actualEndTime =
+        lineData.originalEndTime.toFixed(3);
       if (Math.abs(lineData.newEndTime - lineData.originalEndTime) > 0.001) {
         lineData.element.dataset.endTime = lineData.newEndTime.toFixed(3);
       }
@@ -536,21 +583,25 @@ class LyricsPlusRenderer {
    */
   _onLyricClick(e) {
     const time = parseFloat(e.currentTarget.dataset.startTime);
-    const player = document.querySelector("video");
-    if (player) player.currentTime = time - 0.05;
+    this._seekPlayerTo(time - 0.05);
     this._scrollToActiveLine(e.currentTarget, true);
   }
 
-  // --- Lyrics Display & Rendering Logic ---
-
   /**
- * Internal helper to render word-by-word lyrics.
- * @private
- */
-  _renderWordByWordLyrics(lyrics, displayMode, singerClassMap, lightweight, elementPool, fragment) {
+   * Internal helper to render word-by-word lyrics.
+   * @private
+   */
+  _renderWordByWordLyrics(
+    lyrics,
+    displayMode,
+    singerClassMap,
+    lightweight,
+    elementPool,
+    fragment
+  ) {
     const getComputedFont = (element) => {
-      if (!element) return '400 16px sans-serif';
-      const cacheKey = element.tagName + (element.className || '');
+      if (!element) return "400 16px sans-serif";
+      const cacheKey = element.tagName + (element.className || "");
       if (this.fontCache[cacheKey]) return this.fontCache[cacheKey];
       const style = getComputedStyle(element);
       const font = `${style.fontWeight} ${style.fontSize} ${style.fontFamily}`;
@@ -558,18 +609,27 @@ class LyricsPlusRenderer {
       return font;
     };
 
+    /**
+     * Calculate pre-highlight delay based on exact wipe effect positioning.
+     * @param {HTMLElement} syllable - The current syllable element.
+     * @param {string} font - The computed font string.
+     * @param {number} currentDuration - Duration of current syllable in ms.
+     * @returns {number} Delay in milliseconds (negative for early start).
+     */
     const calculatePreHighlightDelay = (syllable, font, currentDuration) => {
       const syllableWidthPx = this._getTextWidth(syllable.textContent, font);
-      const emWidthPx = this._getTextWidth('M', font);
-      const syllableWidthEm = emWidthPx > 0 ? (syllableWidthPx / emWidthPx) : 0;
+      const emWidthPx = this._getTextWidth("M", font);
+      const syllableWidthEm = syllableWidthPx / emWidthPx;
 
       const gradientWidth = 0.75;
       const gradientHalfWidth = gradientWidth / 2;
       const initialGradientPosition = -gradientHalfWidth;
       const finalGradientPosition = syllableWidthEm + gradientHalfWidth;
-      const totalAnimationDistance = finalGradientPosition - initialGradientPosition;
+      const totalAnimationDistance =
+        finalGradientPosition - initialGradientPosition;
 
       const triggerPointFromTextEnd = gradientHalfWidth;
+
       let triggerPosition;
       if (syllableWidthEm <= gradientWidth) {
         triggerPosition = -gradientHalfWidth * 0.5;
@@ -578,34 +638,37 @@ class LyricsPlusRenderer {
       }
 
       const distanceToTrigger = triggerPosition - initialGradientPosition;
+
       let triggerTimingFraction = 0;
       if (totalAnimationDistance > 0) {
         triggerTimingFraction = distanceToTrigger / totalAnimationDistance;
       }
 
       const rawDelayMs = triggerTimingFraction * currentDuration;
-      return Math.max(0, Math.round(rawDelayMs));
+
+      return Math.round(rawDelayMs);
     };
 
     lyrics.data.forEach((line) => {
-      let currentLine = elementPool.lines.pop() || document.createElement('div');
-      currentLine.innerHTML = '';
-      currentLine.className = 'lyrics-line';
+      let currentLine =
+        elementPool.lines.pop() || document.createElement("div");
+      currentLine.innerHTML = "";
+      currentLine.className = "lyrics-line";
       currentLine.dataset.startTime = line.startTime;
       currentLine.dataset.endTime = line.endTime;
-      const singerClass = line.element?.singer ? (singerClassMap[line.element.singer] || 'singer-left') : 'singer-left';
+      const singerClass = line.element?.singer
+        ? singerClassMap[line.element.singer] || "singer-left"
+        : "singer-left";
       currentLine.classList.add(singerClass);
-      if (this._isRTL(this._getDataText(line, true))) currentLine.classList.add('rtl-text');
       if (!currentLine.hasClickListener) {
-        currentLine.addEventListener('click', this._onLyricClick.bind(this));
+        currentLine.addEventListener("click", this._onLyricClick.bind(this));
         currentLine.hasClickListener = true;
       }
 
-      const mainContainer = document.createElement('div');
-      mainContainer.classList.add('main-vocal-container');
+      const mainContainer = document.createElement("div");
+      mainContainer.classList.add("main-vocal-container");
       currentLine.appendChild(mainContainer);
 
-      // Use the new helper for translation container
       this._renderTranslationContainer(currentLine, line, displayMode);
 
       let backgroundContainer = null;
@@ -613,34 +676,82 @@ class LyricsPlusRenderer {
       let currentWordStartTime = null;
       let currentWordEndTime = null;
 
+      // Variables to hold the last syllable of the previous word to link across words
       let pendingSyllable = null;
       let pendingSyllableFont = null;
 
       const flushWordBuffer = () => {
         if (!wordBuffer.length) return;
-        const wordSpan = elementPool.syllables.pop() || document.createElement('span');
-        wordSpan.innerHTML = '';
-        wordSpan.className = 'lyrics-word';
-        let referenceFont = mainContainer.firstChild ? getComputedFont(mainContainer.firstChild) : '400 16px sans-serif';
-        const combinedText = wordBuffer.map(s => s.text).join('');
+
+        const wordSpan =
+          elementPool.syllables.pop() || document.createElement("span");
+        wordSpan.innerHTML = "";
+        wordSpan.className = "lyrics-word";
+        let referenceFont = mainContainer.firstChild
+          ? getComputedFont(mainContainer.firstChild)
+          : "400 16px sans-serif";
+        const combinedText = wordBuffer.map((s) => this._getDataText(s)).join("");
         const totalDuration = currentWordEndTime - currentWordStartTime;
-        const shouldEmphasize = !lightweight && !this._isRTL(combinedText) && !this._isCJK(combinedText) && combinedText.trim().length <= 7 && totalDuration >= 1000;
+        const shouldEmphasize =
+          !lightweight &&
+          !this._isRTL(combinedText) &&
+          !this._isCJK(combinedText) &&
+          combinedText.trim().length <= 7 &&
+          totalDuration >= 1000;
 
-        let maxScale = 1.05; // Subtle but noticeable scale
+        let easedProgress = 0;
+        let actualDecayRate = 0;
+        let penaltyFactor = 1.0;
+        if (shouldEmphasize) {
+          const minDuration = 1000;
+          const maxDuration = 2000;
+          const easingPower = 3.0;
 
-        wordSpan.style.setProperty('--min-scale', Math.max(1.0, Math.min(1.02, 1.01)));
+          const progress = Math.min(
+            1,
+            Math.max(
+              0,
+              (totalDuration - minDuration) / (maxDuration - minDuration)
+            )
+          );
+          easedProgress = Math.pow(progress, easingPower);
+
+          const durationProgressForDecay = Math.min(1, Math.max(0, (totalDuration - minDuration) / (maxDuration - minDuration)));
+          const decayStrength = 1 - durationProgressForDecay;
+          const maxDecayRate = 0.75;
+          actualDecayRate = maxDecayRate * decayStrength;
+
+          if (wordBuffer.length > 1) {
+            const firstSyllableDuration = wordBuffer[0].duration;
+            const imbalanceRatio = firstSyllableDuration / totalDuration;
+
+            const penaltyThreshold = 0.25;
+
+            if (imbalanceRatio < penaltyThreshold) {
+              const minPenaltyFactor = 0.4;
+
+              const penaltyProgress = imbalanceRatio / penaltyThreshold;
+              penaltyFactor = minPenaltyFactor + (1.0 - minPenaltyFactor) * penaltyProgress;
+            }
+          }
+        }
+
+        wordSpan.style.setProperty(
+          "--min-scale",
+          Math.max(1.0, Math.min(1.06, 1.02))
+        );
         wordSpan.dataset.totalDuration = totalDuration;
 
         let isCurrentWordBackground = wordBuffer[0].isBackground || false;
         const characterData = [];
 
-        // Store syllable elements for pre-highlight calculation
         const syllableElements = [];
 
         wordBuffer.forEach((s, syllableIndex) => {
-          const sylSpan = elementPool.syllables.pop() || document.createElement('span');
-          sylSpan.innerHTML = '';
-          sylSpan.className = 'lyrics-syllable';
+          const sylSpan =
+            elementPool.syllables.pop() || document.createElement("span");
+          sylSpan.innerHTML = "";
+          sylSpan.className = "lyrics-syllable";
 
           sylSpan.dataset.startTime = s.time;
           sylSpan.dataset.duration = s.duration;
@@ -653,37 +764,39 @@ class LyricsPlusRenderer {
           sylSpan._endTimeMs = s.time + s.duration;
           sylSpan._wordDurationMs = totalDuration;
 
-          if (!sylSpan.hasClickListener) {
-            sylSpan.addEventListener('click', this._onLyricClick.bind(this));
-            sylSpan.hasClickListener = true;
-          }
-          if (this._isRTL(this._getDataText(s))) sylSpan.classList.add('rtl-text');
+          if (this._isRTL(this._getDataText(s, true)))
+            sylSpan.classList.add("rtl-text");
 
-          // Store syllable for pre-highlight calculation
           syllableElements.push(sylSpan);
 
           const charSpansForSyllable = [];
 
           if (s.isBackground) {
-            sylSpan.textContent = this._getDataText(s).replace(/[()]/g, '').trimEnd();
+            sylSpan.textContent = this._getDataText(s).replace(/[()]/g, "");
           } else {
             if (shouldEmphasize) {
-              const syllableText = this._getDataText(s).trimEnd();
-              const totalSyllableWidth = this._getTextWidth(syllableText, referenceFont);
+              wordSpan.classList.add("growable");
+              const syllableText = this._getDataText(s);
+              const totalSyllableWidth = this._getTextWidth(
+                syllableText,
+                referenceFont
+              );
               let cumulativeCharWidth = 0;
               let charIndex = 0;
 
-              syllableText.split('').forEach(char => {
-                if (char === ' ') {
-                  sylSpan.appendChild(document.createTextNode(' '));
+              syllableText.split("").forEach((char) => {
+                if (char === " ") {
+                  sylSpan.appendChild(document.createTextNode(" "));
                 } else {
-                  const charSpan = elementPool.chars.pop() || document.createElement('span');
+                  const charSpan =
+                    elementPool.chars.pop() || document.createElement("span");
                   charSpan.textContent = char;
-                  charSpan.className = 'char';
+                  charSpan.className = "char";
 
                   const charWidth = this._getTextWidth(char, referenceFont);
                   if (totalSyllableWidth > 0) {
-                    const startPercent = cumulativeCharWidth / totalSyllableWidth;
+                    const startPercent =
+                      cumulativeCharWidth / totalSyllableWidth;
                     const durationPercent = charWidth / totalSyllableWidth;
                     charSpan.dataset.wipeStart = startPercent.toFixed(4);
                     charSpan.dataset.wipeDuration = durationPercent.toFixed(4);
@@ -692,13 +805,17 @@ class LyricsPlusRenderer {
 
                   charSpan.dataset.charIndex = charIndex++;
                   charSpan.dataset.syllableCharIndex = characterData.length;
-                  characterData.push({ charSpan, syllableSpan: sylSpan, isBackground: s.isBackground });
+                  characterData.push({
+                    charSpan,
+                    syllableSpan: sylSpan,
+                    isBackground: s.isBackground,
+                  });
                   charSpansForSyllable.push(charSpan);
                   sylSpan.appendChild(charSpan);
                 }
               });
             } else {
-              sylSpan.textContent = this._getDataText(s).trimEnd();
+              sylSpan.textContent = this._getDataText(s);
             }
           }
           if (charSpansForSyllable.length > 0) {
@@ -707,44 +824,7 @@ class LyricsPlusRenderer {
           wordSpan.appendChild(sylSpan);
         });
 
-
-
-        if (shouldEmphasize && characterData.length > 0) {
-          wordSpan.classList.add('growable');
-          wordSpan._cachedChars = characterData.map(cd => cd.charSpan);
-
-          const minDuration = 1000;
-          const maxDuration = 2000;
-          const easingPower = 3.0;
-
-          const progress = Math.min(1, Math.max(0, (totalDuration - minDuration) / (maxDuration - minDuration)));
-          const easedProgress = Math.pow(progress, easingPower);
-
-          const textLength = combinedText.trim().length;
-          const lengthFactor = Math.max(0.5, 1.0 - ((textLength - 3) * 0.05));
-
-          maxScale = 1.0 + (0.05 + easedProgress * 0.1) * lengthFactor;
-
-          const shadowIntensity = 0.5 + easedProgress * 0.5;
-          const normalizedGrowth = (maxScale - 1.0) / 0.13;
-          const translateYPeak = -normalizedGrowth * 2.5;
-
-          wordSpan.style.setProperty('--max-scale', maxScale.toFixed(3));
-          wordSpan.style.setProperty('--shadow-intensity', shadowIntensity.toFixed(3));
-          wordSpan.style.setProperty('--translate-y-peak', translateYPeak.toFixed(3));
-
-          const wordWidth = this._getTextWidth(wordSpan.textContent, referenceFont);
-          let cumulativeWidth = 0;
-          wordSpan._cachedChars.forEach(span => {
-            const charWidth = this._getTextWidth(span.textContent, referenceFont);
-            const position = (cumulativeWidth + (charWidth / 2)) / wordWidth;
-            const horizontalOffset = Math.sign((position - 0.5) * 2) * Math.pow(Math.abs((position - 0.5) * 2), 1.3) * ((maxScale - 1.0) * 40);
-            span.dataset.horizontalOffset = horizontalOffset;
-            span.dataset.position = position;
-            cumulativeWidth += charWidth;
-          });
-        }
-
+        // Handle pending syllable from previous word (cross-word linking)
         if (pendingSyllable && syllableElements.length > 0) {
           const nextSyllable = syllableElements[0];
           const currentDuration = pendingSyllable._durationMs;
@@ -753,13 +833,19 @@ class LyricsPlusRenderer {
             pendingSyllable,
             pendingSyllableFont,
             currentDuration
-          );
+          ) * 1.03;
 
           pendingSyllable._nextSyllableInWord = nextSyllable;
-          pendingSyllable._preHighlightDurationMs = Math.max(0, currentDuration - delayMs);
+          //avoid bleeding lmao
+          pendingSyllable._preHighlightDurationMs = currentDuration - delayMs;
           pendingSyllable._preHighlightDelayMs = delayMs;
         }
 
+        if (shouldEmphasize) {
+          wordSpan._cachedChars = characterData.map((cd) => cd.charSpan);
+        }
+
+        // Handle syllables within the same word (intra-word linking)
         syllableElements.forEach((syllable, index) => {
           if (index < syllableElements.length - 1) {
             const nextSyllable = syllableElements[index + 1];
@@ -772,19 +858,57 @@ class LyricsPlusRenderer {
             );
 
             syllable._nextSyllableInWord = nextSyllable;
-            syllable._preHighlightDurationMs = Math.max(0, currentDuration - delayMs);
+            syllable._preHighlightDurationMs = currentDuration - delayMs;
             syllable._preHighlightDelayMs = delayMs;
           }
         });
 
-        const targetContainer = isCurrentWordBackground ? (backgroundContainer || (backgroundContainer = document.createElement('div'), backgroundContainer.className = 'background-vocal-container', currentLine.appendChild(backgroundContainer))) : mainContainer;
+        if (shouldEmphasize && wordSpan._cachedChars?.length > 0) {
+          const wordWidth = this._getTextWidth(
+            wordSpan.textContent,
+            referenceFont
+          );
+          let cumulativeWidth = 0;
+
+          const numChars = wordSpan._cachedChars.length;
+          wordSpan._cachedChars.forEach((span, index) => {
+            const powerDecayFactor = 1.0 - (index / (numChars > 1 ? numChars - 1 : 1)) * actualDecayRate;
+
+            const charProgress = easedProgress * powerDecayFactor * penaltyFactor;
+
+            const charMaxScale = 1.0 + 0.05 + charProgress * 0.1;
+            const charShadowIntensity = 0.4 + charProgress * 0.4;
+            const normalizedGrowth = (charMaxScale - 1.0) / 0.13;
+            const charTranslateYPeak = -normalizedGrowth * 2.5;
+
+            span.style.setProperty("--max-scale", charMaxScale.toFixed(3));
+            span.style.setProperty("--shadow-intensity", charShadowIntensity.toFixed(3));
+            span.style.setProperty("--translate-y-peak", charTranslateYPeak.toFixed(3));
+
+            const charWidth = this._getTextWidth(span.textContent, referenceFont);
+            const position = (cumulativeWidth + charWidth / 2) / wordWidth;
+            const horizontalOffset = (position - 0.5) * 2 * ((charMaxScale - 1.0) * 25);
+
+            span.dataset.horizontalOffset = horizontalOffset;
+            span.dataset.position = position;
+            cumulativeWidth += charWidth;
+          });
+        }
+
+        const targetContainer = isCurrentWordBackground
+          ? backgroundContainer ||
+          ((backgroundContainer = document.createElement("div")),
+            (backgroundContainer.className = "background-vocal-container"),
+            currentLine.appendChild(backgroundContainer))
+          : mainContainer;
         targetContainer.appendChild(wordSpan);
-        const trailText = combinedText.match(/\s+$/);
+        const trailText = combinedText.match(/\s+$/)
         if (trailText) targetContainer.appendChild(document.createTextNode(trailText));
 
-        pendingSyllable = syllableElements.length > 0
-          ? syllableElements[syllableElements.length - 1]
-          : null;
+        pendingSyllable =
+          syllableElements.length > 0
+            ? syllableElements[syllableElements.length - 1]
+            : null;
         pendingSyllableFont = referenceFont;
 
         wordBuffer = [];
@@ -797,17 +921,30 @@ class LyricsPlusRenderer {
           if (wordBuffer.length === 0) currentWordStartTime = s.time;
           wordBuffer.push(s);
           currentWordEndTime = s.time + s.duration;
-          const isLastSyllableInLine = syllableIndex === line.syllabus.length - 1;
+          const isLastSyllableInLine =
+            syllableIndex === line.syllabus.length - 1;
           const nextSyllable = line.syllabus[syllableIndex + 1];
-          const endsWithExplicitDelimiter = s.isLineEnding || /\s$/.test(s.text);
-          const isBackgroundStatusChanging = nextSyllable && (s.isBackground !== nextSyllable.isBackground) && !endsWithExplicitDelimiter;
-          if (endsWithExplicitDelimiter || isLastSyllableInLine || isBackgroundStatusChanging) {
+          const endsWithExplicitDelimiter =
+            s.isLineEnding || /\s$/.test(this._getDataText(s));
+          const isBackgroundStatusChanging =
+            nextSyllable &&
+            s.isBackground !== nextSyllable.isBackground &&
+            !endsWithExplicitDelimiter;
+          if (
+            endsWithExplicitDelimiter ||
+            isLastSyllableInLine ||
+            isBackgroundStatusChanging
+          ) {
             flushWordBuffer();
           }
         });
       } else {
-        mainContainer.textContent = this._getDataText(line);
+        mainContainer.textContent = line.text;
       }
+      if (this._isRTL(mainContainer.textContent))
+        mainContainer.classList.add("rtl-text");
+      if (this._isRTL(mainContainer.textContent))
+        currentLine.classList.add("rtl-text");
       fragment.appendChild(currentLine);
     });
   }
@@ -816,29 +953,36 @@ class LyricsPlusRenderer {
    * Internal helper to render line-by-line lyrics.
    * @private
    */
-  _renderLineByLineLyrics(lyrics, displayMode, singerClassMap, elementPool, fragment) {
+  _renderLineByLineLyrics(
+    lyrics,
+    displayMode,
+    singerClassMap,
+    elementPool,
+    fragment
+  ) {
     const lineFragment = document.createDocumentFragment();
-    lyrics.data.forEach(line => {
-      const lineDiv = elementPool.lines.pop() || document.createElement('div');
-      lineDiv.innerHTML = '';
-      lineDiv.className = 'lyrics-line';
+    lyrics.data.forEach((line) => {
+      const lineDiv = elementPool.lines.pop() || document.createElement("div");
+      lineDiv.innerHTML = "";
+      lineDiv.className = "lyrics-line";
       lineDiv.dataset.startTime = line.startTime;
       lineDiv.dataset.endTime = line.endTime;
-      const singerClass = line.element?.singer ? (singerClassMap[line.element.singer] || 'singer-left') : 'singer-left';
+      const singerClass = line.element?.singer
+        ? singerClassMap[line.element.singer] || "singer-left"
+        : "singer-left";
       lineDiv.classList.add(singerClass);
-      // Apply rtl-text to the line itself based on the "big" text direction for overall flex-direction control.
-      if (this._isRTL(this._getDataText(line, true))) lineDiv.classList.add('rtl-text');
+      if (this._isRTL(this._getDataText(line, true)))
+        lineDiv.classList.add("rtl-text");
       if (!lineDiv.hasClickListener) {
-        lineDiv.addEventListener('click', this._onLyricClick.bind(this));
+        lineDiv.addEventListener("click", this._onLyricClick.bind(this));
         lineDiv.hasClickListener = true;
       }
-      const mainContainer = document.createElement('div');
-      mainContainer.className = 'main-vocal-container';
+      const mainContainer = document.createElement("div");
+      mainContainer.className = "main-vocal-container";
       mainContainer.textContent = this._getDataText(line);
-      // Apply rtl-text to mainContainer for its internal text alignment.
-      if (this._isRTL(this._getDataText(line, true))) mainContainer.classList.add('rtl-text');
+      if (this._isRTL(this._getDataText(line, true)))
+        mainContainer.classList.add("rtl-text");
       lineDiv.appendChild(mainContainer);
-      // Use the new helper for translation container
       this._renderTranslationContainer(lineDiv, line, displayMode);
       lineFragment.appendChild(lineDiv);
     });
@@ -852,10 +996,17 @@ class LyricsPlusRenderer {
    * @private
    */
   _applyDisplayModeClasses(container, displayMode) {
-    container.classList.remove('lyrics-translated', 'lyrics-romanized', 'lyrics-both-modes');
-    if (displayMode === 'translate') container.classList.add('lyrics-translated');
-    else if (displayMode === 'romanize') container.classList.add('lyrics-romanized');
-    else if (displayMode === 'both') container.classList.add('lyrics-both-modes');
+    container.classList.remove(
+      "lyrics-translated",
+      "lyrics-romanized",
+      "lyrics-both-modes"
+    );
+    if (displayMode === "translate")
+      container.classList.add("lyrics-translated");
+    else if (displayMode === "romanize")
+      container.classList.add("lyrics-romanized");
+    else if (displayMode === "both")
+      container.classList.add("lyrics-both-modes");
   }
 
   /**
@@ -866,25 +1017,22 @@ class LyricsPlusRenderer {
    * @private
    */
   _renderTranslationContainer(lineElement, lineData, displayMode) {
-    if (displayMode === 'romanize' || displayMode === 'both') {
-      // Only render romanization if the original text is NOT purely Latin script
+    if (displayMode === "romanize" || displayMode === "both") {
       if (!this._isPurelyLatinScript(lineData.text)) {
-        // Render romanization syllable by syllable if available, otherwise line by line
-        if (lineData.syllabus && lineData.syllabus.length > 0 && lineData.syllabus.some(s => s.romanizedText)) {
-          const romanizationContainer = document.createElement('div');
-          romanizationContainer.classList.add('lyrics-romanization-container');
-          // Apply rtl-text to the container itself based on the original text direction (lineData.text)
-          // This ensures the container's overall directionality is correct.
-          if (this._isRTL(lineData.text)) romanizationContainer.classList.add('rtl-text');
-          lineData.syllabus.forEach(syllable => {
-            const romanizedText = this._getDataText(syllable, false); // This is syllable.text (original text of syllable)
+        if (
+          lineData.syllabus &&
+          lineData.syllabus.length > 0 &&
+          lineData.syllabus.some((s) => s.romanizedText)
+        ) {
+          const romanizationContainer = document.createElement("div");
+          romanizationContainer.classList.add("lyrics-romanization-container");
+          lineData.syllabus.forEach((syllable) => {
+            const romanizedText = this._getDataText(syllable, false);
             if (romanizedText) {
-              const sylSpan = document.createElement('span');
-              sylSpan.className = 'lyrics-syllable'; // Use lyrics-syllable class for highlighting
+              const sylSpan = document.createElement("span");
+              sylSpan.className = "lyrics-syllable";
               sylSpan.textContent = romanizedText;
-              // Apply rtl-text to individual syllable spans for their internal text alignment.
-              if (this._isRTL(romanizedText)) sylSpan.classList.add('rtl-text');
-              // Copy timing data for highlighting
+              if (this._isRTL(romanizedText)) sylSpan.classList.add("rtl-text");
               sylSpan.dataset.startTime = syllable.time;
               sylSpan.dataset.duration = syllable.duration;
               sylSpan.dataset.endTime = syllable.time + syllable.duration;
@@ -892,29 +1040,37 @@ class LyricsPlusRenderer {
               sylSpan._durationMs = syllable.duration;
               sylSpan._endTimeMs = syllable.time + syllable.duration;
               romanizationContainer.appendChild(sylSpan);
+              const trailText = romanizedText.match(/\s+$/)
+              if (trailText) romanizationContainer.appendChild(document.createTextNode(trailText));
             }
           });
+
+          if (this._isRTL(romanizationContainer.textContent))
+            romanizationContainer.classList.add("rtl-text");
           if (romanizationContainer.children.length > 0) {
             lineElement.appendChild(romanizationContainer);
           }
-        } else if (lineData.romanizedText && lineData.text.trim() !== lineData.romanizedText.trim()) {
-          // Fallback to line-level romanization if no syllable data
-          const romanizationContainer = document.createElement('div');
-          romanizationContainer.classList.add('lyrics-romanization-container');
-          const romanizedText = this._getDataText(lineData, false); // This is lineData.text (original text of line)
+        } else if (
+          lineData.romanizedText &&
+          lineData.text.trim() !== lineData.romanizedText.trim()
+        ) {
+          const romanizationContainer = document.createElement("div");
+          romanizationContainer.classList.add("lyrics-romanization-container");
+          const romanizedText = this._getDataText(lineData, false);
           romanizationContainer.textContent = romanizedText;
-          // Apply rtl-text to the container itself based on the original text direction (lineData.text)
-          // This ensures the container's overall directionality is correct.
-          if (this._isRTL(lineData.text)) romanizationContainer.classList.add('rtl-text');
+          if (this._isRTL(romanizationContainer.textContent))
+            romanizationContainer.classList.add("rtl-text");
           lineElement.appendChild(romanizationContainer);
         }
       }
     }
-    if (displayMode === 'translate' || displayMode === 'both') {
-      // Translation remains line-by-line
-      if (lineData.translatedText && lineData.text.trim() !== lineData.translatedText.trim()) {
-        const translationContainer = document.createElement('div');
-        translationContainer.classList.add('lyrics-translation-container');
+    if (displayMode === "translate" || displayMode === "both") {
+      if (
+        lineData.translatedText &&
+        lineData.text.trim() !== lineData.translatedText.trim()
+      ) {
+        const translationContainer = document.createElement("div");
+        translationContainer.classList.add("lyrics-translation-container");
         translationContainer.textContent = lineData.translatedText;
         lineElement.appendChild(translationContainer);
       }
@@ -930,83 +1086,75 @@ class LyricsPlusRenderer {
    */
   updateDisplayMode(lyrics, displayMode, currentSettings) {
     this.currentDisplayMode = displayMode;
-    this._currentSettings = currentSettings;
     const container = this._getContainer();
     if (!container) return;
 
-    container.innerHTML = ''; // Clear existing content
+    container.innerHTML = "";
 
-    // Re-apply display mode classes
     this._applyDisplayModeClasses(container, displayMode);
 
-    // Re-apply settings that affect lyrics display
-    // Word-by-word and lightweight settings
-    const isWordByWordMode = lyrics.type === "Word" && currentSettings.wordByWord;
-    container.classList.toggle('word-by-word-mode', isWordByWordMode);
-    container.classList.toggle('line-by-line-mode', !isWordByWordMode);
-    container.classList.toggle('lightweight-mode', !!currentSettings.lightweight);
-
-    // Larger text mode
-    this.largerTextMode = currentSettings.largerTextMode;
-    container.classList.toggle('romanized-big-mode', this.largerTextMode === "romanization");
-
-    // Blur and fade settings
-    container.classList.toggle('blur-inactive-enabled', !!currentSettings.blurInactive);
-    const isVideoFullscreen = this._isVideoFullscreen?.() ?? this.__detectVideoFullscreen();
-    container.classList.toggle('fade-past-lines', !!currentSettings.fadePastLines && !isVideoFullscreen);
-    
-    container.classList.toggle('hide-offscreen', !!currentSettings.hideOffscreen);
-    container.classList.toggle('compability-wipe', !!currentSettings.compabilityWipe);
-    
-    this._setupPlayerStateObserver?.(currentSettings);
-    this._syncFadePastLinesState?.();
-    
-    // Font size if available
-    if (currentSettings.fontSize) {
-        container.style.setProperty('--lyrics-font-size', `${currentSettings.fontSize}px`);
-    }
-    
-    // Dynamic background settings - apply immediately (but don't refresh lyrics)
-    if (currentSettings.dynamicPlayerPage !== undefined || currentSettings.dynamicPlayerFullscreen !== undefined) {
-        
-        // Trigger dynamic background update by calling the function from settings.js
-        // This only affects the visual background, not the lyrics content
-        if (typeof window.applyDynamicPlayerClass === 'function') {
-            window.applyDynamicPlayerClass();
-        } else {
-        }
-    }
-    
-    // Note: AI translation settings are not refreshed here as they require API fetch
+    container.classList.toggle(
+      "use-song-palette-fullscreen",
+      !!currentSettings.useSongPaletteFullscreen
+    );
+    container.classList.toggle(
+      "use-song-palette-all-modes",
+      !!currentSettings.useSongPaletteAllModes
+    );
 
     if (currentSettings.overridePaletteColor) {
-      container.classList.add('override-palette-color');
-      container.style.setProperty('--lyplus-override-pallete', currentSettings.overridePaletteColor);
-      container.style.setProperty('--lyplus-override-pallete-white', `${currentSettings.overridePaletteColor}85`);
-      container.classList.remove('use-song-palette-fullscreen', 'use-song-palette-all-modes');
+      container.classList.add("override-palette-color");
+      container.style.setProperty(
+        "--lyplus-override-pallete",
+        currentSettings.overridePaletteColor
+      );
+      container.style.setProperty(
+        "--lyplus-override-pallete-white",
+        `${currentSettings.overridePaletteColor}85`
+      );
+      container.classList.remove(
+        "use-song-palette-fullscreen",
+        "use-song-palette-all-modes"
+      );
     } else {
-      container.classList.remove('override-palette-color');
-      if (currentSettings.useSongPaletteFullscreen || currentSettings.useSongPaletteAllModes) {
-        if (typeof LYPLUS_getSongPalette === 'function') {
+      container.classList.remove("override-palette-color");
+      if (
+        currentSettings.useSongPaletteFullscreen ||
+        currentSettings.useSongPaletteAllModes
+      ) {
+        if (typeof LYPLUS_getSongPalette === "function") {
           const songPalette = LYPLUS_getSongPalette();
           if (songPalette) {
             const { r, g, b } = songPalette;
-            container.style.setProperty('--lyplus-song-pallete', `rgb(${r}, ${g}, ${b})`);
+            container.style.setProperty(
+              "--lyplus-song-pallete",
+              `rgb(${r}, ${g}, ${b})`
+            );
             const alpha = 133 / 255;
             const r_blend = Math.round(alpha * 255 + (1 - alpha) * r);
             const g_blend = Math.round(alpha * 255 + (1 - alpha) * b);
             const b_blend = Math.round(alpha * 255 + (1 - alpha) * b);
-            container.style.setProperty('--lyplus-song-white-pallete', `rgb(${r_blend}, ${g_blend}, ${b_blend})`);
+            container.style.setProperty(
+              "--lyplus-song-white-pallete",
+              `rgb(${r_blend}, ${g_blend}, ${b_blend})`
+            );
           }
         }
       }
     }
 
-    const playerPageElement = document.querySelector('ytmusic-player-page');
-    container.classList.toggle('fullscreen', playerPageElement && playerPageElement.hasAttribute('player-fullscreened'));
+    container.classList.toggle(
+      "fullscreen",
+      document.body.hasAttribute("player-fullscreened_")
+    );
+    const isWordByWordMode =
+      lyrics.type === "Word" && currentSettings.wordByWord;
+    container.classList.toggle("word-by-word-mode", isWordByWordMode);
+    container.classList.toggle("line-by-line-mode", !isWordByWordMode);
 
-    // Re-determine text direction and dual-side layout (copied from displayLyrics)
-    let hasRTL = false, hasLTR = false;
+    // Re-determine text direction and dual-side layout
+    let hasRTL = false,
+      hasLTR = false;
     if (lyrics && lyrics.data && lyrics.data.length > 0) {
       for (const line of lyrics.data) {
         if (this._isRTL(line.text)) hasRTL = true;
@@ -1014,18 +1162,22 @@ class LyricsPlusRenderer {
         if (hasRTL && hasLTR) break;
       }
     }
-    container.classList.remove('mixed-direction-lyrics', 'dual-side-lyrics');
-    if (hasRTL && hasLTR) container.classList.add('mixed-direction-lyrics');
+    container.classList.remove("mixed-direction-lyrics", "dual-side-lyrics");
+    if (hasRTL && hasLTR) container.classList.add("mixed-direction-lyrics");
 
     const singerClassMap = {};
     let isDualSide = false;
     if (lyrics && lyrics.data && lyrics.data.length > 0) {
-      const allSingers = [...new Set(lyrics.data.map(line => line.element?.singer).filter(Boolean))];
+      const allSingers = [
+        ...new Set(
+          lyrics.data.map((line) => line.element?.singer).filter(Boolean)
+        ),
+      ];
       const leftCandidates = [];
       const rightCandidates = [];
 
-      allSingers.forEach(s => {
-        if (!s.startsWith('v')) return;
+      allSingers.forEach((s) => {
+        if (!s.startsWith("v")) return;
 
         const numericPart = s.substring(1);
         if (numericPart.length === 0) return;
@@ -1039,60 +1191,63 @@ class LyricsPlusRenderer {
         if (isNaN(num)) return;
 
         if (num % 2 !== 0) {
-          leftCandidates.push(s); // Odd numbers to the left
+          leftCandidates.push(s);
         } else {
-          rightCandidates.push(s); // Even numbers to the right
+          rightCandidates.push(s);
         }
       });
 
-      const sortByOriginalNumber = (a, b) => parseInt(a.substring(1)) - parseInt(b.substring(1));
+      const sortByOriginalNumber = (a, b) =>
+        parseInt(a.substring(1)) - parseInt(b.substring(1));
       leftCandidates.sort(sortByOriginalNumber);
       rightCandidates.sort(sortByOriginalNumber);
 
       if (leftCandidates.length > 0 || rightCandidates.length > 0) {
-        leftCandidates.forEach(s => singerClassMap[s] = 'singer-left');
-        rightCandidates.forEach(s => singerClassMap[s] = 'singer-right');
+        leftCandidates.forEach((s) => (singerClassMap[s] = "singer-left"));
+        rightCandidates.forEach((s) => (singerClassMap[s] = "singer-right"));
         isDualSide = leftCandidates.length > 0 && rightCandidates.length > 0;
       }
     }
-    if (isDualSide) container.classList.add('dual-side-lyrics');
+    if (isDualSide) container.classList.add("dual-side-lyrics");
 
     const elementPool = { lines: [], syllables: [], chars: [] };
 
     const createGapLine = (gapStart, gapEnd, classesToInherit = null) => {
       const gapDuration = gapEnd - gapStart;
-      const gapLine = elementPool.lines.pop() || document.createElement('div');
-      gapLine.className = 'lyrics-line lyrics-gap';
+      const gapLine = elementPool.lines.pop() || document.createElement("div");
+      gapLine.className = "lyrics-line lyrics-gap";
       gapLine.dataset.startTime = gapStart;
       gapLine.dataset.endTime = gapEnd;
       if (!gapLine.hasClickListener) {
-        gapLine.addEventListener('click', this._onLyricClick.bind(this));
+        gapLine.addEventListener("click", this._onLyricClick.bind(this));
         gapLine.hasClickListener = true;
       }
       if (classesToInherit) {
-        if (classesToInherit.includes('rtl-text')) gapLine.classList.add('rtl-text');
-        if (classesToInherit.includes('singer-left')) gapLine.classList.add('singer-left');
-        if (classesToInherit.includes('singer-right')) gapLine.classList.add('singer-right');
+        if (classesToInherit.includes("rtl-text"))
+          gapLine.classList.add("rtl-text");
+        if (classesToInherit.includes("singer-left"))
+          gapLine.classList.add("singer-left");
+        if (classesToInherit.includes("singer-right"))
+          gapLine.classList.add("singer-right");
       }
-      const existingMainContainer = gapLine.querySelector('.main-vocal-container');
+      const existingMainContainer = gapLine.querySelector(
+        ".main-vocal-container"
+      );
       if (existingMainContainer) existingMainContainer.remove();
-      const mainContainer = document.createElement('div');
-      mainContainer.className = 'main-vocal-container';
-      const lyricsWord = document.createElement('div');
-      lyricsWord.className = 'lyrics-word';
+      const mainContainer = document.createElement("div");
+      mainContainer.className = "main-vocal-container";
+      const lyricsWord = document.createElement("div");
+      lyricsWord.className = "lyrics-word";
       for (let i = 0; i < 3; i++) {
-        const syllableSpan = elementPool.syllables.pop() || document.createElement('span');
-        syllableSpan.className = 'lyrics-syllable';
-        const syllableStart = (gapStart + (i * gapDuration / 3)) * 1000;
-        const syllableDuration = ((gapDuration / 3) / 0.9) * 1000;
+        const syllableSpan =
+          elementPool.syllables.pop() || document.createElement("span");
+        syllableSpan.className = "lyrics-syllable";
+        const syllableStart = (gapStart + (i * gapDuration) / 3) * 1000;
+        const syllableDuration = (gapDuration / 3 / 0.9) * 1000;
         syllableSpan.dataset.startTime = syllableStart;
         syllableSpan.dataset.duration = syllableDuration;
         syllableSpan.dataset.endTime = syllableStart + syllableDuration;
         syllableSpan.textContent = "•";
-        if (!syllableSpan.hasClickListener) {
-          syllableSpan.addEventListener('click', this._onLyricClick.bind(this));
-          syllableSpan.hasClickListener = true;
-        }
         lyricsWord.appendChild(syllableSpan);
       }
       mainContainer.appendChild(lyricsWord);
@@ -1103,93 +1258,133 @@ class LyricsPlusRenderer {
     const fragment = document.createDocumentFragment();
 
     if (isWordByWordMode) {
-      this._renderWordByWordLyrics(lyrics, displayMode, singerClassMap, currentSettings.lightweight, elementPool, fragment);
+      this._renderWordByWordLyrics(
+        lyrics,
+        displayMode,
+        singerClassMap,
+        currentSettings.lightweight,
+        elementPool,
+        fragment
+      );
     } else {
-      this._renderLineByLineLyrics(lyrics, displayMode, singerClassMap, elementPool, fragment);
+      this._renderLineByLineLyrics(
+        lyrics,
+        displayMode,
+        singerClassMap,
+        elementPool,
+        fragment
+      );
     }
 
     container.appendChild(fragment);
 
-    // Add song information display in fullscreen mode
-    const playerPageForSongInfo = document.querySelector('ytmusic-player-page');
-    const isFullscreen = playerPageForSongInfo && playerPageForSongInfo.hasAttribute('player-fullscreened');
-    if (isFullscreen && this.lastKnownSongInfo) {
-      this._addSongInfoDisplay(container);
-    }
-
-    // Post-rendering logic for gaps and timing adjustments
-    const originalLines = Array.from(container.querySelectorAll('.lyrics-line:not(.lyrics-gap)'));
+    const originalLines = Array.from(
+      container.querySelectorAll(".lyrics-line:not(.lyrics-gap)")
+    );
     if (originalLines.length > 0) {
       const firstLine = originalLines[0];
       const firstStartTime = parseFloat(firstLine.dataset.startTime);
       if (firstStartTime >= 7.0) {
-        const classesToInherit = [...firstLine.classList].filter(c => ['rtl-text', 'singer-left', 'singer-right'].includes(c));
-        container.insertBefore(createGapLine(0, firstStartTime - 0.85, classesToInherit), firstLine);
+        const classesToInherit = [...firstLine.classList].filter((c) =>
+          ["rtl-text", "singer-left", "singer-right"].includes(c)
+        );
+        container.insertBefore(
+          createGapLine(0, firstStartTime - 0.66, classesToInherit),
+          firstLine
+        );
       }
     }
     const gapLinesToInsert = [];
     originalLines.forEach((line, index) => {
       if (index < originalLines.length - 1) {
         const nextLine = originalLines[index + 1];
-        if (parseFloat(nextLine.dataset.startTime) - parseFloat(line.dataset.endTime) >= 7.0) {
-          const classesToInherit = [...nextLine.classList].filter(c => ['rtl-text', 'singer-left', 'singer-right'].includes(c));
-          gapLinesToInsert.push({ gapLine: createGapLine(parseFloat(line.dataset.endTime) + 0.4, parseFloat(nextLine.dataset.startTime) - 0.85, classesToInherit), nextLine });
+        if (
+          parseFloat(nextLine.dataset.startTime) -
+          parseFloat(line.dataset.endTime) >=
+          7.0
+        ) {
+          const classesToInherit = [...nextLine.classList].filter((c) =>
+            ["rtl-text", "singer-left", "singer-right"].includes(c)
+          );
+          gapLinesToInsert.push({
+            gapLine: createGapLine(
+              parseFloat(line.dataset.endTime) + 0.31,
+              parseFloat(nextLine.dataset.startTime) - 0.66,
+              classesToInherit
+            ),
+            nextLine,
+          });
         }
       }
     });
-    gapLinesToInsert.forEach(({ gapLine, nextLine }) => container.insertBefore(gapLine, nextLine));
+    gapLinesToInsert.forEach(({ gapLine, nextLine }) =>
+      container.insertBefore(gapLine, nextLine)
+    );
     this._retimingActiveTimings(originalLines);
 
-    // Render metadata (assuming metadata doesn't change with display mode)
-    const metadataContainer = document.createElement('div');
-    metadataContainer.className = 'lyrics-plus-metadata';
-    metadataContainer.dataset.startTime = (lyrics.data[lyrics.data.length - 1]?.endTime || 0) + 0.5; // Approximate start time for metadata
-    metadataContainer.dataset.endTime = (lyrics.data[lyrics.data.length - 1]?.endTime || 0) + 10; // Approximate end time for metadata
+    const metadataContainer = document.createElement("div");
+    metadataContainer.className = "lyrics-plus-metadata";
+    if (lyrics.data[lyrics.data.length - 1]?.endTime != 0) {
+      // musixmatch sometimes returning plainText duh
+      metadataContainer.dataset.startTime =
+        (lyrics.data[lyrics.data.length - 1]?.endTime || 0) + 0.8;
+      metadataContainer.dataset.endTime =
+        (lyrics.data[lyrics.data.length - 1]?.endTime || 0) + 10;
+    }
 
-    // Note: songWriters and source are not available in updateDisplayMode,
-    // so this part might need to be handled differently if they are dynamic.
-    // For now, assuming they are set once by displayLyrics.
-    if (lyrics.metadata.songWriters) { // Use lyrics.metadata directly
-      const songWritersDiv = document.createElement('span');
-      songWritersDiv.className = 'lyrics-song-writters';
-      songWritersDiv.innerText = `${t("writtenBy")} ${lyrics.metadata.songWriters.join(', ')}`;
+    // Note: songWriters and source may not be available on subsequent updates.
+    // They should ideally be part of the main 'lyrics' object if they can change.
+    if (lyrics.metadata.songWriters && lyrics.metadata.songWriters.length > 0) {
+      const songWritersDiv = document.createElement("span");
+      songWritersDiv.className = "lyrics-song-writters";
+      songWritersDiv.innerText = `${t(
+        "writtenBy"
+      )} ${lyrics.metadata.songWriters.join(", ")}`;
       metadataContainer.appendChild(songWritersDiv);
     }
-    const sourceDiv = document.createElement('span');
-    sourceDiv.className = 'lyrics-source-provider';
-    sourceDiv.innerText = `${t("source")} ${lyrics.metadata.source}`; // Use lyrics.metadata directly
+    const sourceDiv = document.createElement("span");
+    sourceDiv.className = "lyrics-source-provider";
+    sourceDiv.innerText = `${t("source")} ${lyrics.metadata.source}`;
     metadataContainer.appendChild(sourceDiv);
     container.appendChild(metadataContainer);
 
-    // Add an empty div at the end for bottom padding
-    const emptyDiv = document.createElement('div');
-    emptyDiv.className = 'lyrics-plus-empty';
+    const emptyDiv = document.createElement("div");
+    emptyDiv.className = "lyrics-plus-empty";
     container.appendChild(emptyDiv);
 
-    // Create the fixed empty div for avoiding detected by resizerObserver
-    const emptyFixedDiv = document.createElement('div');
-    emptyFixedDiv.className = 'lyrics-plus-empty-fixed';
+    // This fixed div prevents the resize observer from firing due to the main empty div changing size.
+    const emptyFixedDiv = document.createElement("div");
+    emptyFixedDiv.className = "lyrics-plus-empty-fixed";
     container.appendChild(emptyFixedDiv);
 
-    // Cache and setup for sync
-    this.cachedLyricsLines = Array.from(container.querySelectorAll('.lyrics-line, .lyrics-plus-metadata, .lyrics-plus-empty')).map(line => {
-      if (line) {
-        line._startTimeMs = parseFloat(line.dataset.startTime) * 1000;
-        line._endTimeMs = parseFloat(line.dataset.endTime) * 1000;
-      }
-      return line;
-    }).filter(Boolean);
+    this.cachedLyricsLines = Array.from(
+      container.querySelectorAll(
+        ".lyrics-line, .lyrics-plus-metadata, .lyrics-plus-empty"
+      )
+    )
+      .map((line) => {
+        if (line) {
+          line._startTimeMs = parseFloat(line.dataset.startTime) * 1000;
+          line._endTimeMs = parseFloat(line.dataset.endTime) * 1000;
+        }
+        return line;
+      })
+      .filter(Boolean);
 
-    this.cachedSyllables = Array.from(container.getElementsByClassName('lyrics-syllable')).map(syllable => {
-      if (syllable) {
-        syllable._startTimeMs = parseFloat(syllable.dataset.startTime);
-        syllable._durationMs = parseFloat(syllable.dataset.duration);
-        syllable._endTimeMs = syllable._startTimeMs + syllable._durationMs;
-        const wordDuration = parseFloat(syllable.dataset.wordDuration);
-        syllable._wordDurationMs = isNaN(wordDuration) ? null : wordDuration;
-      }
-      return syllable;
-    }).filter(Boolean);
+    this.cachedSyllables = Array.from(
+      container.getElementsByClassName("lyrics-syllable")
+    )
+      .map((syllable) => {
+        if (syllable) {
+          syllable._startTimeMs = parseFloat(syllable.dataset.startTime);
+          syllable._durationMs = parseFloat(syllable.dataset.duration);
+          syllable._endTimeMs = syllable._startTimeMs + syllable._durationMs;
+          const wordDuration = parseFloat(syllable.dataset.wordDuration);
+          syllable._wordDurationMs = isNaN(wordDuration) ? null : wordDuration;
+        }
+        return syllable;
+      })
+      .filter(Boolean);
 
     this._ensureElementIds();
     this.activeLineIds.clear();
@@ -1197,11 +1392,14 @@ class LyricsPlusRenderer {
     this.visibleLineIds.clear();
     this.currentPrimaryActiveLine = null;
 
-    if (this.cachedLyricsLines.length > 0) this._scrollToActiveLine(this.cachedLyricsLines[0], true);
+    if (this.cachedLyricsLines.length > 0)
+      this._scrollToActiveLine(this.cachedLyricsLines[0], true);
 
     this._startLyricsSync(currentSettings);
-    // Control buttons are created once by displayLyrics, not re-created here.
-    container.classList.toggle('blur-inactive-enabled', !!currentSettings.blurInactive);
+    container.classList.toggle(
+      "blur-inactive-enabled",
+      !!currentSettings.blurInactive
+    );
   }
 
   /**
@@ -1217,9 +1415,20 @@ class LyricsPlusRenderer {
    * @param {object} currentSettings - The current user settings.
    * @param {Function} fetchAndDisplayLyricsFn - The function to fetch and display lyrics.
    * @param {Function} setCurrentDisplayModeAndRefetchFn - The function to set display mode and refetch.
-   * @param {string} largerTextMode - The larger text mode setting ("lyrics" or "romanization").
    */
-  displayLyrics(lyrics, source = "Unknown", type = "Line", lightweight = false, songWriters, songInfo, displayMode = 'none', currentSettings = {}, fetchAndDisplayLyricsFn, setCurrentDisplayModeAndRefetchFn, largerTextMode = "lyrics") {
+  displayLyrics(
+    lyrics,
+    source = "Unknown",
+    type = "Line",
+    lightweight = false,
+    songWriters,
+    songInfo,
+    displayMode = "none",
+    currentSettings = {},
+    fetchAndDisplayLyricsFn,
+    setCurrentDisplayModeAndRefetchFn,
+    largerTextMode = "lyrics"
+  ) {
     this.lastKnownSongInfo = songInfo;
     this.fetchAndDisplayLyricsFn = fetchAndDisplayLyricsFn;
     this.setCurrentDisplayModeAndRefetchFn = setCurrentDisplayModeAndRefetchFn;
@@ -1228,215 +1437,103 @@ class LyricsPlusRenderer {
     const container = this._getContainer();
     if (!container) return;
 
-    // Reset any pending/not-found animation state when real lyrics are about to be shown
-    if (this._notFoundCenterTimer) {
-      clearTimeout(this._notFoundCenterTimer);
-      this._notFoundCenterTimer = null;
-    }
-    if (this._notFoundAutoHideTimer) {
-      clearTimeout(this._notFoundAutoHideTimer);
-      this._notFoundAutoHideTimer = null;
-    }
-    container.classList.remove('animate-not-found-center');
+    container.classList.remove("lyrics-plus-message");
 
-    // Ensure any previous user-scroll state does not suppress effects on new song
-    container.classList.remove('not-focused', 'user-scrolling', 'touch-scrolling', 'wheel-scrolling');
-    this.isUserControllingScroll = false;
-
-    // Ensure no stale song info remains while loading
-    const staleInfo = document.querySelector('.lyrics-song-info');
-    if (staleInfo) staleInfo.remove();
-
-    // Add scale-out animation to loading text before removing it
-    const loadingElement = container.querySelector('.text-loading');
-    if (loadingElement && container.classList.contains('lyrics-plus-message')) {
-      loadingElement.classList.add('scale-out');
-      // Wait for animation to complete before removing the message class and displaying lyrics
-      setTimeout(() => {
-        container.classList.remove('lyrics-plus-message');
-        this._renderLyricsContent(lyrics, source, type, lightweight, songWriters, songInfo, displayMode, currentSettings, fetchAndDisplayLyricsFn, setCurrentDisplayModeAndRefetchFn, largerTextMode);
-      }, 400); // Match the CSS transition duration
-      return;
-    }
-
-    container.classList.remove('lyrics-plus-message'); // Remove the class when actual lyrics are displayed
-    this._renderLyricsContent(lyrics, source, type, lightweight, songWriters, songInfo, displayMode, currentSettings, fetchAndDisplayLyricsFn, setCurrentDisplayModeAndRefetchFn, largerTextMode);
-
-    // Re-assert visual effect classes based on current settings after render
-    container.classList.toggle('blur-inactive-enabled', !!currentSettings.blurInactive);
-    const isVideoFullscreenPost = this._isVideoFullscreen?.() ?? this.__detectVideoFullscreen();
-    container.classList.toggle('fade-past-lines', !!currentSettings.fadePastLines && !isVideoFullscreenPost);
-
-    // Nudge programmatic scrolling state briefly so fade/blur logic reliably activates after song change
-    this.lyricsContainer && this.lyricsContainer.classList.remove('not-focused', 'user-scrolling', 'touch-scrolling', 'wheel-scrolling');
-    clearTimeout(this.endProgrammaticScrollTimer);
-    this.isProgrammaticScrolling = true;
-    this.endProgrammaticScrollTimer = setTimeout(() => {
-      this.isProgrammaticScrolling = false;
-      this.endProgrammaticScrollTimer = null;
-    }, 300);
-  }
-
-  /**
-   * Helper method to render the actual lyrics content
-   * @private
-   */
-  _renderLyricsContent(lyrics, source, type, lightweight, songWriters, songInfo, displayMode, currentSettings, fetchAndDisplayLyricsFn, setCurrentDisplayModeAndRefetchFn, largerTextMode) {
-    const container = this._getContainer();
-    if (!container) return;
-
-    this._currentSettings = currentSettings;
-
-    // Apply visual settings that are independent of display mode
-    container.classList.toggle('use-song-palette-fullscreen', !!currentSettings.useSongPaletteFullscreen);
-    container.classList.toggle('use-song-palette-all-modes', !!currentSettings.useSongPaletteAllModes);
-    const isVideoFullscreen = this._isVideoFullscreen?.() ?? this.__detectVideoFullscreen();
-    container.classList.toggle('fade-past-lines', !!currentSettings.fadePastLines && !isVideoFullscreen);
-    this._setupPlayerStateObserver?.(currentSettings);
-    
-    this._syncFadePastLinesState?.();
+    container.classList.toggle(
+      "use-song-palette-fullscreen",
+      !!currentSettings.useSongPaletteFullscreen
+    );
+    container.classList.toggle(
+      "use-song-palette-all-modes",
+      !!currentSettings.useSongPaletteAllModes
+    );
+    container.classList.toggle(
+      "lightweight-mode",
+      lightweight
+    );
 
     if (currentSettings.overridePaletteColor) {
-      container.classList.add('override-palette-color');
-      container.style.setProperty('--lyplus-override-pallete', currentSettings.overridePaletteColor);
-      container.style.setProperty('--lyplus-override-pallete-white', `${currentSettings.overridePaletteColor}85`);
-      container.classList.remove('use-song-palette-fullscreen', 'use-song-palette-all-modes');
+      container.classList.add("override-palette-color");
+      container.style.setProperty(
+        "--lyplus-override-pallete",
+        currentSettings.overridePaletteColor
+      );
+      container.style.setProperty(
+        "--lyplus-override-pallete-white",
+        `${currentSettings.overridePaletteColor}85`
+      );
+      container.classList.remove(
+        "use-song-palette-fullscreen",
+        "use-song-palette-all-modes"
+      );
     } else {
-      container.classList.remove('override-palette-color');
-      if (currentSettings.useSongPaletteFullscreen || currentSettings.useSongPaletteAllModes) {
-        if (typeof LYPLUS_getSongPalette === 'function') {
+      container.classList.remove("override-palette-color");
+      if (
+        currentSettings.useSongPaletteFullscreen ||
+        currentSettings.useSongPaletteAllModes
+      ) {
+        if (typeof LYPLUS_getSongPalette === "function") {
           const songPalette = LYPLUS_getSongPalette();
           if (songPalette) {
             const { r, g, b } = songPalette;
-            container.style.setProperty('--lyplus-song-pallete', `rgb(${r}, ${g}, ${b})`);
+            container.style.setProperty(
+              "--lyplus-song-pallete",
+              `rgb(${r}, ${g}, ${b})`
+            );
             const alpha = 133 / 255;
             const r_blend = Math.round(alpha * 255 + (1 - alpha) * r);
             const g_blend = Math.round(alpha * 255 + (1 - alpha) * b);
             const b_blend = Math.round(alpha * 255 + (1 - alpha) * b);
-            container.style.setProperty('--lyplus-song-white-pallete', `rgb(${r_blend}, ${g_blend}, ${b_blend})`);
+            container.style.setProperty(
+              "--lyplus-song-white-pallete",
+              `rgb(${r_blend}, ${g_blend}, ${b_blend})`
+            );
           }
         }
       }
     }
 
-    const playerPageElement = document.querySelector('ytmusic-player-page');
-    container.classList.toggle('fullscreen', playerPageElement && playerPageElement.hasAttribute('player-fullscreened'));
-    // Prefer word-by-word mode in video fullscreen for better karaoke-style experience
-    let isWordByWordMode = (type === "Word" && currentSettings.wordByWord);
-    if (this._isVideoFullscreen?.() ?? this.__detectVideoFullscreen()) {
-      isWordByWordMode = true;
-    }
-    container.classList.toggle('word-by-word-mode', isWordByWordMode);
-    container.classList.toggle('line-by-line-mode', !isWordByWordMode);
-    container.classList.toggle('romanized-big-mode', this.largerTextMode === "romanization");
+    container.classList.toggle(
+      "fullscreen",
+      document.body.hasAttribute("player-fullscreened_")
+    );
+    const isWordByWordMode = type === "Word" && currentSettings.wordByWord;
+    container.classList.toggle("word-by-word-mode", isWordByWordMode);
+    container.classList.toggle("line-by-line-mode", !isWordByWordMode);
 
-    // Call the new updateDisplayMode to handle the actual rendering of lyrics lines
+    container.classList.toggle(
+      "romanized-big-mode",
+      largerTextMode != "lyrics"
+    );
+
+    if (this._notFoundCenterTimer) {
+      clearTimeout(this._notFoundCenterTimer);
+      this._notFoundCenterTimer = null;
+    }
+    container.classList.remove('animate-not-found-center');
+
+    const buttonsWrapper = document.getElementById("lyrics-plus-buttons-wrapper");
+    if (buttonsWrapper) {
+      buttonsWrapper.style.removeProperty("display");
+      buttonsWrapper.style.removeProperty("opacity");
+      buttonsWrapper.style.removeProperty("pointer-events");
+    }
+
     this.updateDisplayMode(lyrics, displayMode, currentSettings);
 
-    // Add song information display in fullscreen mode
-    const playerPageForDisplay = document.querySelector('ytmusic-player-page');
-    const isFullscreen = playerPageForDisplay && playerPageForDisplay.hasAttribute('player-fullscreened');
-    if (isFullscreen && songInfo) {
-      this._addSongInfoDisplay(container);
-    }
-    
-    // Also add song info display when not in fullscreen initially (for when user goes fullscreen later)
-    if (songInfo) {
-      this._addSongInfoDisplay(container);
-    }
-    
-    // Set up fullscreen change listener
     this._setupFullscreenListener();
 
-    // Create control buttons (only once)
+    // Control buttons are created once to avoid re-rendering them.
     this._createControlButtons();
-    container.classList.toggle('blur-inactive-enabled', !!currentSettings.blurInactive);
-    
-    // Show refresh button and translation button when lyrics are successfully displayed
-    if (this.reloadButton) {
-      this.reloadButton.style.display = '';
-    }
-    if (this.translationButton) {
-      this.translationButton.style.display = '';
-    }
-  }
-
-  // Detect if YT Music is currently in video fullscreen mode
-  __detectVideoFullscreen() {
-    try {
-      const page = document.querySelector('ytmusic-player-page');
-      return !!(page && page.hasAttribute('video-mode') && page.hasAttribute('player-fullscreened'));
-    } catch (_) {
-      return false;
-    }
-  }
-
-  _isVideoFullscreen() {
-    return this.__detectVideoFullscreen();
-  }
-
-  _setupPlayerStateObserver(currentSettings) {
-    const page = document.querySelector('ytmusic-player-page');
-    const container = this._getContainer();
-    if (!page || !container) return;
-
-    if (this._playerStateObserver) {
-      try { this._playerStateObserver.disconnect(); } catch (_) {}
-    }
-
-    this._playerStateObserver = new MutationObserver(() => {
-      const isVideoFullscreen = this._isVideoFullscreen();
-      const shouldEnableFade = !!this._currentSettings?.fadePastLines && !isVideoFullscreen;
-      container.classList.toggle('fade-past-lines', shouldEnableFade);
-
-      // Handle not-found auto-hide behavior on fullscreen transitions
-      const isNotFoundState = container.classList.contains('lyrics-plus-message') && !!container.querySelector('.text-not-found');
-      const notFoundMsg = container.querySelector('.text-not-found');
-
-      // Exiting fullscreen: ensure not-found text is visible again
-      if (!isVideoFullscreen) {
-        if (this._notFoundAutoHideTimer) {
-          clearTimeout(this._notFoundAutoHideTimer);
-          this._notFoundAutoHideTimer = null;
-        }
-        if (notFoundMsg) notFoundMsg.classList.remove('auto-hide');
-        return;
-      }
-
-      // Entering fullscreen video with not-found state: schedule fade-out if not already scheduled/applied
-      if (isVideoFullscreen && isNotFoundState && notFoundMsg && !notFoundMsg.classList.contains('auto-hide') && !this._notFoundAutoHideTimer) {
-        this._notFoundAutoHideTimer = setTimeout(() => {
-          const c = this._getContainer();
-          const msg = c?.querySelector?.('.text-not-found');
-          if (c && c.classList.contains('lyrics-plus-message') && msg) {
-            msg.classList.add('auto-hide');
-          }
-          this._notFoundAutoHideTimer = null;
-        }, 2000);
-      }
-    });
-    this._playerStateObserver.observe(page, { attributes: true });
-  }
-
-  _syncFadePastLinesState() {
-    const container = this._getContainer();
-    if (!container) return;
-    
-    const isVideoFullscreen = this._isVideoFullscreen?.() ?? this.__detectVideoFullscreen();
-    const shouldEnableFade = !!this._currentSettings?.fadePastLines && !isVideoFullscreen;
-    container.classList.toggle('fade-past-lines', shouldEnableFade);
-  }
-
-  /**
-   * Removes 'past' class from all lyrics lines to prevent fade out during user scroll
-   * @private
-   */
-  _removePastClassFromAllLines() {
-    if (!this.lyricsContainer) return;
-    const lines = this.lyricsContainer.querySelectorAll('.lyrics-line');
-    lines.forEach(line => {
-      line.classList.remove('past');
-    });
+    container.classList.toggle(
+      "blur-inactive-enabled",
+      !!currentSettings.blurInactive
+    );
+    container.classList.toggle(
+      "hide-offscreen",
+      !!currentSettings.hideOffscreen
+    );
+    this._injectCustomCSS(currentSettings.customCSS);
   }
 
   /**
@@ -1445,72 +1542,34 @@ class LyricsPlusRenderer {
   displaySongNotFound() {
     const container = this._getContainer();
     if (container) {
-      // Clear any pending not-found center timers
       if (this._notFoundCenterTimer) {
         clearTimeout(this._notFoundCenterTimer);
         this._notFoundCenterTimer = null;
       }
-      // Clear any pending auto-hide timers
-      if (this._notFoundAutoHideTimer) {
-        clearTimeout(this._notFoundAutoHideTimer);
-        this._notFoundAutoHideTimer = null;
-      }
-      // Fully reset internal state to avoid any stale lyrics lingering
-      this.cleanupLyrics();
-      // Also remove any leftover song-info overlay tied to previous track
-      const existingSongInfo = document.querySelector('.lyrics-song-info');
-      if (existingSongInfo) existingSongInfo.remove();
-      if (this._cleanupArtworkObservers) {
-        this._cleanupArtworkObservers();
-        this._cleanupArtworkObservers = null;
-      }
-      const refreshedContainer = this._getContainer();
-      if (refreshedContainer) {
-        refreshedContainer.innerHTML = `<span class="text-not-found">${t("notFound")}</span>`;
-        refreshedContainer.classList.add('lyrics-plus-message');
-        // Ensure the animated class is reset before scheduling
-        refreshedContainer.classList.remove('animate-not-found-center');
-        // Ensure player observer is active so we respond to fullscreen toggles
-        try { this._setupPlayerStateObserver?.({}); } catch (_) {}
-        // After a short delay, trigger the center animation and fade-out the message
-        this._notFoundCenterTimer = setTimeout(() => {
-          const latestContainer = this._getContainer();
-          if (latestContainer && latestContainer.classList.contains('lyrics-plus-message')) {
-            latestContainer.classList.add('animate-not-found-center');
-          }
-          this._notFoundCenterTimer = null;
-        }, 2000);
+      container.innerHTML = `<span class="text-not-found">${t(
+        "notFound"
+      )}</span>`;
+      container.classList.add("lyrics-plus-message");
+      container.classList.remove('animate-not-found-center');
 
-        // Check initial state: if already in fullscreen video, schedule auto-hide
-        try {
-          const page = document.querySelector('ytmusic-player-page');
-          const isFullscreenVideo = !!(page && page.hasAttribute('video-mode') && page.hasAttribute('player-fullscreened'));
-          if (isFullscreenVideo && !this._notFoundAutoHideTimer) {
-            this._notFoundAutoHideTimer = setTimeout(() => {
-              const c = this._getContainer();
-              const msg = c?.querySelector?.('.text-not-found');
-              if (c && c.classList.contains('lyrics-plus-message') && msg) {
-                msg.classList.add('auto-hide');
-              }
-              this._notFoundAutoHideTimer = null;
-            }, 2000);
-          }
-        } catch (_) {}
+      const buttonsWrapper = document.getElementById("lyrics-plus-buttons-wrapper");
+      if (buttonsWrapper) {
+        buttonsWrapper.style.display = "none";
+        buttonsWrapper.style.opacity = "0";
+        buttonsWrapper.style.pointerEvents = "none";
       }
       
-      // Try to get song info from DOM and display it even when lyrics not found
-      // Add a small delay to ensure DOM is ready
+      this._notFoundCenterTimer = setTimeout(() => {
+        const latestContainer = this._getContainer();
+        if (latestContainer && latestContainer.classList.contains('lyrics-plus-message')) {
+          latestContainer.classList.add('animate-not-found-center');
+        }
+        this._notFoundCenterTimer = null;
+      }, 2000);
+      
       setTimeout(() => {
         this._addSongInfoFromDOM();
       }, 100);
-      
-      // Keep refresh button and translation button hidden when lyrics not found
-      if (this.reloadButton) {
-        this.reloadButton.style.display = 'none';
-      }
-      if (this.translationButton) {
-        this.translationButton.style.display = 'none';
-      }
     }
   }
 
@@ -1520,38 +1579,83 @@ class LyricsPlusRenderer {
   displaySongError() {
     const container = this._getContainer();
     if (container) {
-      if (this._notFoundAutoHideTimer) {
-        clearTimeout(this._notFoundAutoHideTimer);
-        this._notFoundAutoHideTimer = null;
-      }
       if (this._notFoundCenterTimer) {
         clearTimeout(this._notFoundCenterTimer);
         this._notFoundCenterTimer = null;
       }
+      container.innerHTML = `<span class="text-not-found">${t(
+        "notFoundError"
+      )}</span>`;
+      container.classList.add("lyrics-plus-message");
       container.classList.remove('animate-not-found-center');
-      container.innerHTML = `<span class="text-not-found">${t("notFoundError")}</span>`;
-      container.classList.add('lyrics-plus-message');
+
+      const buttonsWrapper = document.getElementById("lyrics-plus-buttons-wrapper");
+      if (buttonsWrapper) {
+        buttonsWrapper.style.display = "none";
+        buttonsWrapper.style.opacity = "0";
+        buttonsWrapper.style.pointerEvents = "none";
+      }
       
-      // Try to get song info from DOM and display it even when there's an error
-      // Add a small delay to ensure DOM is ready
+      this._notFoundCenterTimer = setTimeout(() => {
+        const latestContainer = this._getContainer();
+        if (latestContainer && latestContainer.classList.contains('lyrics-plus-message')) {
+          latestContainer.classList.add('animate-not-found-center');
+        }
+        this._notFoundCenterTimer = null;
+      }, 2000);
+      
       setTimeout(() => {
         this._addSongInfoFromDOM();
       }, 100);
-      
-      // Hide refresh button and translation button when there's an error
-      if (this.reloadButton) {
-        this.reloadButton.style.display = 'none';
-      }
-      if (this.translationButton) {
-        this.translationButton.style.display = 'none';
-      }
     }
   }
 
-  // --- Text, Style, and ID Utilities ---
+  /**
+   * Gets a reference to the player element, caching it for performance.
+   * @returns {HTMLVideoElement | null} - The player element.
+   * @private
+   */
+  _getPlayerElement() {
+    if (this._playerElement === undefined) {
+      this._playerElement =
+        document.querySelector(this.uiConfig.player) || null;
+    }
+    return this._playerElement;
+  }
+
+  /**
+   * Gets the current playback time, using a custom function from uiConfig if provided, otherwise falling back to the player element.
+   * @returns {number} - The current time in seconds.
+   * @private
+   */
+  _getCurrentPlayerTime() {
+    if (typeof this.uiConfig.getCurrentTime === "function") {
+      return this.uiConfig.getCurrentTime();
+    }
+    const player = this._getPlayerElement();
+    return player ? player.currentTime : 0;
+  }
+
+  /**
+   * Seeks the player to a specific time, using a custom function from uiConfig if provided.
+   * @param {number} time - The time to seek to in seconds.
+   * @private
+   */
+  _seekPlayerTo(time) {
+    if (typeof this.uiConfig.seekTo === "function") {
+      this.uiConfig.seekTo(time);
+      return;
+    }
+    const player = this._getPlayerElement();
+    if (player) {
+      player.currentTime = time;
+    }
+  }
 
   _getTextWidth(text, font) {
-    const canvas = this.textWidthCanvas || (this.textWidthCanvas = document.createElement("canvas"));
+    const canvas =
+      this.textWidthCanvas ||
+      (this.textWidthCanvas = document.createElement("canvas"));
     const context = canvas.getContext("2d");
     context.font = font;
     return context.measureText(text).width;
@@ -1559,11 +1663,13 @@ class LyricsPlusRenderer {
 
   _ensureElementIds() {
     if (!this.cachedLyricsLines || !this.cachedSyllables) return;
-    this.cachedLyricsLines.forEach((line, i) => { if (line && !line.id) line.id = `line-${i}`; });
-    this.cachedSyllables.forEach((syllable, i) => { if (syllable && !syllable.id) syllable.id = `syllable-${i}`; });
+    this.cachedLyricsLines.forEach((line, i) => {
+      if (line && !line.id) line.id = `line-${i}`;
+    });
+    this.cachedSyllables.forEach((syllable, i) => {
+      if (syllable && !syllable.id) syllable.id = `syllable-${i}`;
+    });
   }
-
-  // --- Lyrics Synchronization & Highlighting ---
 
   /**
    * Starts the synchronization loop for highlighting lyrics based on video time.
@@ -1571,322 +1677,258 @@ class LyricsPlusRenderer {
    * @returns {Function} - A cleanup function to stop the sync.
    */
   _startLyricsSync(currentSettings = {}) {
-    // Cleanup previous sync if exists
-    if (this._syncCleanup) {
-      this._syncCleanup();
-      this._syncCleanup = null;
+    const canGetTime =
+      typeof this.uiConfig.getCurrentTime === "function" ||
+      this._getPlayerElement();
+    if (!canGetTime) {
+      console.warn(
+        "LyricsPlusRenderer: Cannot start sync. No player element found and no custom getCurrentTime function provided in uiConfig."
+      );
+      return () => { };
     }
 
-    const videoElement = document.querySelector('video');
-    if (!videoElement) return () => { };
     this._ensureElementIds();
     if (this.visibilityObserver) this.visibilityObserver.disconnect();
     this.visibilityObserver = this._setupVisibilityTracking();
 
     if (this.lyricsAnimationFrameId) {
-      cancelAnimationFrame(this.lyricsAnimationFrameId);
-      this.lyricsAnimationFrameId = null;
+      if (!this.uiConfig.disableNativeTick)
+        cancelAnimationFrame(this.lyricsAnimationFrameId);
     }
-    this.lastTime = videoElement.currentTime * 1000;
-
-    if (this._visibilityChangeHandler) {
-      document.removeEventListener('visibilitychange', this._visibilityChangeHandler);
-    }
-    this._visibilityChangeHandler = () => {
-      if (!document.hidden) {
-        this.lastTime = videoElement.currentTime * 1000;
-      }
-    };
-    document.addEventListener('visibilitychange', this._visibilityChangeHandler);
-
-    const sync = () => {
-      if (document.hidden) {
+    this.lastTime = this._getCurrentPlayerTime() * 1000;
+    if (!this.uiConfig.disableNativeTick) {
+      const sync = () => {
+        const currentTime = this._getCurrentPlayerTime() * 1000;
+        const isForceScroll = Math.abs(currentTime - this.lastTime) > 1000;
+        this._updateLyricsHighlight(
+          currentTime,
+          isForceScroll,
+          currentSettings
+        );
+        this.lastTime = currentTime;
         this.lyricsAnimationFrameId = requestAnimationFrame(sync);
-        return;
-      }
-      const currentTime = videoElement.currentTime * 1000;
-      const isForceScroll = Math.abs(currentTime - this.lastTime) > 1000;
-      this._updateLyricsHighlight(currentTime, isForceScroll, currentSettings);
-      this.lastTime = currentTime;
+      };
       this.lyricsAnimationFrameId = requestAnimationFrame(sync);
-    };
-    this.lyricsAnimationFrameId = requestAnimationFrame(sync);
+    }
 
     this._setupResizeObserver();
 
-    // Store cleanup function
-    this._syncCleanup = () => {
-      if (this.visibilityObserver) {
-        this.visibilityObserver.disconnect();
-        this.visibilityObserver = null;
-      }
-      if (this.resizeObserver) {
-        this.resizeObserver.disconnect();
-        this.resizeObserver = null;
-      }
-      if (this._visibilityChangeHandler) {
-        document.removeEventListener('visibilitychange', this._visibilityChangeHandler);
-        this._visibilityChangeHandler = null;
-      }
+    return () => {
+      if (this.visibilityObserver) this.visibilityObserver.disconnect();
+      if (this.resizeObserver) this.resizeObserver.disconnect();
       if (this.lyricsAnimationFrameId) {
         cancelAnimationFrame(this.lyricsAnimationFrameId);
         this.lyricsAnimationFrameId = null;
       }
     };
-
-    return this._syncCleanup;
   }
 
   /**
- * Updates the highlighted lyrics and syllables based on the current time.
- * @param {number} currentTime - The current video time in milliseconds.
- * @param {boolean} isForceScroll - Whether to force a scroll update.
- * @param {object} currentSettings - The current user settings.
- */
-  _updateLyricsHighlight(currentTime, isForceScroll = false, currentSettings = {}) {
-    // Guard clause: Do nothing if lyrics aren't loaded.
+   * Updates the current time
+   * @param {number} currentTime - The current video time in seconds.
+   */
+  updateCurrentTick(currentTime) {
+    currentTime = currentTime * 1000;
+    const isForceScroll = Math.abs(currentTime - this.lastTime) > 1000;
+    this._updateLyricsHighlight(currentTime, isForceScroll, currentSettings);
+    this.lastTime = currentTime;
+  }
+
+  /**
+   * Updates the highlighted lyrics and syllables based on the current time.
+   * @param {number} currentTime - The current video time in milliseconds.
+   * @param {boolean} isForceScroll - Whether to force a scroll update.
+   * @param {object} currentSettings - The current user settings.
+   */
+  _updateLyricsHighlight(
+    currentTime,
+    isForceScroll = false,
+    currentSettings = {}
+  ) {
     if (!this.cachedLyricsLines || this.cachedLyricsLines.length === 0) {
       return;
     }
 
-    // Constants for predictive timing.
     const scrollLookAheadMs = 300;
     const highlightLookAheadMs = 190;
+    const predictiveTime = currentTime + scrollLookAheadMs;
 
-    // --- 1. SCROLLING LOGIC (Optimized) ---
-    // Cache visible lines array, but invalidate when visibility actually changes
     let visibleLines = this._cachedVisibleLines;
-    const currentVisibilityHash = Array.from(this.visibleLineIds).sort().join(',');
+    const currentVisibilityHash =
+      this.visibleLineIds.size > 0
+        ? Array.from(this.visibleLineIds).sort().join(",")
+        : "";
 
     if (!visibleLines || this._lastVisibilityHash !== currentVisibilityHash) {
-      visibleLines = this.cachedLyricsLines.filter(line => this.visibleLineIds.has(line.id));
+      visibleLines = this.cachedLyricsLines.filter((line) =>
+        this.visibleLineIds.has(line.id)
+      );
       this._cachedVisibleLines = visibleLines;
       this._lastVisibilityHash = currentVisibilityHash;
     }
 
-    const predictiveTime = currentTime + scrollLookAheadMs;
-    let lineToScroll = null;
-
-    // Optimized active line finding - break early when possible
-    const currentlyActiveAndPredictiveLines = [];
-    for (let i = 0; i < this.cachedLyricsLines.length; i++) {
-      const line = this.cachedLyricsLines[i];
-      if (line && predictiveTime >= line._startTimeMs && predictiveTime < line._endTimeMs) {
-        currentlyActiveAndPredictiveLines.push(line);
-      }
-    }
-
-    if (currentlyActiveAndPredictiveLines.length > 0) {
-      // Find earliest starting line more efficiently
-      lineToScroll = currentlyActiveAndPredictiveLines[0];
-      for (let i = 1; i < currentlyActiveAndPredictiveLines.length; i++) {
-        if (currentlyActiveAndPredictiveLines[i]._startTimeMs < lineToScroll._startTimeMs) {
-          lineToScroll = currentlyActiveAndPredictiveLines[i];
-        }
-      }
-    } else {
-      // Optimized fallback - iterate backwards for most recent
-      const lookAheadTime = currentTime - scrollLookAheadMs;
-      for (let i = this.cachedLyricsLines.length - 1; i >= 0; i--) {
-        const line = this.cachedLyricsLines[i];
-        if (line && lookAheadTime >= line._startTimeMs) {
-          lineToScroll = line;
-          break;
-        }
-      }
-    }
-
-    // Fallback: If song hasn't started, prepare to scroll to the first line.
-    if (!lineToScroll && this.cachedLyricsLines.length > 0) {
-      lineToScroll = this.cachedLyricsLines[0];
-    }
-
-    // --- 2. HIGHLIGHTING LOGIC (Optimized) ---
-    const highlightTime = currentTime - highlightLookAheadMs;
     const activeLinesForHighlighting = [];
 
-    // Only check visible lines and limit to 3 results
-    for (let i = 0; i < visibleLines.length && activeLinesForHighlighting.length < 3; i++) {
+    for (let i = 0; i < visibleLines.length; i++) {
       const line = visibleLines[i];
-      if (line && currentTime >= line._startTimeMs - highlightLookAheadMs && currentTime <= line._endTimeMs - highlightLookAheadMs) {
+      if (
+        line &&
+        currentTime >= line._startTimeMs - highlightLookAheadMs &&
+        currentTime <= line._endTimeMs - highlightLookAheadMs
+      ) {
         activeLinesForHighlighting.push(line);
       }
     }
 
-    // Sort by start time (descending) - only if we have multiple lines
+    if (activeLinesForHighlighting.length > 3) {
+      activeLinesForHighlighting.splice(
+        0,
+        activeLinesForHighlighting.length - 3
+      );
+    }
+
     if (activeLinesForHighlighting.length > 1) {
-      activeLinesForHighlighting.sort((a, b) => b._startTimeMs - a._startTimeMs);
+      activeLinesForHighlighting.sort(
+        (a, b) => a._startTimeMs - b._startTimeMs
+      );
     }
 
-    const newActiveLineIds = new Set();
-    for (let i = 0; i < activeLinesForHighlighting.length; i++) {
-      newActiveLineIds.add(activeLinesForHighlighting[i].id);
+    const newActiveLineIds = new Set(
+      activeLinesForHighlighting.map((line) => line.id)
+    );
+
+    const activeLineIdsChanged =
+      this.activeLineIds.size !== newActiveLineIds.size ||
+      [...this.activeLineIds].some((id) => !newActiveLineIds.has(id));
+
+    if (activeLineIdsChanged) {
+      const toDeactivate = [];
+      for (const lineId of this.activeLineIds) {
+        if (!newActiveLineIds.has(lineId)) {
+          toDeactivate.push(lineId);
+        }
+      }
+
+      const toActivate = [];
+      for (const lineId of newActiveLineIds) {
+        if (!this.activeLineIds.has(lineId)) {
+          toActivate.push(lineId);
+        }
+      }
+
+      if (toDeactivate.length > 0) {
+        this._batchDeactivateLines(toDeactivate);
+      }
+      if (toActivate.length > 0) {
+        this._batchActivateLines(toActivate);
+      }
+
+      this.activeLineIds = newActiveLineIds;
     }
 
-    // --- 3. DOM & STATE UPDATES (Optimized) ---
-    // Trigger scroll if needed - skip if we're in the middle of a fullscreen transition
-    if (lineToScroll && (lineToScroll !== this.currentPrimaryActiveLine || isForceScroll)) {
+    let candidates = this._findActiveLine(
+      predictiveTime,
+      currentTime - scrollLookAheadMs
+    );
+
+    if (candidates.length > 3) {
+      candidates = candidates.slice(-3);
+    }
+
+    let lineToScroll = candidates[0];
+
+    if (
+      lineToScroll &&
+      (lineToScroll !== this.currentPrimaryActiveLine || isForceScroll)
+    ) {
       if (!this.isUserControllingScroll || isForceScroll) {
-        // During fullscreen transition, only update if forced (to prevent lag)
-        if (this._isFullscreenTransitioning && !isForceScroll) {
-          // Skip updates during transition, but keep track of the line to scroll
-          this.currentPrimaryActiveLine = lineToScroll;
-          return;
-        }
-        
-        // Throttle scroll updates to reduce lag in player page
-        // Use longer throttle during transition recovery period
-        const now = Date.now();
-        const timeSinceLastUpdate = now - this._lastScrollUpdateTime;
-        const throttleDelay = this._isFullscreenTransitioning ? 100 : this._scrollUpdateThrottle;
-        const shouldUpdate = isForceScroll || 
-                             timeSinceLastUpdate >= throttleDelay ||
-                             this._lastScrollLineId !== lineToScroll.id;
-        
-        if (shouldUpdate) {
-          this._updatePositionClassesAndScroll(lineToScroll, isForceScroll);
-          this.lastPrimaryActiveLine = this.currentPrimaryActiveLine;
-          this.currentPrimaryActiveLine = lineToScroll;
-          this._lastScrollUpdateTime = now;
-          this._lastScrollLineId = lineToScroll.id;
-        }
+        this._updatePositionClassesAndScroll(lineToScroll, isForceScroll);
+        this.lastPrimaryActiveLine = this.currentPrimaryActiveLine;
+        this.currentPrimaryActiveLine = lineToScroll;
       }
     }
 
-    // --- OPTIMIZATION: Batch DOM updates for visible lines ---
-    const activeLineIdsArray = Array.from(this.activeLineIds);
-    const newActiveLineIdsArray = Array.from(newActiveLineIds);
-
-    // Process lines that need to be deactivated
-    for (let i = 0; i < activeLineIdsArray.length; i++) {
-      const lineId = activeLineIdsArray[i];
-      if (!newActiveLineIds.has(lineId)) {
-        const line = document.getElementById(lineId);
-        if (line) {
-          line.classList.remove('active');
-          this._resetSyllables(line);
-          // Only add 'past' class during programmatic scrolling (auto scroll), not user scroll
-          if (this.lyricsContainer && this.lyricsContainer.classList.contains('fade-past-lines') && this.isProgrammaticScrolling) {
-            line.classList.add('past');
-          }
-        }
-      }
-    }
-
-    // Process lines that need to be activated
-    for (let i = 0; i < newActiveLineIdsArray.length; i++) {
-      const lineId = newActiveLineIdsArray[i];
-      if (!this.activeLineIds.has(lineId)) {
-        const line = document.getElementById(lineId);
-        if (line) {
-          line.classList.add('active');
-          // Ensure newly active line is not treated as past
-          if (line.classList.contains('past')) line.classList.remove('past');
-        }
-      }
-    }
-
-    this.activeLineIds = newActiveLineIds;
-
-    const mostRecentActiveLine = activeLinesForHighlighting.length > 0 ? activeLinesForHighlighting[0] : null;
+    const mostRecentActiveLine =
+      activeLinesForHighlighting.length > 0
+        ? activeLinesForHighlighting[activeLinesForHighlighting.length - 1]
+        : null;
     if (this.currentFullscreenFocusedLine !== mostRecentActiveLine) {
       if (this.currentFullscreenFocusedLine) {
-        this.currentFullscreenFocusedLine.classList.remove('fullscreen-focused');
+        this.currentFullscreenFocusedLine.classList.remove(
+          "fullscreen-focused"
+        );
       }
       if (mostRecentActiveLine) {
-        mostRecentActiveLine.classList.add('fullscreen-focused');
+        mostRecentActiveLine.classList.add("fullscreen-focused");
       }
       this.currentFullscreenFocusedLine = mostRecentActiveLine;
     }
 
     this._updateSyllables(currentTime);
 
-    const isVideoFullscreen = this._isVideoFullscreen?.() ?? this.__detectVideoFullscreen();
-    if (this.lyricsContainer && this.lyricsContainer.classList.contains('hide-offscreen') && !isVideoFullscreen) {
+    if (
+      this.lyricsContainer &&
+      this.lyricsContainer.classList.contains("hide-offscreen")
+    ) {
       if (this._lastVisibilityUpdateSize !== this.visibleLineIds.size) {
         this._batchUpdateViewportVisibility();
         this._lastVisibilityUpdateSize = this.visibleLineIds.size;
       }
     }
+  }
 
-    // Apply fade-out class to past lines when enabled - ONLY during programmatic scrolling (auto scroll)
-    if (this.lyricsContainer && this.lyricsContainer.classList.contains('fade-past-lines') && this.isProgrammaticScrolling) {
-      const elements = this.cachedLyricsLines;
-      const graceMs = 180; // small grace for smoother feel
-      for (let i = 0; i < elements.length; i++) {
-        const line = elements[i];
-        if (!line || typeof line._endTimeMs !== 'number') continue;
-        const becamePast = currentTime > line._endTimeMs; // immediate past detection to avoid collapse
-        const stablePast = currentTime > (line._endTimeMs + graceMs); // for stable fade state
-        const isActive = this.activeLineIds.has(line.id);
+  _findActiveLine(predictiveTime, lookAheadTime) {
+    const lines = this.cachedLyricsLines;
+    const currentlyActiveAndPredictiveLines = [];
 
-        if (isActive) {
-          if (line.classList.contains('past')) line.classList.remove('past');
-          continue;
-        }
+    for (let i = 0; i < lines.length; i++) {
+      const line = lines[i];
+      if (
+        line &&
+        predictiveTime >= line._startTimeMs &&
+        predictiveTime < line._endTimeMs
+      ) {
+        currentlyActiveAndPredictiveLines.push(line);
+      }
+    }
 
-        // Mark as past immediately after end to prevent background vocal collapse
-        if (becamePast) {
-          line.classList.add('past');
-          continue;
-        }
+    if (currentlyActiveAndPredictiveLines.length > 0) {
+      return currentlyActiveAndPredictiveLines;
+    }
 
-        // If rewound significantly before the line start, clear past
-        if (currentTime < (line._startTimeMs - 50) && line.classList.contains('past')) {
-          line.classList.remove('past');
-        }
+    for (let i = lines.length - 1; i >= 0; i--) {
+      const line = lines[i];
+      if (line && lookAheadTime >= line._startTimeMs) {
+        return [line];
+      }
+    }
+
+    return lines.length > 0 ? [lines[0]] : [];
+  }
+
+  /**
+   * Batch deactivate lines to reduce DOM thrashing
+   */
+  _batchDeactivateLines(lineIds) {
+    for (const lineId of lineIds) {
+      const line = document.getElementById(lineId);
+      if (line) {
+        line.classList.remove("active");
+        this._resetSyllables(line);
       }
     }
   }
 
-  _updateSyllables(currentTime) {
-    if (!this.activeLineIds.size) return;
-
-    const newHighlightedSyllableIds = new Set();
-
-    // Convert Set to Array once for iteration
-    const activeLineIdsArray = Array.from(this.activeLineIds);
-
-    for (let i = 0; i < activeLineIdsArray.length; i++) {
-      const lineId = activeLineIdsArray[i];
-      const parentLine = document.getElementById(lineId);
-      if (!parentLine) continue;
-
-      // Cache syllables query result - use cached if available
-      let syllables = parentLine._cachedSyllableElements;
-      if (!syllables) {
-        syllables = parentLine.querySelectorAll('.lyrics-syllable');
-        parentLine._cachedSyllableElements = syllables; // Cache for next time
-      }
-
-      for (let j = 0; j < syllables.length; j++) {
-        const syllable = syllables[j];
-        if (!syllable || typeof syllable._startTimeMs !== 'number' || typeof syllable._endTimeMs !== 'number') continue;
-
-        const startTime = syllable._startTimeMs;
-        const endTime = syllable._endTimeMs;
-        const classList = syllable.classList;
-        const hasHighlight = classList.contains('highlight');
-        const hasFinished = classList.contains('finished');
-
-        if (currentTime >= startTime && currentTime <= endTime) {
-          newHighlightedSyllableIds.add(syllable.id);
-          if (!hasHighlight) {
-            this._updateSyllableAnimation(syllable, currentTime);
-          }
-        } else if (currentTime < startTime && hasHighlight) {
-          this._resetSyllable(syllable);
-        } else if (currentTime > startTime) {
-          if (!hasFinished) {
-            classList.add('finished');
-          } else if (!hasHighlight) {
-            this._updateSyllableAnimation(syllable, startTime);
-          }
-        }
+  /**
+   * Batch activate lines to reduce DOM thrashing
+   */
+  _batchActivateLines(lineIds) {
+    for (const lineId of lineIds) {
+      const line = document.getElementById(lineId);
+      if (line) {
+        line.classList.add("active");
       }
     }
-
-    this.highlightedSyllableIds = newHighlightedSyllableIds;
   }
 
   /**
@@ -1900,64 +1942,148 @@ class LyricsPlusRenderer {
       const line = lines[i];
       if (line) {
         const isOutOfView = !visibleIds.has(line.id);
-        line.classList.toggle('viewport-hidden', isOutOfView);
+        line.classList.toggle("viewport-hidden", isOutOfView);
       }
     }
   }
 
-  _updateSyllableAnimation(syllable, currentTime) {
-    if (syllable.classList.contains('highlight')) return;
+  _updateSyllables(currentTime) {
+    if (!this.activeLineIds.size) return;
+
+    // Cache syllable queries to avoid repeated DOM lookups
+    const activeSyllables = [];
+
+    for (const lineId of this.activeLineIds) {
+      const parentLine = document.getElementById(lineId);
+      if (!parentLine) continue;
+
+      let syllables = parentLine._cachedSyllableElements;
+      if (!syllables) {
+        syllables = parentLine.querySelectorAll(".lyrics-syllable");
+        parentLine._cachedSyllableElements = syllables;
+      }
+
+      for (let j = 0; j < syllables.length; j++) {
+        const syllable = syllables[j];
+        if (syllable && typeof syllable._startTimeMs === "number") {
+          activeSyllables.push(syllable);
+        }
+      }
+    }
+
+    // Process all syllables in batches
+    const toHighlight = [];
+    const toFinish = [];
+    const toReset = [];
+
+    for (const syllable of activeSyllables) {
+      const startTime = syllable._startTimeMs;
+      const endTime = syllable._endTimeMs;
+      const classList = syllable.classList;
+      const hasHighlight = classList.contains("highlight");
+      const hasFinished = classList.contains("finished");
+
+      if (currentTime >= startTime && currentTime <= endTime) {
+        if (!hasHighlight) {
+          toHighlight.push(syllable);
+        }
+        if (hasFinished) {
+          classList.remove("finished");
+        }
+      } else if (currentTime > endTime) {
+        if (!hasFinished) {
+          if (!hasHighlight) {
+            toHighlight.push(syllable);
+          }
+          toFinish.push(syllable);
+        }
+      } else {
+        if (hasHighlight || hasFinished) {
+          toReset.push(syllable);
+        }
+      }
+    }
+
+    // Batch apply changes
+    for (const syllable of toHighlight) {
+      this._updateSyllableAnimation(syllable);
+    }
+    for (const syllable of toFinish) {
+      syllable.classList.add("finished");
+    }
+    for (const syllable of toReset) {
+      this._resetSyllable(syllable);
+    }
+  }
+
+  _updateSyllableAnimation(syllable) {
+    // --- READ PHASE ---
+    if (syllable.classList.contains("highlight")) return;
 
     const classList = syllable.classList;
-    const isRTL = classList.contains('rtl-text');
+    const isRTL = classList.contains("rtl-text");
     const charSpans = syllable._cachedCharSpans;
     const wordElement = syllable.parentElement;
     const allWordCharSpans = wordElement?._cachedChars;
-    const isGrowable = wordElement?.classList.contains('growable');
-    const isFirstSyllable = syllable.dataset.syllableIndex === '0';
-    const isGap = syllable.parentElement?.parentElement?.parentElement?.classList.contains('lyrics-gap');
+    const isGrowable = wordElement?.classList.contains("growable");
+    const isFirstSyllable = syllable.dataset.syllableIndex === "0";
+    const isGap =
+      syllable.parentElement?.parentElement?.parentElement?.classList.contains(
+        "lyrics-gap"
+      );
     const nextSyllable = syllable._nextSyllableInWord;
 
+    // --- CALCULATION PHASE ---
     const pendingStyleUpdates = [];
     const charAnimationsMap = new Map();
-    const wipeAnimation = isRTL ? 'wipe-rtl' : 'wipe';
+    const wipeAnimation = isRTL ? "wipe-rtl" : "wipe";
 
+    // Step 1: Grow Pass.
     if (isGrowable && isFirstSyllable && allWordCharSpans) {
-      const spansToAnimate = allWordCharSpans;
       const finalDuration = syllable._wordDurationMs ?? syllable._durationMs;
       const baseDelayPerChar = finalDuration * 0.09;
       const growDurationMs = finalDuration * 1.5;
 
-      spansToAnimate.forEach(span => {
+      allWordCharSpans.forEach((span) => {
         const horizontalOffset = parseFloat(span.dataset.horizontalOffset) || 0;
-        const growDelay = baseDelayPerChar * (parseFloat(span.dataset.syllableCharIndex) || 0);
-        charAnimationsMap.set(span, `grow-dynamic ${growDurationMs}ms ease-in-out ${growDelay}ms forwards`);
+        const growDelay =
+          baseDelayPerChar * (parseFloat(span.dataset.syllableCharIndex) || 0);
+        charAnimationsMap.set(
+          span,
+          `grow-dynamic ${growDurationMs}ms ease-in-out ${growDelay}ms forwards`
+        );
         pendingStyleUpdates.push({
           element: span,
-          property: '--char-offset-x',
-          value: `${horizontalOffset}`
+          property: "--char-offset-x",
+          value: `${horizontalOffset}`,
         });
       });
     }
 
+    // Step 2: Wipe Pass.
     if (charSpans && charSpans.length > 0) {
       const syllableDuration = syllable._durationMs;
 
       charSpans.forEach((span, charIndex) => {
-        const wipeDelay = syllableDuration * (parseFloat(span.dataset.wipeStart) || 0);
-        const wipeDuration = syllableDuration * (parseFloat(span.dataset.wipeDuration) || 0);
+        const wipeDelay =
+          syllableDuration * (parseFloat(span.dataset.wipeStart) || 0);
+        const wipeDuration =
+          syllableDuration * (parseFloat(span.dataset.wipeDuration) || 0);
 
-        const existingAnimation = charAnimationsMap.get(span) || span.style.animation;
+        const existingAnimation =
+          charAnimationsMap.get(span) || span.style.animation;
         const animationParts = [];
 
-        if (existingAnimation && existingAnimation.includes('grow-dynamic')) {
-          animationParts.push(existingAnimation.split(',')[0].trim());
+        if (existingAnimation && existingAnimation.includes("grow-dynamic")) {
+          animationParts.push(existingAnimation.split(",")[0].trim());
         }
 
         if (charIndex > 0) {
           const prevChar = charSpans[charIndex - 1];
-          const prevWipeDelay = syllableDuration * (parseFloat(prevChar.dataset.wipeStart) || 0);
-          const prevWipeDuration = syllableDuration * (parseFloat(prevChar.dataset.wipeDuration) || 0);
+          const prevWipeDelay =
+            syllableDuration * (parseFloat(prevChar.dataset.wipeStart) || 0);
+          const prevWipeDuration =
+            syllableDuration * (parseFloat(prevChar.dataset.wipeDuration) || 0);
 
           if (prevWipeDuration > 0) {
             animationParts.push(
@@ -1972,61 +2098,67 @@ class LyricsPlusRenderer {
           );
         }
 
-        charAnimationsMap.set(span, animationParts.join(', '));
+        charAnimationsMap.set(span, animationParts.join(", "));
       });
     } else {
       const currentWipeAnimation = isGap ? "fade-gap" : wipeAnimation;
       const syllableAnimation = `${currentWipeAnimation} ${syllable._durationMs}ms linear forwards`;
       pendingStyleUpdates.push({
         element: syllable,
-        property: 'animation',
-        value: syllableAnimation
+        property: "animation",
+        value: syllableAnimation,
       });
     }
 
+    // Step 3: Pre-Wipe Pass.
     if (nextSyllable) {
       const preHighlightDuration = syllable._preHighlightDurationMs;
       const preHighlightDelay = syllable._preHighlightDelayMs;
 
       pendingStyleUpdates.push({
         element: nextSyllable,
-        property: 'class',
-        action: 'add',
-        value: 'pre-highlight'
+        property: "class",
+        action: "add",
+        value: "pre-highlight",
       });
       pendingStyleUpdates.push({
         element: nextSyllable,
-        property: '--pre-wipe-duration',
-        value: `${preHighlightDuration}ms`
+        property: "--pre-wipe-duration",
+        value: `${preHighlightDuration}ms`,
       });
       pendingStyleUpdates.push({
         element: nextSyllable,
-        property: '--pre-wipe-delay',
-        value: `${preHighlightDelay}ms`
+        property: "--pre-wipe-delay",
+        value: `${preHighlightDelay}ms`,
       });
 
       const nextCharSpan = nextSyllable._cachedCharSpans?.[0];
       if (nextCharSpan) {
-        const preWipeAnim = `pre-wipe-char ${preHighlightDuration}ms linear ${preHighlightDelay}ms forwards`;
-        const existingAnimation = charAnimationsMap.get(nextCharSpan) || nextCharSpan.style.animation || '';
-        const combinedAnimation = existingAnimation && !existingAnimation.includes('pre-wipe-char')
-          ? `${existingAnimation}, ${preWipeAnim}`
-          : preWipeAnim;
+        const preWipeAnim = `pre-wipe-char ${preHighlightDuration}ms ${preHighlightDelay}ms forwards`;
+        const existingAnimation =
+          charAnimationsMap.get(nextCharSpan) ||
+          nextCharSpan.style.animation ||
+          "";
+        const combinedAnimation =
+          existingAnimation && !existingAnimation.includes("pre-wipe-char")
+            ? `${existingAnimation}, ${preWipeAnim}`
+            : preWipeAnim;
         charAnimationsMap.set(nextCharSpan, combinedAnimation);
       }
     }
 
-    classList.remove('pre-highlight');
-    classList.add('highlight');
+    // --- WRITE PHASE ---
+    classList.remove("pre-highlight");
+    classList.add("highlight");
 
     for (const [span, animationString] of charAnimationsMap.entries()) {
       span.style.animation = animationString;
     }
 
     for (const update of pendingStyleUpdates) {
-      if (update.action === 'add') {
+      if (update.action === "add") {
         update.element.classList.add(update.value);
-      } else if (update.property === 'animation') {
+      } else if (update.property === "animation") {
         update.element.style.animation = update.value;
       } else {
         update.element.style.setProperty(update.property, update.value);
@@ -2036,40 +2168,50 @@ class LyricsPlusRenderer {
 
   _resetSyllable(syllable) {
     if (!syllable) return;
-    syllable.style.animation = '';
-    if(!syllable.classList.contains('finished')){
-      syllable.classList.add("finished")
+    syllable.style.animation = "";
+    if (!syllable.classList.contains("finished")) {
+      syllable.classList.add("finished");
       syllable.offsetHeight;
     }
-    syllable.classList.remove('highlight', 'finished', 'pre-highlight');
-    syllable.style.removeProperty('--pre-wipe-duration');
-    syllable.style.removeProperty('--pre-wipe-delay');
-    syllable.querySelectorAll('span.char').forEach(span => { span.style.animation = ''; });
+    syllable.classList.remove("highlight", "finished", "pre-highlight");
+    syllable.style.removeProperty("--pre-wipe-duration");
+    syllable.style.removeProperty("--pre-wipe-delay");
+    syllable.querySelectorAll("span.char").forEach((span) => {
+      span.style.animation = "";
+    });
   }
 
   _resetSyllables(line) {
     if (!line) return;
-    Array.from(line.getElementsByClassName('lyrics-syllable')).forEach(this._resetSyllable);
+    Array.from(line.getElementsByClassName("lyrics-syllable")).forEach(
+      this._resetSyllable
+    );
   }
 
-  // --- Scrolling Logic ---
-
   _getScrollPaddingTop() {
-    const selectors = [
-      'ytmusic-tab-renderer:has(#lyrics-plus-container[style*="display: block"])',
-      'ytmusic-app-layout[is-mweb-modernization-enabled] ytmusic-tab-renderer:has(#lyrics-plus-container[style*="display: block"])',
-      'ytmusic-player-page:not([is-video-truncation-fix-enabled])[player-fullscreened] ytmusic-tab-renderer:has(#lyrics-plus-container[style*="display: block"])'
-    ];
+    const selectors = this.uiConfig.selectors;
     for (const selector of selectors) {
       const element = document.querySelector(selector);
       if (element) {
         const style = window.getComputedStyle(element);
-        const paddingTopValue = style.getPropertyValue('--lyrics-scroll-padding-top') || '25%';
-        return paddingTopValue.includes('%') ? element.getBoundingClientRect().height * (parseFloat(paddingTopValue) / 100) : (parseFloat(paddingTopValue) || 0);
+        const paddingTopValue =
+          style.getPropertyValue("--lyrics-scroll-padding-top") || "25%";
+        return paddingTopValue.includes("%")
+          ? element.getBoundingClientRect().height *
+          (parseFloat(paddingTopValue) / 100)
+          : parseFloat(paddingTopValue) || 0;
       }
     }
-    const container = document.querySelector("#lyrics-plus-container")?.parentElement;
-    return container ? (parseFloat(window.getComputedStyle(container).getPropertyValue('scroll-padding-top')) || 0) : 0;
+    const container = document.querySelector(
+      "#lyrics-plus-container"
+    )?.parentElement;
+    return container
+      ? parseFloat(
+        window
+          .getComputedStyle(container)
+          .getPropertyValue("scroll-padding-top")
+      ) || 0
+      : 0;
   }
 
   /**
@@ -2084,31 +2226,36 @@ class LyricsPlusRenderer {
   _animateScroll(newTranslateY, forceScroll = false) {
     if (!this.lyricsContainer) return;
 
-    // Early exit if position hasn't changed and not forced
-    if (!forceScroll && this.currentScrollOffset === newTranslateY) return;
+    if (
+      !forceScroll &&
+      Math.abs(this.currentScrollOffset - newTranslateY) < 0.1
+    )
+      return;
 
-    // Set the primary scroll offset for the entire container.
     this.currentScrollOffset = newTranslateY;
-    this.lyricsContainer.style.setProperty('--lyrics-scroll-offset', `${newTranslateY}px`);
 
-    // Cache container classes check
-    const isUserScrolling = this.lyricsContainer.classList.contains('user-scrolling');
+    this.lyricsContainer.style.setProperty(
+      "--lyrics-scroll-offset",
+      `${newTranslateY}px`
+    );
 
-    // If this is a forced jump (seek/click) or a user-driven scroll,
-    // make all line animations instant and exit early.
+    const isUserScrolling =
+      this.lyricsContainer.classList.contains("user-scrolling");
+
     if (forceScroll || isUserScrolling) {
-      // Batch update all delays to 0ms
+      // Batch clear delays
       const elements = this.cachedLyricsLines;
       for (let i = 0; i < elements.length; i++) {
         if (elements[i]) {
-          elements[i].style.setProperty('--lyrics-line-delay', '0ms');
+          elements[i].style.setProperty("--lyrics-line-delay", "0ms");
         }
       }
       return;
     }
 
-    // Cache reference line calculations
-    const referenceLine = this.currentPrimaryActiveLine || this.lastPrimaryActiveLine ||
+    const referenceLine =
+      this.currentPrimaryActiveLine ||
+      this.lastPrimaryActiveLine ||
       (this.cachedLyricsLines.length > 0 ? this.cachedLyricsLines[0] : null);
 
     if (!referenceLine) return;
@@ -2116,50 +2263,76 @@ class LyricsPlusRenderer {
     const referenceLineIndex = this.cachedLyricsLines.indexOf(referenceLine);
     if (referenceLineIndex === -1) return;
 
-    // Constants
-    const delayIncrement = 30; // 30ms stagger per line
+    const delayIncrement = 30;
     let delayCounter = 0;
-
-    // Batch DOM updates for better performance
     const elements = this.cachedLyricsLines;
-    const visibleIds = this.visibleLineIds; // Cache reference
+    const visibleIds = this.visibleLineIds;
+
+    // Batch style updates
+    const styleUpdates = [];
 
     for (let i = 0; i < elements.length; i++) {
       const element = elements[i];
       if (!element) continue;
 
-      // Check visibility using cached Set
       if (visibleIds.has(element.id)) {
-        // Apply staggered delay only from reference line position onwards
-        const delay = (i >= referenceLineIndex) ? delayCounter * delayIncrement : 0;
-        element.style.setProperty('--lyrics-line-delay', `${delay}ms`);
+        const delay =
+          i >= referenceLineIndex ? delayCounter * delayIncrement : 0;
+        styleUpdates.push({ element, delay: `${delay}ms` });
         if (i >= referenceLineIndex) {
           delayCounter++;
         }
       } else {
-        // Elements outside viewport move instantly
-        element.style.setProperty('--lyrics-line-delay', '0ms');
+        styleUpdates.push({ element, delay: "0ms" });
       }
+    }
+
+    for (const update of styleUpdates) {
+      update.element.style.setProperty("--lyrics-line-delay", update.delay);
     }
   }
 
   _updatePositionClassesAndScroll(lineToScroll, forceScroll = false) {
-    if (!this.lyricsContainer || !this.cachedLyricsLines || this.cachedLyricsLines.length === 0) return;
+    if (
+      !this.lyricsContainer ||
+      !this.cachedLyricsLines ||
+      this.cachedLyricsLines.length === 0
+    )
+      return;
     const scrollLineIndex = this.cachedLyricsLines.indexOf(lineToScroll);
     if (scrollLineIndex === -1) return;
 
-    const positionClasses = ['lyrics-activest', 'pre-active-line', 'next-active-line', 'prev-1', 'prev-2', 'prev-3', 'prev-4', 'next-1', 'next-2', 'next-3', 'next-4'];
-    this.lyricsContainer.querySelectorAll('.' + positionClasses.join(', .')).forEach(el => el.classList.remove(...positionClasses));
+    const positionClasses = [
+      "lyrics-activest",
+      "pre-active-line",
+      "next-active-line",
+      "prev-1",
+      "prev-2",
+      "prev-3",
+      "prev-4",
+      "next-1",
+      "next-2",
+      "next-3",
+      "next-4",
+    ];
+    this.lyricsContainer
+      .querySelectorAll("." + positionClasses.join(", ."))
+      .forEach((el) => el.classList.remove(...positionClasses));
 
-    lineToScroll.classList.add('lyrics-activest');
-    const elements = this.cachedLyricsLines; // Renamed for clarity, as it now includes metadata/empty divs
-    for (let i = Math.max(0, scrollLineIndex - 4); i <= Math.min(elements.length - 1, scrollLineIndex + 4); i++) {
+    lineToScroll.classList.add("lyrics-activest");
+    const elements = this.cachedLyricsLines;
+    for (
+      let i = Math.max(0, scrollLineIndex - 4);
+      i <= Math.min(elements.length - 1, scrollLineIndex + 4);
+      i++
+    ) {
       const position = i - scrollLineIndex;
       if (position === 0) continue;
       const element = elements[i];
-      if (position === -1) element.classList.add('pre-active-line');
-      else if (position === 1) element.classList.add('next-active-line');
-      else if (position < 0) element.classList.add(`prev-${Math.abs(position)}`);
+      if (position === -1) element.classList.add("pre-active-line");
+      else if (position === 1) element.classList.add("next-active-line");
+      else if (position < 0)
+        element.classList.add(`prev-${Math.abs(position)}`);
       else element.classList.add(`next-${position}`);
     }
 
@@ -2167,40 +2340,36 @@ class LyricsPlusRenderer {
   }
 
   _scrollToActiveLine(activeLine, forceScroll = false) {
-    if (!activeLine || !this.lyricsContainer || getComputedStyle(this.lyricsContainer).display !== 'block') return;
+    if (
+      !activeLine ||
+      !this.lyricsContainer ||
+      getComputedStyle(this.lyricsContainer).display !== "block"
+    )
+      return;
     const scrollContainer = this.lyricsContainer.parentElement;
     if (!scrollContainer) return;
-
-    // Skip during fullscreen transition to reduce lag
-    if (this._isFullscreenTransitioning && !forceScroll) {
-      return;
-    }
 
     const paddingTop = this._getScrollPaddingTop();
     const targetTranslateY = paddingTop - activeLine.offsetTop;
 
-    // Use cached values if available, otherwise get them
-    // Always recalculate during transition to avoid stale cache
-    if (this._isFullscreenTransitioning || !this._cachedContainerRect || forceScroll) {
-      const containerRect = this.lyricsContainer.getBoundingClientRect();
-      const scrollRect = scrollContainer.getBoundingClientRect();
-      this._cachedContainerRect = {
-        containerTop: containerRect.top,
-        scrollContainerTop: scrollRect.top
-      };
-    }
-    
-    const containerTop = this._cachedContainerRect.containerTop;
-    const scrollContainerTop = this._cachedContainerRect.scrollContainerTop;
-    const activeLineTop = activeLine.getBoundingClientRect().top;
+    const containerTop = this._cachedContainerRect
+      ? this._cachedContainerRect.containerTop
+      : this.lyricsContainer.getBoundingClientRect().top;
+    const scrollContainerTop = this._cachedContainerRect
+      ? this._cachedContainerRect.scrollContainerTop
+      : scrollContainer.getBoundingClientRect().top;
 
-    // Skip if already close to target (with larger threshold during transition)
-    const threshold = this._isFullscreenTransitioning ? 20 : 5;
-    if (!forceScroll && Math.abs((activeLineTop - scrollContainerTop) - paddingTop) < threshold) {
+    if (
+      !forceScroll &&
+      Math.abs(
+        activeLine.getBoundingClientRect().top - scrollContainerTop - paddingTop
+      ) < 1
+    ) {
       return;
     }
+    this._cachedContainerRect = null;
 
-    this.lyricsContainer.classList.remove('not-focused', 'user-scrolling');
+    this.lyricsContainer.classList.remove("not-focused", "user-scrolling");
     this.isProgrammaticScrolling = true;
     this.isUserControllingScroll = false;
     clearTimeout(this.endProgrammaticScrollTimer);
@@ -2213,23 +2382,22 @@ class LyricsPlusRenderer {
     this._animateScroll(targetTranslateY);
   }
 
-  // --- Visibility Tracking ---
-
   _setupVisibilityTracking() {
     const container = this._getContainer();
     if (!container || !container.parentElement) return null;
     if (this.visibilityObserver) this.visibilityObserver.disconnect();
     this.visibilityObserver = new IntersectionObserver(
       (entries) => {
-        entries.forEach(entry => {
+        entries.forEach((entry) => {
           const id = entry.target.id;
           if (entry.isIntersecting) this.visibleLineIds.add(id);
           else this.visibleLineIds.delete(id);
         });
-      }, { root: container.parentElement, rootMargin: '200px 0px', threshold: 0.1 }
+      },
+      { root: container.parentElement, rootMargin: "200px 0px", threshold: 0.1 }
     );
     if (this.cachedLyricsLines) {
-      this.cachedLyricsLines.forEach(line => {
+      this.cachedLyricsLines.forEach((line) => {
         if (line) this.visibilityObserver.observe(line);
       });
     }
@@ -2241,26 +2409,28 @@ class LyricsPlusRenderer {
     if (!container) return null;
     if (this.resizeObserver) this.resizeObserver.disconnect();
 
-    this.resizeObserver = new ResizeObserver(entries => {
-      for (let entry of entries) {
-        if (entry.target === container) {
-          // Call the debounced handler
-          this._debouncedResizeHandler(container);
-        }
+    this._lastResizeContentRect = null;
+
+    this.resizeObserver = new ResizeObserver((entries) => {
+      for (const entry of entries) {
+        if (entry.target !== container) continue;
+        this._lastResizeContentRect = entry.contentRect || null;
+        this._debouncedResizeHandler(container);
       }
     });
+
     this.resizeObserver.observe(container);
     return this.resizeObserver;
   }
 
-  // --- Control Buttons & UI ---
-
   _createControlButtons() {
-    let buttonsWrapper = document.getElementById('lyrics-plus-buttons-wrapper');
+    let buttonsWrapper = document.getElementById("lyrics-plus-buttons-wrapper");
     if (!buttonsWrapper) {
-      buttonsWrapper = document.createElement('div');
-      buttonsWrapper.id = 'lyrics-plus-buttons-wrapper';
-      const originalLyricsSection = document.querySelector('#tab-renderer');
+      buttonsWrapper = document.createElement("div");
+      buttonsWrapper.id = "lyrics-plus-buttons-wrapper";
+      const originalLyricsSection = document.querySelector(
+        this.uiConfig.patchParent
+      );
       if (originalLyricsSection) {
         originalLyricsSection.appendChild(buttonsWrapper);
       }
@@ -2268,32 +2438,37 @@ class LyricsPlusRenderer {
 
     if (this.setCurrentDisplayModeAndRefetchFn) {
       if (!this.translationButton) {
-        this.translationButton = document.createElement('button');
-        this.translationButton.id = 'lyrics-plus-translate-button';
+        this.translationButton = document.createElement("button");
+        this.translationButton.id = "lyrics-plus-translate-button";
         buttonsWrapper.appendChild(this.translationButton);
         this._updateTranslationButtonText();
-        this.translationButton.addEventListener('click', (event) => {
+        this.translationButton.addEventListener("click", (event) => {
           event.stopPropagation();
           this._createDropdownMenu(buttonsWrapper);
-          if (this.dropdownMenu) this.dropdownMenu.classList.toggle('hidden');
+          if (this.dropdownMenu) this.dropdownMenu.classList.toggle("hidden");
         });
-        document.addEventListener('click', (event) => {
-          if (this.dropdownMenu && !this.dropdownMenu.classList.contains('hidden') && !this.dropdownMenu.contains(event.target) && event.target !== this.translationButton) {
-            this.dropdownMenu.classList.add('hidden');
+        document.addEventListener("click", (event) => {
+          if (
+            this.dropdownMenu &&
+            !this.dropdownMenu.classList.contains("hidden") &&
+            !this.dropdownMenu.contains(event.target) &&
+            event.target !== this.translationButton
+          ) {
+            this.dropdownMenu.classList.add("hidden");
           }
         });
       }
     }
 
     if (!this.reloadButton) {
-      this.reloadButton = document.createElement('button');
-      this.reloadButton.id = 'lyrics-plus-reload-button';
+      this.reloadButton = document.createElement("button");
+      this.reloadButton.id = "lyrics-plus-reload-button";
       this.reloadButton.innerHTML = `<svg width="16" height="16" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
         <path d="M17.65 6.35C16.2 4.9 14.21 4 12 4c-4.42 0-7.99 3.58-7.99 8s3.57 8 7.99 8c3.73 0 6.84-2.55 7.73-6h-2.08c-.82 2.33-3.04 4-5.65 4-3.31 0-6-2.69-6-6s2.69-6 6-6c1.66 0 3.14.69 4.22 1.78L13 11h7V4l-2.35 2.35z" fill="currentColor"/>
       </svg>`;
-      this.reloadButton.title = t('refreshLyrics');
+      this.reloadButton.title = t("RefreshLyrics") || "Refresh Lyrics";
       buttonsWrapper.appendChild(this.reloadButton);
-      this.reloadButton.addEventListener('click', () => {
+      this.reloadButton.addEventListener("click", () => {
         if (this.lastKnownSongInfo && this.fetchAndDisplayLyricsFn) {
           this.fetchAndDisplayLyricsFn(this.lastKnownSongInfo, true, true);
         }
@@ -2303,135 +2478,148 @@ class LyricsPlusRenderer {
 
   _createDropdownMenu(parentWrapper) {
     if (this.dropdownMenu) {
-      this.dropdownMenu.innerHTML = '';
+      this.dropdownMenu.innerHTML = "";
     } else {
-      this.dropdownMenu = document.createElement('div');
-      this.dropdownMenu.id = 'lyrics-plus-translation-dropdown';
-      this.dropdownMenu.classList.add('hidden');
+      this.dropdownMenu = document.createElement("div");
+      this.dropdownMenu.id = "lyrics-plus-translation-dropdown";
+      this.dropdownMenu.classList.add("hidden");
       parentWrapper?.appendChild(this.dropdownMenu);
     }
 
-    if (typeof this.currentDisplayMode === 'undefined') return;
+    if (typeof this.currentDisplayMode === "undefined") return;
 
-    // Show options that are NOT currently active
-    const hasTranslation = (this.currentDisplayMode === 'translate' || this.currentDisplayMode === 'both');
-    const hasRomanization = (this.currentDisplayMode === 'romanize' || this.currentDisplayMode === 'both');
+    const hasTranslation =
+      this.currentDisplayMode === "translate" ||
+      this.currentDisplayMode === "both";
+    const hasRomanization =
+      this.currentDisplayMode === "romanize" ||
+      this.currentDisplayMode === "both";
 
-    // Create array to store options in fixed order
-    const options = [];
+    const translationIconSVG = `<svg width="18" height="18" viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg">
+      <path d="M4.42071 14.8679C4.77605 14.8679 5.02011 14.6817 5.44699 14.2961L7.9329 12.0903H12.5463C14.6844 12.0903 15.838 10.9031 15.838 8.79859V3.29169C15.838 1.18717 14.6844 0 12.5463 0H3.29169C1.15361 0 0 1.18408 0 3.29169V8.79859C0 10.9062 1.15361 12.0903 3.29169 12.0903H3.63069V13.9574C3.63069 14.5141 3.91596 14.8679 4.42071 14.8679ZM4.71496 13.5548V11.4742C4.71496 11.0808 4.5685 10.9343 4.17503 10.9343H3.29478C1.83838 10.9343 1.15596 10.197 1.15596 8.79549V3.29478C1.15596 1.89932 1.83838 1.16362 3.29478 1.16362H12.5432C13.9933 1.16362 14.6819 1.89932 14.6819 3.29478V8.79549C14.6819 10.197 13.9933 10.9343 12.5432 10.9343H7.88595C7.49071 10.9343 7.28478 10.9938 7.01305 11.2761L4.71496 13.5548ZM5.55209 9.4314C5.81293 9.4314 5.99443 9.30481 6.1088 8.97081L6.63077 7.4439H9.19956L9.72756 8.97081C9.83443 9.30333 10.0174 9.4314 10.2799 9.4314C10.6016 9.4314 10.8121 9.23003 10.8121 8.93268C10.8121 8.82582 10.7877 8.71763 10.7313 8.56365L8.71733 3.13404C8.58014 2.76339 8.30105 2.57276 7.90758 2.57276C7.52163 2.57276 7.25784 2.76339 7.113 3.13404L5.09754 8.56365C5.04867 8.71763 5.02423 8.82582 5.02423 8.93107C5.02423 9.23165 5.23473 9.4314 5.55209 9.4314ZM6.91914 6.57587L7.87402 3.79805H7.95483L8.90957 6.57587H6.91914Z" fill="currentColor"/>
+    </svg>`;
 
-    // Always add Translation option first (Show or Hide)
-    const translationOptionDiv = document.createElement('div');
-    translationOptionDiv.className = 'dropdown-option';
-    
+    const textIconSVG = `<svg width="17" height="16" viewBox="0 0 17 16" fill="none" xmlns="http://www.w3.org/2000/svg">
+      <path d="M3.95003 15.45C4.11003 15.64 4.33003 15.73 4.61003 15.73C4.81003 15.73 5.01003 15.68 5.18003 15.57C5.35003 15.47 5.56003 15.31 5.80003 15.09L8.23003 12.86H12.63C13.2542 12.8807 13.8734 12.7431 14.43 12.46C14.93 12.18 15.31 11.79 15.57 11.27C15.83 10.77 15.97 10.14 15.97 9.41004V3.71004C15.97 2.99004 15.83 2.37004 15.57 1.86004C15.31 1.35004 14.93 0.960036 14.43 0.680036C13.8743 0.393476 13.255 0.252419 12.63 0.270036H3.37003C2.73917 0.245916 2.11264 0.383616 1.55003 0.670036C1.06003 0.960036 0.700029 1.36004 0.430029 1.87004C0.170029 2.37004 0.0300293 3.00004 0.0300293 3.73004V9.43004C0.0300293 10.15 0.170029 10.77 0.430029 11.28C0.700029 11.8 1.07003 12.18 1.56003 12.46C2.06003 12.73 2.64003 12.87 3.33003 12.87H3.71003V14.67C3.71003 15.01 3.79003 15.27 3.95003 15.46V15.45ZM7.22003 11.93L5.00003 14.26V12.15C5.00003 11.92 4.95003 11.77 4.86003 11.68C4.76003 11.58 4.62003 11.54 4.42003 11.54H3.46003C2.79003 11.54 2.30003 11.37 1.98003 11.02C1.66003 10.67 1.50003 10.15 1.50003 9.46004V3.81004C1.50003 3.13004 1.66003 2.61004 1.98003 2.26004C2.30003 1.92004 2.79003 1.74004 3.46003 1.74004H12.56C13.22 1.74004 13.72 1.92004 14.04 2.26004C14.36 2.61004 14.52 3.13004 14.52 3.81004V9.46004C14.52 10.16 14.36 10.66 14.04 11.02C13.72 11.37 13.22 11.54 12.56 11.54H8.16003C7.94003 11.54 7.77003 11.57 7.64003 11.62C7.51003 11.67 7.37003 11.77 7.22003 11.93ZM2.93003 5.43004C2.93003 5.02004 3.25003 4.69004 3.63003 4.69004H8.02003C8.41003 4.69004 8.72003 5.02004 8.72003 5.42004C8.72003 5.82004 8.41003 6.16004 8.02003 6.16004H3.64003C3.54547 6.15745 3.45234 6.13625 3.36597 6.09765C3.27961 6.05905 3.20169 6.00381 3.13669 5.93509C3.07168 5.86637 3.02085 5.78551 2.98711 5.69713C2.95336 5.60876 2.93737 5.5146 2.94003 5.42004L2.93003 5.43004ZM3.63003 6.89004C3.25003 6.89004 2.93003 7.23004 2.93003 7.63004C2.93003 8.03004 3.25003 8.37004 3.63003 8.37004H5.13003C5.51003 8.37004 5.83003 8.04004 5.83003 7.63004C5.83003 7.23004 5.51003 6.89004 5.13003 6.89004H3.63003ZM10.17 5.42004C10.17 5.02004 10.49 4.69004 10.87 4.69004H12.37C12.75 4.69004 13.07 5.02004 13.07 5.42004C13.07 5.82004 12.75 6.16004 12.37 6.16004H10.87C10.7755 6.15745 10.6823 6.13625 10.596 6.09765C10.5096 6.05905 10.4317 6.00381 10.3667 5.93509C10.3017 5.86637 10.2509 5.78551 10.2171 5.69713C10.1834 5.60876 10.1674 5.5146 10.17 5.42004ZM7.98003 6.90004C7.59003 6.90004 7.28003 7.24004 7.28003 7.64004C7.28003 8.04004 7.59003 8.38004 7.98003 8.38004H10.19C10.58 8.38004 10.89 8.05004 10.89 7.64004C10.89 7.24004 10.58 6.90004 10.19 6.90004H8.00003H7.98003Z" fill="currentColor"/>
+    </svg>`;
+
+    const hideTranslationIconSVG = `<svg width="16" height="16" viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg">
+      <path d="M5.73545 7.3191L4.82381 9.77516C4.77484 9.92914 4.75042 10.0374 4.75042 10.1427C4.75042 10.4432 4.96095 10.643 5.2783 10.643C5.53912 10.643 5.72065 10.5163 5.83505 10.1824L6.35704 8.65552H7.07512L5.73545 7.3191ZM6.76558 4.54388L6.83921 4.34562C6.98405 3.97498 7.24787 3.7843 7.63379 3.7843C8.0273 3.7843 8.30639 3.97498 8.44354 4.34562L9.5479 7.32295L7.9159 5.69287L7.68107 5.00968H7.60023L7.50615 5.28349L6.76558 4.54388ZM1.40642 1.83338L0.491296 0.920541C0.388078 0.818647 0.332378 0.677895 0.337912 0.532932C0.337912 0.379429 0.386393 0.258406 0.491296 0.161444C0.596318 0.0565414 0.725521 0 0.870844 0H0.878905C1.02423 0 1.15343 0.0565414 1.25845 0.161444L2.56312 1.46454C2.76113 1.43699 2.96167 1.42592 3.16281 1.4317H11.9172C12.5899 1.4317 13.1574 1.56138 13.6275 1.81269C14.1057 2.05582 14.4624 2.42069 14.7056 2.89083C14.9488 3.36096 15.0785 3.9283 15.0785 4.59296V9.82123C15.0785 10.486 14.9569 11.0534 14.7056 11.5235C14.472 11.975 14.1264 12.3218 13.683 12.5712L14.7594 13.6463C14.8645 13.7594 14.9209 13.8886 14.9209 14.0339C14.9209 14.1792 14.8645 14.3004 14.7594 14.4053C14.6653 14.5108 14.5294 14.5699 14.388 14.5669C14.2447 14.5681 14.1071 14.5095 14.0085 14.4053L12.5412 12.9416C12.3443 12.9688 12.1363 12.9826 11.9172 12.9826H7.7589L5.45683 15.0171C5.22982 15.2197 5.02724 15.3657 4.86507 15.463C4.7029 15.5602 4.52462 15.6089 4.33009 15.6089C4.0937 15.6208 3.86417 15.5254 3.70597 15.3495C3.54561 15.1475 3.46477 14.8936 3.47896 14.6362V12.9826H3.11421C2.46579 12.9826 1.90639 12.8529 1.44444 12.6016C0.987656 12.3579 0.614724 11.9821 0.374483 11.5235C0.112228 10.9954 -0.0157722 10.4107 0.00155112 9.82123V4.59296C0.00155112 3.9283 0.123175 3.36096 0.366303 2.89083C0.602935 2.43332 0.954574 2.08337 1.40642 1.83338ZM2.43512 2.85955C2.16997 2.93811 1.95319 3.06286 1.78489 3.23128C1.4768 3.55549 1.32281 4.01744 1.32281 4.6335V9.77263C1.32281 10.3968 1.48498 10.8669 1.78489 11.183C2.09286 11.4992 2.56299 11.6532 3.1953 11.6532H4.11933C4.30579 11.6532 4.44354 11.6937 4.52462 11.7748C4.62194 11.8559 4.66248 12.0018 4.66248 12.2044V14.1175L4.6543 14.1255H4.66248V14.1175L6.79433 12.0179C6.94014 11.8639 7.06982 11.7748 7.19963 11.7262C7.32113 11.6775 7.4833 11.6532 7.68588 11.6532H11.2498L2.43512 2.85955ZM3.86116 2.76114L12.6596 11.5489C12.9182 11.4701 13.1309 11.3474 13.2951 11.183C13.5951 10.8588 13.7492 10.3968 13.7492 9.77263V4.6335C13.7492 4.01744 13.5951 3.54731 13.2951 3.23128C12.9872 2.91513 12.5089 2.76114 11.8767 2.76114H3.86116Z" fill="currentColor"/>
+    </svg>`;
+
+    const hideTextIconSVG = `<svg width="16" height="16" viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg">
+      <path d="M0.760587 2.36684L1.73181 3.33805L1.71548 3.36254C1.46248 3.67267 1.33189 4.1134 1.33189 4.66838V9.84277C1.33189 10.4712 1.49512 10.9446 1.7971 11.2629C2.10723 11.5812 2.5806 11.7362 3.2172 11.7362H4.14761C4.33532 11.7362 4.47407 11.777 4.56385 11.8587C4.64546 11.9403 4.69443 12.0872 4.69443 12.2912V14.2255L6.8409 12.1035C6.98781 11.9484 7.12656 11.8587 7.24898 11.8097C7.3714 11.7607 7.53463 11.7362 7.73867 11.7362H10.1382L11.4766 13.0747H7.81212L5.49426 15.1233C5.26573 15.3273 5.06986 15.4742 4.89847 15.5721C4.73524 15.6701 4.55568 15.719 4.36797 15.719C4.09048 15.719 3.87828 15.6374 3.73137 15.4579C3.56987 15.2545 3.48856 14.999 3.50285 14.7397V13.0747H3.13558C2.48266 13.0747 1.91952 12.9441 1.45431 12.6911C0.994029 12.4461 0.618513 12.0678 0.376996 11.6057C0.113028 11.0738 -0.0159119 10.4852 0.00156743 9.89174V4.62757C0.00156743 3.95833 0.12399 3.38702 0.376996 2.91366C0.483096 2.70962 0.605518 2.53007 0.760587 2.36684ZM0.850363 0C1.00543 0 1.12785 0.0571305 1.24212 0.16323L14.8881 13.7929C14.9942 13.9072 15.0514 14.0378 15.0514 14.1847C15.0514 14.3316 14.9942 14.454 14.8881 14.5601C14.8402 14.6139 14.7809 14.6564 14.7146 14.6846C14.6483 14.7128 14.5766 14.726 14.5046 14.7233C14.4328 14.7239 14.3618 14.7097 14.2958 14.6817C14.2298 14.6536 14.1703 14.6122 14.121 14.5601L0.466773 0.930411C0.414092 0.878525 0.373028 0.816046 0.346296 0.747106C0.319564 0.678165 0.307773 0.604335 0.311704 0.530497C0.311704 0.38359 0.368835 0.261168 0.474934 0.16323C0.572872 0.0571305 0.695295 0 0.842202 0H0.850363ZM11.999 1.44459C12.6764 1.44459 13.2558 1.57517 13.7292 1.82818C14.2026 2.07302 14.5617 2.44029 14.8147 2.91366C15.0595 3.38702 15.182 3.95833 15.182 4.62757V9.89174C15.182 10.561 15.0595 11.1323 14.8147 11.6057C14.7004 11.8179 14.5698 12.0056 14.4066 12.177L13.4354 11.1976L13.4762 11.1568C13.721 10.8466 13.8516 10.4059 13.8516 9.84277V4.66838C13.8516 4.0481 13.6884 3.57474 13.3864 3.25644C13.0763 2.93814 12.6029 2.78307 11.9582 2.78307H5.02089L3.67424 1.44459H11.999ZM5.19228 7.41064C5.37194 7.41064 5.54424 7.48201 5.67128 7.60905C5.79832 7.73609 5.86969 7.90839 5.86969 8.08805C5.86969 8.2677 5.79832 8.44001 5.67128 8.56704C5.54424 8.69408 5.37194 8.76545 5.19228 8.76545H3.84563C3.66598 8.76545 3.49367 8.69408 3.36664 8.56704C3.2396 8.44001 3.16823 8.2677 3.16823 8.08805C3.16823 7.90839 3.2396 7.73609 3.36664 7.60905C3.49367 7.48201 3.66598 7.41064 3.84563 7.41064H5.19228ZM9.70559 7.41064C10.081 7.41064 10.383 7.71262 10.383 8.08805V8.14518L9.64846 7.41064H9.70559ZM3.59263 5.20704L4.89847 6.50472H3.83747C3.68084 6.50289 3.52969 6.44683 3.40973 6.34609C3.28978 6.24535 3.20845 6.10615 3.17959 5.9522C3.15072 5.79824 3.1761 5.63903 3.25141 5.50168C3.32672 5.36433 3.4473 5.25732 3.59263 5.19888V5.20704ZM11.5093 5.15807C11.5982 5.15807 11.6863 5.17559 11.7685 5.20963C11.8507 5.24368 11.9254 5.29357 11.9883 5.35648C12.0512 5.41938 12.1011 5.49405 12.1351 5.57624C12.1692 5.65843 12.1867 5.74651 12.1867 5.83547C12.1867 5.92443 12.1692 6.01252 12.1351 6.0947C12.1011 6.17689 12.0512 6.25157 11.9883 6.31447C11.9254 6.37737 11.8507 6.42727 11.7685 6.46131C11.6863 6.49536 11.5982 6.51288 11.5093 6.51288H10.1545C10.0655 6.51288 9.97743 6.49536 9.89524 6.46131C9.81306 6.42727 9.73838 6.37737 9.67548 6.31447C9.61257 6.25157 9.56268 6.17689 9.52863 6.0947C9.49459 6.01252 9.47707 5.92443 9.47707 5.83547C9.47707 5.74651 9.49459 5.65843 9.52863 5.57624C9.56268 5.49405 9.61257 5.41938 9.67548 5.35648C9.73838 5.29357 9.81306 5.24368 9.89524 5.20963C9.97743 5.17559 10.0655 5.15807 10.1545 5.15807H11.5093ZM7.9019 5.15807C8.02503 5.15868 8.14566 5.19283 8.25083 5.25686C8.356 5.3209 8.44173 5.41238 8.4988 5.52149C8.55587 5.63059 8.58213 5.75319 8.57474 5.8761C8.56735 5.99901 8.52661 6.11758 8.45688 6.21906L7.39589 5.15807H7.9019Z" fill="currentColor"/>
+    </svg>`;
+
     if (!hasTranslation) {
-      // Show Translation option
-      const showTranslationSVG = `<svg width="16" height="16" viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg" style="width:1.5em;height:1.5em;vertical-align:middle;margin-left:8px;">
-        <g clip-path="url(#clip0_1_14)">
-          <path d="M4.4721 15.4039C4.82744 15.4039 5.0715 15.2177 5.49838 14.832L7.98429 12.6262H12.5977C14.7358 12.6262 15.8894 11.439 15.8894 9.33452V3.82762C15.8894 1.7231 14.7358 0.535934 12.5977 0.535934H3.34308C1.205 0.535934 0.0513916 1.72001 0.0513916 3.82762V9.33452C0.0513916 11.4421 1.205 12.6262 3.34308 12.6262H3.68208V14.4933C3.68208 15.05 3.96735 15.4039 4.4721 15.4039ZM4.76635 14.0907V12.0102C4.76635 11.6167 4.61989 11.4702 4.22643 11.4702H3.34617C1.88977 11.4702 1.20735 10.7329 1.20735 9.33143V3.83071C1.20735 2.43526 1.88977 1.69955 3.34617 1.69955H12.5946C14.0447 1.69955 14.7333 2.43526 14.7333 3.83071V9.33143C14.7333 10.7329 14.0447 11.4702 12.5946 11.4702H7.93734C7.54211 11.4702 7.33617 11.5297 7.06444 11.812L4.76635 14.0907Z" fill="white"/>
-          <path d="M5.60348 9.96734C5.86432 9.96734 6.04582 9.84075 6.16019 9.50675L6.68216 7.97985H9.25095L9.77896 9.50675C9.88582 9.83928 10.0688 9.96734 10.3313 9.96734C10.653 9.96734 10.8635 9.76597 10.8635 9.46863C10.8635 9.36176 10.8391 9.25357 10.7827 9.0996L8.76872 3.66998C8.63153 3.29933 8.35244 3.1087 7.95898 3.1087C7.57302 3.1087 7.30924 3.29933 7.16439 3.66998L5.14893 9.0996C5.10006 9.25357 5.07562 9.36176 5.07562 9.46701C5.07562 9.76759 5.28612 9.96734 5.60348 9.96734ZM6.97053 7.11181L7.92542 4.334H8.00623L8.96097 7.11181H6.97053Z" fill="white"/>
-        </g>
-        <defs>
-          <clipPath id="clip0_1_14">
-            <rect width="16" height="16" fill="white"/>
-          </clipPath>
-        </defs>
-      </svg>`;
-      translationOptionDiv.innerHTML = `<span>${t('showTranslation')}</span>${showTranslationSVG}`;
-      translationOptionDiv.addEventListener('click', () => {
-        this.dropdownMenu.classList.add('hidden');
-        let newMode = 'translate';
-        if (this.currentDisplayMode === 'romanize') {
-          newMode = 'both';
+      const optionDiv = document.createElement("div");
+      optionDiv.className = "dropdown-option";
+      const textSpan = document.createElement("span");
+      textSpan.textContent = t("showTranslation");
+      const iconDiv = document.createElement("div");
+      iconDiv.className = "dropdown-icon";
+      iconDiv.innerHTML = translationIconSVG;
+      optionDiv.appendChild(textSpan);
+      optionDiv.appendChild(iconDiv);
+      optionDiv.addEventListener("click", () => {
+        this.dropdownMenu.classList.add("hidden");
+        let newMode = "translate";
+        if (this.currentDisplayMode === "romanize") {
+          newMode = "both";
         }
         if (this.setCurrentDisplayModeAndRefetchFn && this.lastKnownSongInfo) {
-          this.setCurrentDisplayModeAndRefetchFn(newMode, this.lastKnownSongInfo);
+          this.setCurrentDisplayModeAndRefetchFn(
+            newMode,
+            this.lastKnownSongInfo
+          );
         }
       });
-    } else {
-      // Hide Translation option
-      const hideTranslationSVG = `<svg width="16" height="16" viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg" style="width:1.5em;height:1.5em;vertical-align:middle;margin-left:8px;">
-        <g clip-path="url(#clip0_1_52)">
-          <path d="M1.78454 1.99989L0.869408 1.08705C0.76619 0.985151 0.710491 0.844399 0.716025 0.699436C0.716025 0.545933 0.764506 0.42491 0.869408 0.327948C0.974431 0.223045 1.10363 0.166504 1.24896 0.166504H1.25702C1.40234 0.166504 1.53154 0.223045 1.63657 0.327948L2.94123 1.63105C3.13924 1.6035 3.33978 1.59243 3.54093 1.5982H12.2953C12.9681 1.5982 13.5355 1.72789 14.0056 1.9792C14.4838 2.22232 14.8405 2.5872 15.0837 3.05733C15.3269 3.52747 15.4566 4.0948 15.4566 4.75947V9.98774C15.4566 10.6525 15.335 11.2199 15.0837 11.69C14.8502 12.1415 14.5045 12.4883 14.0611 12.7377L15.1376 13.8128C15.2426 13.9259 15.299 14.0551 15.299 14.2004C15.299 14.3458 15.2426 14.4669 15.1376 14.5718C15.0434 14.6773 14.9075 14.7364 14.7661 14.7334C14.6228 14.7346 14.4852 14.676 14.3866 14.5718L12.9193 13.1081C12.7224 13.1353 12.5144 13.1491 12.2953 13.1491H8.13702L5.83494 15.1836C5.60793 15.3862 5.40535 15.5322 5.24318 15.6295C5.08102 15.7267 4.90273 15.7754 4.70821 15.7754C4.47181 15.7873 4.24228 15.6919 4.08409 15.516C3.92372 15.3141 3.84288 15.0601 3.85708 14.8027V13.1491H3.49233C2.8439 13.1491 2.28451 13.0194 1.82255 12.7681C1.36577 12.5244 0.992837 12.1486 0.752596 11.69C0.490341 11.1619 0.362341 10.5772 0.379664 9.98774V4.75947C0.379664 4.0948 0.501288 3.52747 0.744416 3.05733C0.981047 2.59983 1.33269 2.24987 1.78454 1.99989ZM2.81323 3.02605C2.54809 3.10461 2.3313 3.22936 2.163 3.39778C1.85491 3.72199 1.70093 4.18395 1.70093 4.80001V9.93914C1.70093 10.5633 1.86309 11.0334 2.163 11.3495C2.47097 11.6657 2.94111 11.8197 3.57341 11.8197H4.49744C4.6839 11.8197 4.82165 11.8602 4.90273 11.9413C5.00006 12.0224 5.0406 12.1683 5.0406 12.3709V14.284L5.03242 14.292H5.0406V14.284L7.17245 12.1844C7.31825 12.0304 7.44794 11.9413 7.57774 11.8927C7.69924 11.844 7.86141 11.8197 8.06399 11.8197H11.6279L2.81323 3.02605ZM4.23927 2.92765L13.0377 11.7154C13.2964 11.6366 13.509 11.5139 13.6733 11.3495C13.9732 11.0253 14.1273 10.5633 14.1273 9.93914V4.80001C14.1273 4.18395 13.9732 3.71381 13.6733 3.39778C13.3653 3.08163 12.887 2.92765 12.2548 2.92765H4.23927Z" fill="white"/>
-          <path d="M6.11356 7.4856L5.20192 9.94166C5.15296 10.0956 5.12854 10.2039 5.12854 10.3092C5.12854 10.6097 5.33907 10.8095 5.65642 10.8095C5.91723 10.8095 6.09877 10.6828 6.21317 10.3489L6.73516 8.82202H7.45323L6.11356 7.4856ZM7.1437 4.71038L7.21732 4.51213C7.36216 4.14148 7.62598 3.95081 8.01191 3.95081C8.40541 3.95081 8.68451 4.14148 8.82165 4.51213L9.92601 7.48945L8.29401 5.85938L8.05919 5.17619H7.97834L7.88427 5.44999L7.1437 4.71038Z" fill="white"/>
-        </g>
-        <defs>
-          <clipPath id="clip0_1_52">
-            <rect width="16" height="16" fill="white"/>
-          </clipPath>
-        </defs>
-      </svg>`;
-      translationOptionDiv.innerHTML = `<span>${t('hideTranslation')}</span>${hideTranslationSVG}`;
-      translationOptionDiv.addEventListener('click', () => {
-        this.dropdownMenu.classList.add('hidden');
-        let newMode = 'none';
-        if (this.currentDisplayMode === 'both') {
-          newMode = 'romanize';
-        }
-        if (this.setCurrentDisplayModeAndRefetchFn && this.lastKnownSongInfo) {
-          this.setCurrentDisplayModeAndRefetchFn(newMode, this.lastKnownSongInfo);
-        }
-      });
+      this.dropdownMenu.appendChild(optionDiv);
     }
-    
-    options.push(translationOptionDiv);
 
-    // Always add Pronunciation option second (Show or Hide)
-    const pronunciationOptionDiv = document.createElement('div');
-    pronunciationOptionDiv.className = 'dropdown-option';
-    
+    if (hasTranslation) {
+      const optionDiv = document.createElement("div");
+      optionDiv.className = "dropdown-option";
+      const textSpan = document.createElement("span");
+      textSpan.textContent = t("hideTranslation");
+      const iconDiv = document.createElement("div");
+      iconDiv.className = "dropdown-icon";
+      iconDiv.innerHTML = hideTranslationIconSVG;
+      optionDiv.appendChild(textSpan);
+      optionDiv.appendChild(iconDiv);
+      optionDiv.addEventListener("click", () => {
+        this.dropdownMenu.classList.add("hidden");
+        let newMode = "none";
+        if (this.currentDisplayMode === "both") {
+          newMode = "romanize";
+        }
+        if (this.setCurrentDisplayModeAndRefetchFn && this.lastKnownSongInfo) {
+          this.setCurrentDisplayModeAndRefetchFn(
+            newMode,
+            this.lastKnownSongInfo
+          );
+        }
+      });
+      this.dropdownMenu.appendChild(optionDiv);
+    }
+
     if (!hasRomanization) {
-      // Show Pronunciation option
-      const showPronunciationsSVG = `<svg width="16" height="15" viewBox="0 0 16 15" fill="none" xmlns="http://www.w3.org/2000/svg" style="width:1.5em;height:1.5em;vertical-align:middle;margin-left:8px;">
-        <path d="M4.42071 14.8679C4.77605 14.8679 5.02011 14.6817 5.44699 14.2961L7.9329 12.0903H12.5463C14.6844 12.0903 15.838 10.9031 15.838 8.79859V3.29169C15.838 1.18717 14.6844 0 12.5463 0H3.29169C1.15361 0 0 1.18408 0 3.29169V8.79859C0 10.9062 1.15361 12.0903 3.29169 12.0903H3.63069V13.9574C3.63069 14.5141 3.91596 14.8679 4.42071 14.8679ZM4.71496 13.5548V11.4742C4.71496 11.0808 4.5685 10.9343 4.17503 10.9343H3.29478C1.83838 10.9343 1.15596 10.197 1.15596 8.79549V3.29478C1.15596 1.89932 1.83838 1.16362 3.29478 1.16362H12.5432C13.9933 1.16362 14.6819 1.89932 14.6819 3.29478V8.79549C14.6819 10.197 13.9933 10.9343 12.5432 10.9343H7.88595C7.49071 10.9343 7.28478 10.9938 7.01305 11.2761L4.71496 13.5548Z" fill="white"/>
-        <path d="M3 4.74C3 4.33 3.32 4 3.7 4H8.09C8.48 4 8.79 4.33 8.79 4.73C8.79 5.13 8.48 5.47 8.09 5.47H3.71C3.61544 5.46741 3.52231 5.44621 3.43595 5.40761C3.34958 5.36902 3.27167 5.31378 3.20666 5.24505C3.14165 5.17633 3.09082 5.09547 3.05708 5.0071C3.02333 4.91872 3.00734 4.82456 3.01 4.73L3 4.74ZM3.7 6.2C3.32 6.2 3 6.54 3 6.94C3 7.34 3.32 7.68 3.7 7.68H5.2C5.58 7.68 5.9 7.35 5.9 6.94C5.9 6.54 5.58 6.2 5.2 6.2H3.7ZM10.24 4.73C10.24 4.33 10.56 4 10.94 4H12.44C12.82 4 13.14 4.33 13.14 4.73C13.14 5.13 12.82 5.47 12.44 5.47H10.94C10.8454 5.46741 10.7523 5.44621 10.6659 5.40761C10.5796 5.36902 10.5017 5.31378 10.4367 5.24505C10.3716 5.17633 10.3208 5.09547 10.2871 5.0071C10.2533 4.91872 10.2373 4.82456 10.24 4.73ZM8.05 6.21C7.66 6.21 7.35 6.55 7.35 6.95C7.35 7.35 7.66 7.69 8.05 7.69H10.26C10.65 7.69 10.96 7.36 10.96 6.95C10.96 6.55 10.65 6.21 10.26 6.21H8.07H8.05Z" fill="white"/>
-      </svg>`;
-      // Determine the text to show based on larger text mode
-      const showText = this.largerTextMode === "romanization" ? t('showOriginal') : t('showPronunciation');
-      pronunciationOptionDiv.innerHTML = `<span>${showText}</span>${showPronunciationsSVG}`;
-      pronunciationOptionDiv.addEventListener('click', () => {
-        this.dropdownMenu.classList.add('hidden');
-        let newMode = 'romanize';
-        if (this.currentDisplayMode === 'translate') {
-          newMode = 'both';
+      const optionDiv = document.createElement("div");
+      optionDiv.className = "dropdown-option";
+      const textSpan = document.createElement("span");
+      textSpan.textContent =
+        this.largerTextMode == "romanization"
+          ? t("showOriginal")
+          : t("showPronunciation");
+      const iconDiv = document.createElement("div");
+      iconDiv.className = "dropdown-icon";
+      iconDiv.innerHTML = textIconSVG;
+      optionDiv.appendChild(textSpan);
+      optionDiv.appendChild(iconDiv);
+      optionDiv.addEventListener("click", () => {
+        this.dropdownMenu.classList.add("hidden");
+        let newMode = "romanize";
+        if (this.currentDisplayMode === "translate") {
+          newMode = "both";
         }
         if (this.setCurrentDisplayModeAndRefetchFn && this.lastKnownSongInfo) {
-          this.setCurrentDisplayModeAndRefetchFn(newMode, this.lastKnownSongInfo);
+          this.setCurrentDisplayModeAndRefetchFn(
+            newMode,
+            this.lastKnownSongInfo
+          );
         }
       });
-    } else {
-      // Hide Pronunciation option
-      const hidePronunciationsSVG = `<svg width="16" height="16" viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg" style="width:1.5em;height:1.5em;vertical-align:middle;margin-left:8px;">
-        <g clip-path="url(#clip0_1_50)">
-          <path d="M1.15902 2.50685L2.13024 3.47807L2.11392 3.50255C1.86091 3.81269 1.73033 4.25341 1.73033 4.80839V9.98278C1.73033 10.6112 1.89356 11.0846 2.19553 11.4029C2.50567 11.7212 2.97904 11.8763 3.61564 11.8763H4.54605C4.73376 11.8763 4.87251 11.9171 4.96228 11.9987C5.0439 12.0803 5.09287 12.2272 5.09287 12.4312V14.3655L7.23934 12.2435C7.38625 12.0885 7.52499 11.9987 7.64742 11.9497C7.76984 11.9007 7.93307 11.8763 8.13711 11.8763H10.5366L11.8751 13.2147H8.21056L5.89269 15.2633C5.66417 15.4673 5.4683 15.6142 5.29691 15.7122C5.13368 15.8101 4.95412 15.8591 4.76641 15.8591C4.48892 15.8591 4.27672 15.7774 4.12981 15.5979C3.96831 15.3945 3.887 15.139 3.90129 14.8797V13.2147H3.53402C2.8811 13.2147 2.31796 13.0842 1.85275 12.8311C1.39247 12.5862 1.01695 12.2078 0.775434 11.7457C0.511465 11.2139 0.382526 10.6252 0.400005 10.0318V4.76759C0.400005 4.09834 0.522427 3.52704 0.775434 3.05367C0.881533 2.84963 1.00396 2.67008 1.15902 2.50685ZM1.2488 0.140015C1.40387 0.140015 1.52629 0.197145 1.64055 0.303245L15.2866 13.9329C15.3927 14.0472 15.4498 14.1778 15.4498 14.3247C15.4498 14.4716 15.3927 14.594 15.2866 14.7001C15.2386 14.7539 15.1793 14.7964 15.113 14.8246C15.0467 14.8528 14.975 14.8661 14.903 14.8634C14.8313 14.8639 14.7602 14.8498 14.6942 14.8217C14.6282 14.7936 14.5687 14.7522 14.5194 14.7001L0.86521 1.07043C0.81253 1.01854 0.771465 0.956061 0.744733 0.88712C0.718001 0.81818 0.706211 0.744349 0.710142 0.670512C0.710142 0.523605 0.767272 0.401183 0.873372 0.303245C0.97131 0.197145 1.09373 0.140015 1.24064 0.140015H1.2488ZM12.3974 1.5846C13.0748 1.5846 13.6543 1.71518 14.1276 1.96819C14.601 2.21304 14.9601 2.5803 15.2131 3.05367C15.458 3.52704 15.5804 4.09834 15.5804 4.76759V10.0318C15.5804 10.701 15.458 11.2723 15.2131 11.7457C15.0989 11.9579 14.9683 12.1456 14.8051 12.317L13.8338 11.3376L13.8746 11.2968C14.1195 10.9866 14.2501 10.5459 14.2501 9.98278V4.80839C14.2501 4.18812 14.0868 3.71475 13.7849 3.39645C13.4747 3.07815 13.0014 2.92309 12.3566 2.92309H5.41933L4.07268 1.5846H12.3974ZM5.59072 7.55066C5.77038 7.55066 5.94268 7.62203 6.06972 7.74906C6.19675 7.8761 6.26812 8.0484 6.26812 8.22806C6.26812 8.40772 6.19675 8.58002 6.06972 8.70706C5.94268 8.8341 5.77038 8.90547 5.59072 8.90547H4.24407C4.06441 8.90547 3.89211 8.8341 3.76507 8.70706C3.63804 8.58002 3.56667 8.40772 3.56667 8.22806C3.56667 8.0484 3.63804 7.8761 3.76507 7.74906C3.89211 7.62203 4.06441 7.55066 4.24407 7.55066H5.59072ZM10.104 7.55066C10.4795 7.55066 10.7814 7.85263 10.7814 8.22806V8.28519L10.0469 7.55066H10.104ZM3.99107 5.34705L5.29691 6.64473H4.23591C4.07928 6.6429 3.92812 6.58684 3.80817 6.4861C3.68822 6.38536 3.60689 6.24617 3.57802 6.09221C3.54916 5.93825 3.57454 5.77905 3.64985 5.6417C3.72515 5.50434 3.84574 5.39734 3.99107 5.33889V5.34705ZM11.9077 5.29808C11.9967 5.29808 12.0848 5.3156 12.167 5.34965C12.2491 5.38369 12.3238 5.43359 12.3867 5.49649C12.4496 5.55939 12.4995 5.63407 12.5336 5.71626C12.5676 5.79844 12.5851 5.88653 12.5851 5.97549C12.5851 6.06445 12.5676 6.15253 12.5336 6.23472C12.4995 6.31691 12.4496 6.39158 12.3867 6.45448C12.3238 6.51739 12.2491 6.56728 12.167 6.60133C12.0848 6.63537 11.9967 6.65289 11.9077 6.65289H10.5529C10.464 6.65289 10.3759 6.63537 10.2937 6.60133C10.2115 6.56728 10.1368 6.51739 10.0739 6.45448C10.011 6.39158 9.96111 6.31691 9.92707 6.23472C9.89303 6.15253 9.87551 6.06445 9.87551 5.97549C9.87551 5.88653 9.89303 5.79844 9.92707 5.71626C9.96111 5.63407 10.011 5.55939 10.0739 5.49649C10.1368 5.43359 10.2115 5.38369 10.2937 5.34965C10.3759 5.3156 10.464 5.29808 10.5529 5.29808H11.9077ZM8.30034 5.29808C8.42347 5.29869 8.5441 5.33285 8.64927 5.39688C8.75444 5.46091 8.84017 5.5524 8.89724 5.6615C8.95431 5.77061 8.98056 5.89321 8.97318 6.01611C8.96579 6.13902 8.92504 6.25759 8.85532 6.35908L7.79432 5.29808H8.30034Z" fill="white"/>
-        </g>
-        <defs>
-          <clipPath id="clip0_1_50">
-            <rect width="16" height="16" fill="white"/>
-          </clipPath>
-        </defs>
-      </svg>`;
-      // Determine the text to show based on larger text mode
-      const hideText = this.largerTextMode === "romanization" ? t('hideOriginal') : t('hidePronunciation');
-      pronunciationOptionDiv.innerHTML = `<span>${hideText}</span>${hidePronunciationsSVG}`;
-      pronunciationOptionDiv.addEventListener('click', () => {
-        this.dropdownMenu.classList.add('hidden');
-        let newMode = 'none';
-        if (this.currentDisplayMode === 'both') {
-          newMode = 'translate';
-        }
-        if (this.setCurrentDisplayModeAndRefetchFn && this.lastKnownSongInfo) {
-          this.setCurrentDisplayModeAndRefetchFn(newMode, this.lastKnownSongInfo);
-        }
-      });
+      this.dropdownMenu.appendChild(optionDiv);
     }
-    
-    options.push(pronunciationOptionDiv);
 
-    // Add all options to dropdown in fixed order
-    options.forEach(option => {
-      this.dropdownMenu.appendChild(option);
-    });
+    if (hasRomanization) {
+      const optionDiv = document.createElement("div");
+      optionDiv.className = "dropdown-option";
+      const textSpan = document.createElement("span");
+      textSpan.textContent =
+        this.largerTextMode == "romanization"
+          ? t("hideOriginal")
+          : t("hidePronunciation");
+      const iconDiv = document.createElement("div");
+      iconDiv.className = "dropdown-icon";
+      iconDiv.innerHTML = hideTextIconSVG;
+      optionDiv.appendChild(textSpan);
+      optionDiv.appendChild(iconDiv);
+      optionDiv.addEventListener("click", () => {
+        this.dropdownMenu.classList.add("hidden");
+        let newMode = "none";
+        if (this.currentDisplayMode === "both") {
+          newMode = "translate";
+        }
+        if (this.setCurrentDisplayModeAndRefetchFn && this.lastKnownSongInfo) {
+          this.setCurrentDisplayModeAndRefetchFn(
+            newMode,
+            this.lastKnownSongInfo
+          );
+        }
+      });
+      this.dropdownMenu.appendChild(optionDiv);
+    }
   }
 
   _updateTranslationButtonText() {
@@ -2448,60 +2636,161 @@ class LyricsPlusRenderer {
       </defs>
     </svg>`;
     this.translationButton.innerHTML = translationButtonSVG;
-    this.translationButton.title = t('showTranslationOptions');
+    this.translationButton.title = t("showTranslationOptions") || "Translation";
   }
-
-  // --- Cleanup ---
 
   /**
    * Cleans up the lyrics container and resets the state for the next song.
    */
   cleanupLyrics() {
+    // --- Animation Frame Cleanup ---
     if (this.lyricsAnimationFrameId) {
       cancelAnimationFrame(this.lyricsAnimationFrameId);
       this.lyricsAnimationFrameId = null;
     }
+
+    // --- Touch State Cleanup ---
+    if (this.touchState) {
+      if (this.touchState.momentum) {
+        cancelAnimationFrame(this.touchState.momentum);
+        this.touchState.momentum = null;
+      }
+      this.touchState.isActive = false;
+      this.touchState.startY = 0;
+      this.touchState.lastY = 0;
+      this.touchState.velocity = 0;
+      this.touchState.lastTime = 0;
+      this.touchState.samples = [];
+    }
+
+    // --- Timer Cleanup ---
+    if (this.endProgrammaticScrollTimer)
+      clearTimeout(this.endProgrammaticScrollTimer);
+    if (this.userScrollIdleTimer) clearTimeout(this.userScrollIdleTimer);
+    if (this.userScrollRevertTimer) clearTimeout(this.userScrollRevertTimer);
+    this.endProgrammaticScrollTimer = null;
+    this.userScrollIdleTimer = null;
+    this.userScrollRevertTimer = null;
+
+    // --- Observer Cleanup ---
+    if (this.visibilityObserver) this.visibilityObserver.disconnect();
+    if (this.resizeObserver) this.resizeObserver.disconnect();
+    this.visibilityObserver = null;
+    this.resizeObserver = null;
+
+    // --- DOM Elements Cleanup ---
     const container = this._getContainer();
     if (container) {
+      if (this.cachedLyricsLines) {
+        this.cachedLyricsLines.forEach((line) => {
+          if (line && line._cachedSyllableElements) {
+            line._cachedSyllableElements = null;
+          }
+        });
+      }
+
+      if (this.cachedSyllables) {
+        this.cachedSyllables.forEach((syllable) => {
+          if (syllable) {
+            syllable._cachedCharSpans = null;
+            syllable.style.animation = "";
+            syllable.style.removeProperty("--pre-wipe-duration");
+            syllable.style.removeProperty("--pre-wipe-delay");
+          }
+        });
+      }
+
       container.innerHTML = `<span class="text-loading">${t("loading")}</span>`;
-      container.classList.add('lyrics-plus-message');
-      container.classList.remove('user-scrolling');
+      container.classList.add("lyrics-plus-message");
+
+      const buttonsWrapper = document.getElementById("lyrics-plus-buttons-wrapper");
+      if (buttonsWrapper) {
+        buttonsWrapper.style.display = "none";
+        buttonsWrapper.style.opacity = "0";
+        buttonsWrapper.style.pointerEvents = "none";
+      }
+
+      const classesToRemove = [
+        "user-scrolling",
+        "wheel-scrolling",
+        "touch-scrolling",
+        "not-focused",
+        "lyrics-translated",
+        "lyrics-romanized",
+        "lyrics-both-modes",
+        "word-by-word-mode",
+        "line-by-line-mode",
+        "mixed-direction-lyrics",
+        "dual-side-lyrics",
+        "fullscreen",
+        "blur-inactive-enabled",
+        "use-song-palette-fullscreen",
+        "use-song-palette-all-modes",
+        "override-palette-color",
+        "hide-offscreen",
+        "romanized-big-mode",
+      ];
+      container.classList.remove(...classesToRemove);
+
+      container.style.removeProperty("--lyrics-scroll-offset");
+      container.style.removeProperty("--lyplus-override-pallete");
+      container.style.removeProperty("--lyplus-override-pallete-white");
+      container.style.removeProperty("--lyplus-song-pallete");
+      container.style.removeProperty("--lyplus-song-white-pallete");
     }
+
+    // --- State Variables Reset ---
+    this.currentPrimaryActiveLine = null;
+    this.lastPrimaryActiveLine = null;
+    this.currentFullscreenFocusedLine = null;
+    this.lastTime = 0;
+    this.lastProcessedTime = 0;
+
     this.activeLineIds.clear();
     this.highlightedSyllableIds.clear();
     this.visibleLineIds.clear();
-    this.currentPrimaryActiveLine = null;
-    this.currentFullscreenFocusedLine = null;
-    if (this.visibilityObserver) {
-      this.visibilityObserver.disconnect();
-      this.visibilityObserver = null;
-    }
     this.cachedLyricsLines = [];
     this.cachedSyllables = [];
+
+    this._cachedContainerRect = null;
+    this._cachedVisibleLines = null;
+    this._lastVisibilityHash = null;
+    this._lastVisibilityUpdateSize = null;
+
     this.currentScrollOffset = 0;
+    this.isProgrammaticScrolling = false;
     this.isUserControllingScroll = false;
-    clearTimeout(this.userScrollIdleTimer);
-    if (this.resizeObserver) {
-      this.resizeObserver.disconnect();
-      this.resizeObserver = null;
-    }
-    // Prevent stale song info overlay from re-appearing while loading next song
+
+    this.currentDisplayMode = undefined;
+    this.largerTextMode = "lyrics";
+
     this.lastKnownSongInfo = null;
-    // Remove song info overlay on cleanup to prevent stale titles
-    const existingSongInfo = document.querySelector('.lyrics-song-info');
-    if (existingSongInfo) existingSongInfo.remove();
-    if (this._cleanupArtworkObservers) {
-      this._cleanupArtworkObservers();
-      this._cleanupArtworkObservers = null;
+    this.fetchAndDisplayLyricsFn = null;
+    this.setCurrentDisplayModeAndRefetchFn = null;
+
+    this.fontCache = {};
+
+    this._playerElement = undefined;
+    this._customCssStyleTag = null;
+
+    if (this._notFoundCenterTimer) {
+      clearTimeout(this._notFoundCenterTimer);
+      this._notFoundCenterTimer = null;
     }
-    
-    // Hide refresh button and translation button during loading
-    if (this.reloadButton) {
-      this.reloadButton.style.display = 'none';
+  }
+
+  /**
+   * Injects custom CSS from settings into the document.
+   * @param {string} customCSS - The custom CSS string to inject.
+   * @private
+   */
+  _injectCustomCSS(customCSS) {
+    if (!this._customCssStyleTag) {
+      this._customCssStyleTag = document.createElement('style');
+      this._customCssStyleTag.id = 'lyrics-plus-custom-css';
+      document.head.appendChild(this._customCssStyleTag);
     }
-    if (this.translationButton) {
-      this.translationButton.style.display = 'none';
-    }
+    this._customCssStyleTag.textContent = customCSS || '';
   }
 
   /**
@@ -2510,7 +2799,6 @@ class LyricsPlusRenderer {
    */
   _getSongInfoFromDOM() {
     try {
-      // Use the same approach as the existing songTracker
       const titleElement = document.querySelector('.title.style-scope.ytmusic-player-bar');
       const byline = document.querySelector('.byline.style-scope.ytmusic-player-bar');
       
@@ -2523,16 +2811,13 @@ class LyricsPlusRenderer {
         return null;
       }
       
-      // Extract artist and album from byline using the same logic as songTracker
       let artists = [];
       let artistUrls = [];
       let album = "";
       let albumUrl = "";
       
-      // Try to find links in byline - first try the complex-string byline which has actual links
       let links = byline.querySelectorAll('a');
       
-      // If no links found in byline, try the byline-wrapper as fallback
       if (links.length === 0) {
         const bylineWrapper = document.querySelector('.byline-wrapper');
         if (bylineWrapper) {
@@ -2546,18 +2831,15 @@ class LyricsPlusRenderer {
         
         if (href) {
           if (href.startsWith('channel/')) {
-            // These are artist links
             artists.push(text);
             artistUrls.push(href);
           } else if (href.startsWith('browse/')) {
-            // This one is the album
             album = text;
             albumUrl = href;
           }
         }
       }
       
-      // Properly format the artist names (same as songTracker)
       let artist = "";
       if (artists.length === 1) {
         artist = artists[0];
@@ -2567,19 +2849,14 @@ class LyricsPlusRenderer {
         artist = artists.slice(0, -1).join(", ") + ", & " + artists[artists.length - 1];
       }
       
-      // If no links found, try to extract artist from byline text directly
       if (!artist && byline.textContent) {
         const bylineText = byline.textContent.trim();
-        
-        // Split by common separators and take the first part as artist
         const parts = bylineText.split(/[•·–—]/);
         if (parts.length > 0) {
           artist = parts[0].trim();
         }
       }
       
-      // Check if this is a video (no album info)
-      // But don't treat it as video if we have artist info
       const isVideo = album === '' && artist === '';
       
       return {
@@ -2587,18 +2864,15 @@ class LyricsPlusRenderer {
         artist: artist,
         album: album,
         isVideo: isVideo,
-        videoId: null, // We don't need videoId for display purposes
+        videoId: null,
         artistUrl: artistUrls.length > 0 ? artistUrls[0] : null,
         albumUrl: albumUrl || null
       };
     } catch (error) {
-      // Fallback: try to use the existing songTracker functions if available
       try {
         if (typeof LYPLUS_getDOMSongInfo === 'function') {
           const fallbackInfo = LYPLUS_getDOMSongInfo();
           if (fallbackInfo) {
-            
-            // Try to get URLs from byline
             const byline = document.querySelector('.byline.style-scope.ytmusic-player-bar');
             let artistUrl = null;
             let albumUrl = null;
@@ -2629,7 +2903,6 @@ class LyricsPlusRenderer {
           }
         }
       } catch (fallbackError) {
-        // Fallback failed, return null
       }
       
       return null;
@@ -2641,7 +2914,6 @@ class LyricsPlusRenderer {
    * @private
    */
   _addSongInfoFromDOM() {
-    // Check if we're in YouTube Music fullscreen mode
     const playerPage = document.querySelector('ytmusic-player-page');
     const isFullscreen = playerPage && playerPage.hasAttribute('player-fullscreened');
     const isVideoMode = playerPage && playerPage.hasAttribute('video-mode');
@@ -2650,18 +2922,15 @@ class LyricsPlusRenderer {
       return;
     }
     
-    // Skip in video fullscreen mode
     if (isVideoMode) {
       return;
     }
     
-    // Remove existing song info display if it exists
     const existingSongInfo = document.querySelector('.lyrics-song-info');
     if (existingSongInfo) {
       existingSongInfo.remove();
     }
     
-    // Get song info from DOM
     const songInfo = this._getSongInfoFromDOM();
     if (!songInfo) {
       return;
@@ -2671,25 +2940,19 @@ class LyricsPlusRenderer {
       return;
     }
     
-    // Create song info container positioned directly below album art
     const songInfoContainer = document.createElement('div');
     songInfoContainer.className = 'lyrics-song-info';
     songInfoContainer.style.display = 'block';
     
-    // Create song title (styles from CSS)
     const titleElement = document.createElement('p');
     titleElement.id = 'lyrics-song-title';
     titleElement.textContent = songInfo.title;
     
-    // Create artist info (styles from CSS)
     const artistElement = document.createElement('p');
     artistElement.id = 'lyrics-song-artist';
     
-    
-    // Create clickable artist and album elements
     if (songInfo.artistUrl && songInfo.artist) {
       const artistLink = document.createElement('a');
-      // Use relative path for SPA navigation
       artistLink.href = `/${songInfo.artistUrl}`;
       artistLink.textContent = songInfo.artist;
       artistLink.className = 'lyrics-clickable-artist';
@@ -2697,7 +2960,6 @@ class LyricsPlusRenderer {
       artistLink.style.textDecoration = 'none';
       artistLink.style.color = 'inherit';
       
-      // Add proper click handler to open in new tab
       artistLink.addEventListener('click', (e) => {
         e.preventDefault();
         window.open(`/${songInfo.artistUrl}`, '_blank');
@@ -2708,7 +2970,6 @@ class LyricsPlusRenderer {
       artistElement.textContent = songInfo.artist;
     }
     
-    // Add album if available
     if (songInfo.album && songInfo.album.trim() !== '') {
       if (songInfo.artist) {
         const separator = document.createTextNode(' — ');
@@ -2717,7 +2978,6 @@ class LyricsPlusRenderer {
       
       if (songInfo.albumUrl) {
         const albumLink = document.createElement('a');
-        // Use relative path for SPA navigation
         albumLink.href = `/${songInfo.albumUrl}`;
         albumLink.textContent = songInfo.album;
         albumLink.className = 'lyrics-clickable-album';
@@ -2725,7 +2985,6 @@ class LyricsPlusRenderer {
         albumLink.style.textDecoration = 'none';
         albumLink.style.color = 'inherit';
         
-        // Add proper click handler to open in new tab
         albumLink.addEventListener('click', (e) => {
           e.preventDefault();
           window.open(`/${songInfo.albumUrl}`, '_blank');
@@ -2737,13 +2996,10 @@ class LyricsPlusRenderer {
       }
     }
     
-    // Append elements to container
     songInfoContainer.appendChild(titleElement);
     songInfoContainer.appendChild(artistElement);
     
-    // Add to body first
     document.body.appendChild(songInfoContainer);
-    // Position relative to album artwork and keep it synced
     this._positionSongInfoRelativeToArtwork(songInfoContainer);
     this._setupArtworkObservers(songInfoContainer);
   }
@@ -2753,7 +3009,6 @@ class LyricsPlusRenderer {
    * @private
    */
   _addSongInfoDisplay(container) {
-    // Check if we're actually in YouTube Music fullscreen mode
     const playerPage = document.querySelector('ytmusic-player-page');
     const isFullscreen = playerPage && playerPage.hasAttribute('player-fullscreened');
     const isVideoMode = playerPage && playerPage.hasAttribute('video-mode');
@@ -2761,12 +3016,10 @@ class LyricsPlusRenderer {
     if (!isFullscreen) {
       return;
     }
-    // Skip in video fullscreen mode
     if (isVideoMode) {
       return;
     }
     
-    // Remove existing song info display if it exists
     const existingSongInfo = document.querySelector('.lyrics-song-info');
     if (existingSongInfo) {
       existingSongInfo.remove();
@@ -2777,11 +3030,9 @@ class LyricsPlusRenderer {
       return;
     }
     if (songInfo.isVideo) {
-      // Do not show song info overlay for video contents (only if no artist info)
       return;
     }
 
-    // Try to get URLs from DOM if not already present in songInfo
     if (!songInfo.artistUrl || !songInfo.albumUrl) {
       const domInfo = this._getSongInfoFromDOM();
       if (domInfo && domInfo.artistUrl) {
@@ -2792,28 +3043,19 @@ class LyricsPlusRenderer {
       }
     }
 
-    // Create song info container positioned directly below album art
     const songInfoContainer = document.createElement('div');
     songInfoContainer.className = 'lyrics-song-info';
     songInfoContainer.style.display = 'block';
-    // Don't set positioning here - let _positionSongInfoRelativeToArtwork handle it
-    // This avoids conflicts between inline styles and CSS fallback
     
-    // Create song title (styles from CSS)
     const titleElement = document.createElement('p');
     titleElement.id = 'lyrics-song-title';
     titleElement.textContent = songInfo.title;
-    // All typography from CSS
     
-    // Create artist info (styles from CSS)
     const artistElement = document.createElement('p');
     artistElement.id = 'lyrics-song-artist';
     
-    
-    // Create clickable artist and album elements
     if (songInfo.artistUrl && songInfo.artist) {
       const artistLink = document.createElement('a');
-      // Use relative path for SPA navigation
       artistLink.href = `/${songInfo.artistUrl}`;
       artistLink.textContent = songInfo.artist;
       artistLink.className = 'lyrics-clickable-artist';
@@ -2821,7 +3063,6 @@ class LyricsPlusRenderer {
       artistLink.style.textDecoration = 'none';
       artistLink.style.color = 'inherit';
       
-      // Add proper click handler to open in new tab
       artistLink.addEventListener('click', (e) => {
         e.preventDefault();
         window.open(`/${songInfo.artistUrl}`, '_blank');
@@ -2832,7 +3073,6 @@ class LyricsPlusRenderer {
       artistElement.textContent = songInfo.artist;
     }
     
-    // Add album if available
     if (songInfo.album && songInfo.album.trim() !== '') {
       if (songInfo.artist) {
         const separator = document.createTextNode(' — ');
@@ -2841,7 +3081,6 @@ class LyricsPlusRenderer {
       
       if (songInfo.albumUrl) {
         const albumLink = document.createElement('a');
-        // Use relative path for SPA navigation
         albumLink.href = `/${songInfo.albumUrl}`;
         albumLink.textContent = songInfo.album;
         albumLink.className = 'lyrics-clickable-album';
@@ -2849,7 +3088,6 @@ class LyricsPlusRenderer {
         albumLink.style.textDecoration = 'none';
         albumLink.style.color = 'inherit';
         
-        // Add proper click handler to open in new tab
         albumLink.addEventListener('click', (e) => {
           e.preventDefault();
           window.open(`/${songInfo.albumUrl}`, '_blank');
@@ -2861,191 +3099,34 @@ class LyricsPlusRenderer {
       }
     }
     
-    // All typography from CSS
     artistElement.style.fontFamily = 'SF Pro Display, sans-serif';
     
-    // Append elements to container
     songInfoContainer.appendChild(titleElement);
     songInfoContainer.appendChild(artistElement);
     
-    // Add to body first
     document.body.appendChild(songInfoContainer);
-    // Position relative to album artwork and keep it synced
     this._positionSongInfoRelativeToArtwork(songInfoContainer);
     this._setupArtworkObservers(songInfoContainer);
-  }
-
-  _addSongInfoToContainer(container, songInfo) {
-    // Fallback method to add song info to lyrics container
-    const songInfoContainer = document.createElement('div');
-    songInfoContainer.className = 'lyrics-song-info';
-    songInfoContainer.style.display = 'block';
-    songInfoContainer.style.position = 'fixed';
-    songInfoContainer.style.bottom = '20px';
-    songInfoContainer.style.left = '20px';
-    songInfoContainer.style.right = '20px';
-    songInfoContainer.style.textAlign = 'center';
-    songInfoContainer.style.zIndex = '1000';
-    
-    const titleElement = document.createElement('p');
-    titleElement.id = 'lyrics-song-title';
-    titleElement.textContent = songInfo.title;
-    
-    const artistElement = document.createElement('p');
-    artistElement.id = 'lyrics-song-artist';
-    
-    // Create clickable artist and album elements
-    if (songInfo.artistUrl && songInfo.artist) {
-      const artistLink = document.createElement('a');
-      // Use relative path for SPA navigation
-      artistLink.href = `/${songInfo.artistUrl}`;
-      artistLink.textContent = songInfo.artist;
-      artistLink.className = 'lyrics-clickable-artist';
-      artistLink.style.cursor = 'pointer';
-      artistLink.style.textDecoration = 'none';
-      artistLink.style.color = 'inherit';
-      
-      // Add proper click handler to open in new tab
-      artistLink.addEventListener('click', (e) => {
-        e.preventDefault();
-        window.open(`/${songInfo.artistUrl}`, '_blank');
-      });
-      
-      artistElement.appendChild(artistLink);
-    } else if (songInfo.artist) {
-      artistElement.textContent = songInfo.artist;
-    }
-    
-    // Add album if available
-    if (songInfo.album && songInfo.album.trim() !== '') {
-      if (songInfo.artist) {
-        const separator = document.createTextNode(' — ');
-        artistElement.appendChild(separator);
-      }
-      
-      if (songInfo.albumUrl) {
-        const albumLink = document.createElement('a');
-        // Use relative path for SPA navigation
-        albumLink.href = `/${songInfo.albumUrl}`;
-        albumLink.textContent = songInfo.album;
-        albumLink.className = 'lyrics-clickable-album';
-        albumLink.style.cursor = 'pointer';
-        albumLink.style.textDecoration = 'none';
-        albumLink.style.color = 'inherit';
-        
-        // Add proper click handler to open in new tab
-        albumLink.addEventListener('click', (e) => {
-          e.preventDefault();
-          window.open(`/${songInfo.albumUrl}`, '_blank');
-        });
-        
-        artistElement.appendChild(albumLink);
-      } else {
-        artistElement.appendChild(document.createTextNode(songInfo.album));
-      }
-    }
-    
-    songInfoContainer.appendChild(titleElement);
-    songInfoContainer.appendChild(artistElement);
-    
-    // Add to body to ensure it's visible
-    document.body.appendChild(songInfoContainer);
-  }
-
-  _setupFullscreenListener() {
-    // Only set up once
-    if (this.fullscreenListenerSetup) return;
-    this.fullscreenListenerSetup = true;
-    
-    // Listen for fullscreen changes
-    const observer = new MutationObserver((mutations) => {
-      mutations.forEach((mutation) => {
-        if (mutation.type === 'attributes' && mutation.attributeName === 'player-fullscreened') {
-          const playerPage = mutation.target;
-          const isFullscreen = playerPage.hasAttribute('player-fullscreened');
-          
-          // Set flag to skip scroll updates during transition (reduces lag)
-          this._isFullscreenTransitioning = true;
-          if (this._fullscreenTransitionTimer) {
-            clearTimeout(this._fullscreenTransitionTimer);
-          }
-          
-          // Clear caches to prevent stale data after transition
-          this._cachedContainerRect = null;
-          this._lastScrollUpdateTime = 0;
-          this._lastScrollLineId = null;
-          
-          // Longer delay for exiting fullscreen (layout takes time to restructure)
-          const transitionDelay = isFullscreen ? 300 : 600; // Longer when exiting fullscreen
-          
-          this._fullscreenTransitionTimer = setTimeout(() => {
-            this._isFullscreenTransitioning = false;
-            this._fullscreenTransitionTimer = null;
-            
-            // Force a scroll update after transition to re-sync
-            // Use requestAnimationFrame to ensure DOM is ready
-            requestAnimationFrame(() => {
-              if (this.currentPrimaryActiveLine) {
-                // Clear cache before forcing scroll to ensure fresh calculations
-                this._cachedContainerRect = null;
-                this._lastScrollUpdateTime = 0;
-                this._scrollToActiveLine(this.currentPrimaryActiveLine, true);
-              }
-            });
-          }, transitionDelay);
-          
-          if (isFullscreen && !playerPage.hasAttribute('video-mode')) {
-            // Add song info immediately when entering fullscreen (don't wait for lyrics)
-            this._addSongInfoFromDOM();
-          } else {
-            // Remove song info when exiting fullscreen
-            const existingSongInfo = document.querySelector('.lyrics-song-info');
-            if (existingSongInfo) {
-              existingSongInfo.remove();
-            }
-            if (this._cleanupArtworkObservers) {
-              this._cleanupArtworkObservers();
-              this._cleanupArtworkObservers = null;
-            }
-          }
-        }
-      });
-    });
-    
-    // Observe the player page for fullscreen changes
-    const playerPage = document.querySelector('ytmusic-player-page');
-    if (playerPage) {
-      observer.observe(playerPage, {
-        attributes: true,
-        attributeFilter: ['player-fullscreened']
-      });
-    }
   }
 
   /**
    * Finds the album artwork element in YT Music fullscreen layout.
    */
   _findArtworkElement() {
-    // Common selectors observed in YT Music layouts
     const candidates = [
-      // Fullscreen player artwork image
       'ytmusic-player-page[player-fullscreened] img.image',
-      // Artwork container backgrounds
       'ytmusic-player-page[player-fullscreened] #thumbnail img',
       'ytmusic-player-page[player-fullscreened] .image',
-      // Additional selectors for better compatibility
       'ytmusic-player-page[player-fullscreened] #player img',
       'ytmusic-player-page[player-fullscreened] .player-image',
       'ytmusic-player-page[player-fullscreened] ytmusic-player img',
       'ytmusic-player-page[player-fullscreened] #thumbnail',
-      // Player bar image (fallback)
       '.image.ytmusic-player-bar'
     ];
     for (const sel of candidates) {
       const el = document.querySelector(sel);
       if (el && el.getBoundingClientRect) {
         const rect = el.getBoundingClientRect();
-        // Ensure element has valid dimensions
         if (rect.width > 0 && rect.height > 0) {
           return el;
         }
@@ -3060,7 +3141,6 @@ class LyricsPlusRenderer {
   _positionSongInfoRelativeToArtwork(songInfoContainer) {
     const artworkEl = this._findArtworkElement();
     if (!artworkEl) {
-      // Remove inline styles to let CSS fallback positioning take over
       songInfoContainer.style.position = '';
       songInfoContainer.style.left = '';
       songInfoContainer.style.top = '';
@@ -3072,9 +3152,8 @@ class LyricsPlusRenderer {
     
     const rect = artworkEl.getBoundingClientRect();
 
-    // Place left-aligned under the artwork with better spacing
     const leftX = rect.left;
-    const topY = rect.bottom + 20; // Increased gap below artwork
+    const topY = rect.bottom + 20;
 
     songInfoContainer.style.position = 'fixed';
     songInfoContainer.style.left = `${leftX}px`;
@@ -3083,34 +3162,28 @@ class LyricsPlusRenderer {
     songInfoContainer.style.maxWidth = `${Math.max(300, Math.floor(rect.width))}px`;
     songInfoContainer.style.textAlign = 'left';
     songInfoContainer.style.zIndex = '1000';
-    
   }
 
   /**
    * Observes layout changes to keep song info aligned with artwork when zooming/resizing.
    */
   _setupArtworkObservers(songInfoContainer) {
-    // Reposition on resize/scroll to follow layout changes
     const reposition = () => {
       this._positionSongInfoRelativeToArtwork(songInfoContainer);
     };
     this._artworkRepositionHandler = reposition;
 
-    // More frequent repositioning for better tracking
     window.addEventListener('resize', reposition, { passive: true });
     window.addEventListener('scroll', reposition, { passive: true });
     
-    // Also reposition on animation frame for smooth tracking
     let animationFrameId = null;
     const smoothReposition = () => {
       reposition();
       animationFrameId = requestAnimationFrame(smoothReposition);
     };
     
-    // Start smooth repositioning
     animationFrameId = requestAnimationFrame(smoothReposition);
 
-    // Mutation observer to watch player layout changes
     const playerPage = document.querySelector('ytmusic-player-page');
     if (playerPage) {
       if (this._artworkMutationObserver) this._artworkMutationObserver.disconnect();
@@ -3125,7 +3198,22 @@ class LyricsPlusRenderer {
       });
     }
 
-    // Clean-up hook when leaving fullscreen
+    const container = this._getContainer();
+    if (container) {
+      if (this._notFoundObserver) this._notFoundObserver.disconnect();
+      this._notFoundObserver = new MutationObserver(() => {
+        if (container.classList.contains('animate-not-found-center')) {
+          setTimeout(() => {
+            reposition();
+          }, 650);
+        }
+      });
+      this._notFoundObserver.observe(container, {
+        attributes: true,
+        attributeFilter: ['class']
+      });
+    }
+
     this._cleanupArtworkObservers = () => {
       window.removeEventListener('resize', reposition);
       window.removeEventListener('scroll', reposition);
@@ -3137,486 +3225,69 @@ class LyricsPlusRenderer {
         this._artworkMutationObserver.disconnect();
         this._artworkMutationObserver = null;
       }
+      if (this._notFoundObserver) {
+        this._notFoundObserver.disconnect();
+        this._notFoundObserver = null;
+      }
     };
   }
-}
 
-// Create the renderer instance with default config
-const lyricsRendererInstance = new LyricsPlusRenderer();
-
-// Make it globally available for other observers
-window.lyricsRendererInstance = lyricsRendererInstance;
-
-// Track last applied settings to detect what changed between updates
-let __lastAppliedSettingsSnapshot = null;
-
-// Listen for settings updates to refresh display
-window.addEventListener('message', (event) => {
-    if (event.source !== window || !event.data) return;
+  _setupFullscreenListener() {
+    if (this.fullscreenListenerSetup) return;
+    this.fullscreenListenerSetup = true;
     
-    if (event.data.type === 'UPDATE_DYNAMIC_BG') {
-        if (typeof window.applyDynamicPlayerClass === 'function') {
-            window.applyDynamicPlayerClass();
-            // Also apply with a small delay to ensure DOM is ready
-            setTimeout(() => { window.applyDynamicPlayerClass(); }, 50);
-        }
-        return;
-    }
-
-    if (event.data.type === 'UPDATE_SETTINGS') {
-
-        // Determine if only dynamic background settings changed
-        try {
-            const previous = __lastAppliedSettingsSnapshot || {};
-            const current = event.data.settings || {};
-            const keys = new Set([...Object.keys(previous), ...Object.keys(current)]);
-
-            const dynamicOnlyKeys = new Set([
-                'dynamicPlayerPage',
-                'dynamicPlayerFullscreen',
-                'useSongPaletteFullscreen',
-                'useSongPaletteAllModes',
-                'overridePaletteColor'
-            ]);
-
-            let changedKeys = [];
-            keys.forEach(k => {
-                if (previous[k] !== current[k]) changedKeys.push(k);
-            });
-
-            const onlyDynamicChanged = changedKeys.length > 0 && changedKeys.every(k => dynamicOnlyKeys.has(k));
-
-            if (onlyDynamicChanged) {
-                // Apply dynamic background without refreshing lyrics
-                if (typeof window.applyDynamicPlayerClass === 'function') {
-                    window.applyDynamicPlayerClass();
-                }
-                __lastAppliedSettingsSnapshot = { ...current };
-                return;
-            }
-
-            // Store snapshot for next comparison
-            __lastAppliedSettingsSnapshot = { ...current };
-        } catch (e) {
-            // If comparison fails, fall through to default behavior
-        }
-        
-        // Check if lyrics are currently displayed
-        const lyricsContainer = document.querySelector('#lyrics-plus-container');
-        if (!lyricsContainer || lyricsContainer.classList.contains('lyrics-plus-message')) {
-            return; // No lyrics currently displayed
-        }
-        
-        // Check if we have stored lyrics data
-        if (typeof window.lastFetchedLyrics !== 'undefined' && window.lastFetchedLyrics) {
-            // Refresh lyrics display with new settings
-            LyricsPlusAPI.displayLyrics(
-                window.lastFetchedLyrics,
-                window.lastFetchedLyrics.metadata?.source || 'Unknown',
-                window.lastFetchedLyrics.type === "Line" ? "Line" : "Word",
-                event.data.settings.lightweight,
-                window.lastFetchedLyrics.metadata?.songWriters,
-                window.lastKnownSongInfo,
-                currentDisplayMode,
-                event.data.settings,
-                window.fetchAndDisplayLyrics,
-                window.setCurrentDisplayModeAndRender,
-                event.data.settings.largerTextMode
-            );
-        }
-    }
-});
-
-// Create the global API for other modules to use
-const LyricsPlusAPI = {
-  displayLyrics: (...args) => lyricsRendererInstance.displayLyrics(...args),
-  displaySongNotFound: () => lyricsRendererInstance.displaySongNotFound(),
-  displaySongError: () => lyricsRendererInstance.displaySongError(),
-  cleanupLyrics: () => lyricsRendererInstance.cleanupLyrics(),
-  updateDisplayMode: (...args) => lyricsRendererInstance.updateDisplayMode(...args)
-};
-
-// ==========================================================================
-// UP NEXT TAB BUTTONS FUNCTIONALITY
-// ==========================================================================
-
-/**
- * Creates buttons for the Up next tab that redirect to the lyrics tab
- */
-function createUpNextTabButtons() {
-  // Check if buttons already exist
-  let buttonsWrapper = document.getElementById('upnext-buttons-wrapper');
-  if (buttonsWrapper) {
-    return; // Buttons already exist
-  }
-
-  // Find the tab renderer container (where all tabs are shown)
-  const tabRenderer = document.querySelector('ytmusic-tab-renderer');
-  if (!tabRenderer) {
-    return; // Tab renderer not found
-  }
-
-  // Create buttons wrapper
-  buttonsWrapper = document.createElement('div');
-  buttonsWrapper.id = 'upnext-buttons-wrapper';
-  buttonsWrapper.style.position = 'absolute';
-  buttonsWrapper.style.bottom = '1em';
-      buttonsWrapper.style.right = '-1.5em';
-  buttonsWrapper.style.width = '20%';
-  buttonsWrapper.style.display = 'flex';
-  buttonsWrapper.style.justifyContent = 'center';
-  buttonsWrapper.style.gap = '10px';
-  buttonsWrapper.style.zIndex = '1000';
-  tabRenderer.appendChild(buttonsWrapper);
-
-  // Create single button (redirects to lyrics tab)
-  const lyricsButton = document.createElement('button');
-  lyricsButton.id = 'upnext-lyrics-button';
-  lyricsButton.title = 'Lyrics';
-  const lyricsButtonSVG = `<svg width="29" height="28" viewBox="0 0 29 28" fill="none" xmlns="http://www.w3.org/2000/svg" style="width:1.5em;height:1.5em;vertical-align:middle;">
-    <g clip-path="url(#clip0_1_43)">
-      <mask id="mask0_1_43" style="mask-type:luminance" maskUnits="userSpaceOnUse" x="0" y="0" width="29" height="28">
-        <path d="M28.5 0H0.5V28H28.5V0Z" fill="black"/>
-        <g clip-path="url(#clip1_1_43)">
-          <path d="M9.86969 24.5614C10.4761 24.5614 10.9405 24.2829 11.6768 23.6308L15.051 20.6615H20.7642C23.7617 20.6615 25.5 18.8905 25.5 15.9257V8.17447C25.5 5.20963 23.762 3.43863 20.7642 3.43863H8.23584C5.23834 3.43863 3.5 5.20688 3.5 8.17447V15.9257C3.5 18.8933 5.31156 20.6615 8.1255 20.6615H8.47475V22.9966C8.47475 23.9633 8.99416 24.5614 9.86934 24.5614H9.86969ZM10.4094 22.1001V19.3123C10.4094 18.6901 10.1327 18.4581 9.55481 18.4581H8.3345C6.55903 18.4581 5.70344 17.5633 5.70344 15.827V8.27313C5.70344 6.54304 6.55903 5.64963 8.3345 5.64963H20.6655C22.4355 5.64963 23.2966 6.54304 23.2966 8.27313V15.827C23.2966 17.5633 22.4355 18.4581 20.6655 18.4581H14.9084C14.2776 18.4581 13.9796 18.5715 13.5293 19.0253L10.4094 22.1001ZM9.649 11.0393C9.649 12.2073 10.3901 13.0798 11.5011 13.0798C11.969 13.0798 12.3921 12.976 12.6603 12.6456H12.7926C12.4942 13.4125 11.7613 13.9673 10.9697 14.1581C10.6431 14.2417 10.5135 14.4115 10.5135 14.648C10.5135 14.923 10.7397 15.1155 11.0326 15.1155C12.1237 15.1155 14.0576 13.8178 14.0576 11.4717C14.0576 10.0493 13.1632 8.94997 11.793 8.94997C10.5637 8.94997 9.649 9.81554 9.649 11.0393ZM15.0332 11.0393C15.0332 12.2073 15.7667 13.0798 16.8849 13.0798C17.3456 13.0798 17.7763 12.976 18.0444 12.6456H18.1785C17.8811 13.4125 17.1393 13.9673 16.3538 14.1581C16.0283 14.2417 15.8977 14.4115 15.8977 14.648C15.8977 14.923 16.1163 15.1155 16.4168 15.1155C17.5092 15.1155 19.4345 13.8178 19.4345 11.4717C19.4345 10.0493 18.5487 8.94997 17.1771 8.94997C15.9475 8.94997 15.0332 9.81554 15.0332 11.0393Z" fill="white"/>
-        </g>
-      </mask>
-      <g mask="url(#mask0_1_43)">
-        <path d="M28.5 0H0.5V28H28.5V0Z" fill="white"/>
-      </g>
-    </g>
-    <defs>
-      <clipPath id="clip0_1_43">
-        <rect width="28" height="28" fill="white" transform="translate(0.5)"/>
-      </clipPath>
-      <clipPath id="clip1_1_43">
-        <rect width="22" height="22" fill="white" transform="translate(3.5 3)"/>
-      </clipPath>
-    </defs>
-  </svg>`;
-  lyricsButton.innerHTML = lyricsButtonSVG;
-
-  // Add click event listener to redirect to lyrics tab
-  lyricsButton.addEventListener('click', () => {
-    redirectToLyricsTab();
-  });
-
-  // Append button to wrapper
-  buttonsWrapper.appendChild(lyricsButton);
-}
-
-/**
- * Redirects to the lyrics tab by clicking the middle tab
- */
-function redirectToLyricsTab() {
-  // Find all tabs
-  const tabs = document.querySelectorAll('tp-yt-paper-tab.tab-header.style-scope.ytmusic-player-page');
-  
-  if (tabs.length >= 3) {
-    // Click the middle tab (index 1 for 3 tabs, or middle for more tabs)
-    const middleIndex = Math.floor(tabs.length / 2);
-    const lyricsTab = tabs[middleIndex];
-    
-    if (lyricsTab) {
-      lyricsTab.click();
-    }
-  }
-}
-
-/**
- * Initialize Up next tab buttons when DOM is ready
- */
-function initUpNextTabButtons() {
-  // Wait for tabs to be available
-  const checkForTabs = () => {
-    const tabs = document.querySelectorAll('tp-yt-paper-tab.tab-header.style-scope.ytmusic-player-page');
-    
-    if (tabs.length >= 3) {
-      createUpNextTabButtons();
-    } else {
-      // Check again after a short delay
-      setTimeout(checkForTabs, 500);
-    }
-  };
-
-  // Start checking for tabs
-  checkForTabs();
-}
-
-// Initialize the Up next tab buttons when the page loads
-if (document.readyState === 'loading') {
-  document.addEventListener('DOMContentLoaded', initUpNextTabButtons);
-} else {
-  // DOM is already loaded
-  initUpNextTabButtons();
-}
-
-/**
- * Check which tab is currently active and show/hide buttons accordingly
- */
-function manageUpNextButtons() {
-  const buttonsWrapper = document.getElementById('upnext-buttons-wrapper');
-  if (!buttonsWrapper) return;
-
-  // Check if we're currently on the lyrics tab
-  const lyricsContainer = document.getElementById('lyrics-plus-container');
-  const isOnLyricsTab = lyricsContainer && 
-                       lyricsContainer.style.display === 'block' && 
-                       lyricsContainer.offsetParent !== null;
-
-  // Also check if lyrics buttons wrapper exists (indicates we're on lyrics tab)
-  const lyricsButtonsWrapper = document.getElementById('lyrics-plus-buttons-wrapper');
-  const lyricsButtonsVisible = lyricsButtonsWrapper && 
-                              lyricsButtonsWrapper.style.display !== 'none' && 
-                              lyricsButtonsWrapper.offsetParent !== null;
-
-  // Show buttons only when NOT on lyrics tab
-  if (isOnLyricsTab || lyricsButtonsVisible) {
-    buttonsWrapper.style.display = 'none';
-    buttonsWrapper.style.visibility = 'hidden';
-  } else {
-    buttonsWrapper.style.display = 'flex';
-    buttonsWrapper.style.visibility = 'visible';
-  }
-}
-
-/**
- * Auto-redirect to lyrics tab when entering fullscreen mode
- */
-function autoRedirectToLyricsInFullscreen() {
-  const playerPage = document.querySelector('ytmusic-player-page');
-  if (!playerPage) {
-    return;
-  }
-  
-  const isFullscreen = playerPage.hasAttribute('player-fullscreened');
-  if (!isFullscreen) return;
-  
-  // Check if we're already on lyrics tab
-  const tabs = document.querySelectorAll('tp-yt-paper-tab.tab-header.style-scope.ytmusic-player-page');
-  if (tabs.length < 2) {
-    return;
-  }
-  
-  // Find the active tab
-  const activeTab = document.querySelector('tp-yt-paper-tab.tab-header.style-scope.ytmusic-player-page.iron-selected');
-  if (!activeTab) {
-    return;
-  }
-  
-  // Get tab index and all tab texts for debugging
-  const allTabs = Array.from(activeTab.parentElement.children);
-  const tabIndex = allTabs.indexOf(activeTab);
-  
-  // Find lyrics tab by text content (more reliable)
-  let lyricsTabIndex = -1;
-  allTabs.forEach((tab, index) => {
-    const tabText = tab.textContent.trim().toLowerCase();
-    if (tabText.includes('lyrics') || tabText.includes('lirik')) {
-      lyricsTabIndex = index;
-    }
-  });
-  
-  // If not on lyrics tab, auto-redirect
-  if (tabIndex !== lyricsTabIndex && lyricsTabIndex !== -1) {
-    // Use the correctly found lyrics tab
-    const lyricsTab = allTabs[lyricsTabIndex];
-    
-    // Method 1: Direct click
-    lyricsTab.click();
-    
-    // Method 2: Dispatch click event (immediate fallback)
-    lyricsTab.dispatchEvent(new MouseEvent('click', {
-      bubbles: true,
-      cancelable: true,
-      view: window
-    }));
-  }
-}
-
-// Also initialize when navigating between pages (for SPA behavior)
-const observer = new MutationObserver((mutations) => {
-  mutations.forEach((mutation) => {
-    if (mutation.type === 'childList') {
-      // Check if tabs were added/removed
-      const tabs = document.querySelectorAll('tp-yt-paper-tab.tab-header.style-scope.ytmusic-player-page');
-      if (tabs.length >= 3 && !document.getElementById('upnext-buttons-wrapper')) {
-        createUpNextTabButtons();
-      }
-      
-      // Manage button visibility based on current tab
-      manageUpNextButtons();
-    }
-    
-    // Watch for changes in the lyrics container display
-    if (mutation.type === 'attributes' && mutation.attributeName === 'style') {
-      manageUpNextButtons();
-    }
-    
-    // Watch for fullscreen changes and auto-redirect to lyrics
-    if (mutation.type === 'attributes' && mutation.attributeName === 'player-fullscreened') {
-      // Instant redirect - no delay
-      autoRedirectToLyricsInFullscreen();
-      
-      // Also show song info immediately when entering fullscreen
-      const playerPage = mutation.target;
-      const isFullscreen = playerPage.hasAttribute('player-fullscreened');
-      const isVideoMode = playerPage.hasAttribute('video-mode');
-      
-      if (isFullscreen && !isVideoMode) {
-        // Use the renderer instance to add song info
-        if (window.lyricsRendererInstance) {
-          window.lyricsRendererInstance._addSongInfoFromDOM();
-        }
-      } else if (!isFullscreen) {
-        // Remove song info when exiting fullscreen
-        const existingSongInfo = document.querySelector('.lyrics-song-info');
-        if (existingSongInfo) {
-          existingSongInfo.remove();
-        }
-      }
-    }
-  });
-});
-
-// Start observing for tab changes
-observer.observe(document.body, {
-  childList: true,
-  subtree: true,
-  attributes: true,
-  attributeFilter: ['style', 'player-fullscreened']
-});
-
-// Also check tab changes when tabs are clicked
-document.addEventListener('click', (event) => {
-  if (event.target.matches('tp-yt-paper-tab.tab-header.style-scope.ytmusic-player-page')) {
-    setTimeout(manageUpNextButtons, 100); // Small delay to allow tab switch
-    setTimeout(manageUpNextButtons, 500); // Double check after longer delay
-  }
-});
-
-// Observe ytmusic-player-page specifically for fullscreen changes
-function setupPlayerPageObserver() {
-  const playerPage = document.querySelector('ytmusic-player-page');
-  if (playerPage) {
-    const playerObserver = new MutationObserver((mutations) => {
+    const observer = new MutationObserver((mutations) => {
       mutations.forEach((mutation) => {
         if (mutation.type === 'attributes' && mutation.attributeName === 'player-fullscreened') {
-          // Instant redirect - no delay
-          autoRedirectToLyricsInFullscreen();
-        }
-      });
-    });
-    
-    playerObserver.observe(playerPage, {
-      attributes: true,
-      attributeFilter: ['player-fullscreened']
-    });
-  }
-}
-
-// Setup player page observer when available
-setupPlayerPageObserver();
-
-// Additional immediate fullscreen observer for song info
-function setupImmediateSongInfoObserver() {
-  const playerPage = document.querySelector('ytmusic-player-page');
-  if (playerPage) {
-    const immediateObserver = new MutationObserver((mutations) => {
-      mutations.forEach((mutation) => {
-        if (mutation.type === 'attributes' && mutation.attributeName === 'player-fullscreened') {
-          const isFullscreen = mutation.target.hasAttribute('player-fullscreened');
-          const isVideoMode = mutation.target.hasAttribute('video-mode');
+          const playerPage = mutation.target;
+          const isFullscreen = playerPage.hasAttribute('player-fullscreened');
           
-          if (isFullscreen && !isVideoMode) {
-            // Add song info immediately - no waiting
-            if (window.lyricsRendererInstance) {
-              window.lyricsRendererInstance._addSongInfoFromDOM();
-            }
-          } else if (!isFullscreen) {
-            // Remove song info immediately when exiting fullscreen
+          this._isFullscreenTransitioning = true;
+          if (this._fullscreenTransitionTimer) {
+            clearTimeout(this._fullscreenTransitionTimer);
+          }
+          
+          this._cachedContainerRect = null;
+          this._lastScrollUpdateTime = 0;
+          this._lastScrollLineId = null;
+          
+          const transitionDelay = isFullscreen ? 300 : 600;
+          
+          this._fullscreenTransitionTimer = setTimeout(() => {
+            this._isFullscreenTransitioning = false;
+            this._fullscreenTransitionTimer = null;
+            
+            requestAnimationFrame(() => {
+              if (this.currentPrimaryActiveLine) {
+                this._cachedContainerRect = null;
+                this._lastScrollUpdateTime = 0;
+                this._scrollToActiveLine(this.currentPrimaryActiveLine, true);
+              }
+            });
+          }, transitionDelay);
+          
+          if (isFullscreen && !playerPage.hasAttribute('video-mode')) {
+            this._addSongInfoFromDOM();
+          } else {
             const existingSongInfo = document.querySelector('.lyrics-song-info');
             if (existingSongInfo) {
               existingSongInfo.remove();
+            }
+            if (this._cleanupArtworkObservers) {
+              this._cleanupArtworkObservers();
+              this._cleanupArtworkObservers = null;
             }
           }
         }
       });
     });
     
-    immediateObserver.observe(playerPage, {
-      attributes: true,
-      attributeFilter: ['player-fullscreened', 'video-mode']
-    });
-    
-  } else {
-    // Retry if player page not ready yet
-    setTimeout(setupImmediateSongInfoObserver, 500);
-  }
-}
-
-// Setup immediate observer
-setupImmediateSongInfoObserver();
-setTimeout(setupPlayerPageObserver, 1000); // Retry after delay
-
-// Aggressive fallback: Check for fullscreen every 100ms
-let fullscreenCheckInterval = null;
-function startFullscreenCheck() {
-  if (fullscreenCheckInterval) return; // Already running
-  
-  fullscreenCheckInterval = setInterval(() => {
     const playerPage = document.querySelector('ytmusic-player-page');
     if (playerPage) {
-      const isFullscreen = playerPage.hasAttribute('player-fullscreened');
-      const isVideoMode = playerPage.hasAttribute('video-mode');
-      
-      // Check if we should show song info but it's not there
-      if (isFullscreen && !isVideoMode) {
-        const existingSongInfo = document.querySelector('.lyrics-song-info');
-        if (!existingSongInfo && window.lyricsRendererInstance) {
-          window.lyricsRendererInstance._addSongInfoFromDOM();
-        }
-      }
+      observer.observe(playerPage, {
+        attributes: true,
+        attributeFilter: ['player-fullscreened']
+      });
     }
-  }, 100); // Check every 100ms
+  }
 }
-
-// Start aggressive check after a delay
-setTimeout(startFullscreenCheck, 2000);
-
-// Additional fallback: Listen for fullscreen events
-document.addEventListener('fullscreenchange', () => {
-  autoRedirectToLyricsInFullscreen();
-});
-
-// Additional fallback: Listen for keyboard shortcuts (F key for fullscreen)
-document.addEventListener('keydown', (event) => {
-  if (event.key === 'f' || event.key === 'F') {
-    autoRedirectToLyricsInFullscreen();
-  }
-});
-
-// Additional fallback: Periodic check when in fullscreen
-setInterval(() => {
-  const playerPage = document.querySelector('ytmusic-player-page');
-  if (playerPage && playerPage.hasAttribute('player-fullscreened')) {
-    // Only auto-redirect if we're not on lyrics tab
-    const activeTab = document.querySelector('tp-yt-paper-tab.tab-header.style-scope.ytmusic-player-page.iron-selected');
-    if (activeTab) {
-      const tabText = activeTab.textContent.trim().toLowerCase();
-      // Check if current tab is NOT lyrics
-      if (!tabText.includes('lyrics') && !tabText.includes('lirik')) {
-        autoRedirectToLyricsInFullscreen();
-      }
-    }
-  }
-}, 2000); // Check every 2 seconds
-
-// Periodic check to ensure buttons are managed correctly
-setInterval(() => {
-  if (document.getElementById('upnext-buttons-wrapper')) {
-    manageUpNextButtons();
-  }
-}, 1000); // Check every second
-
-

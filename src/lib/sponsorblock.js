@@ -156,6 +156,7 @@ async function fetchSponsorSegments(videoID, customOptions = {}) {
         });
 
         if (response.status === 404) {
+            console.info("SponsorBlock returned 404; no segments available for this video.");
             return [];
         }
 
@@ -175,6 +176,7 @@ async function fetchSponsorSegments(videoID, customOptions = {}) {
             }
 
             // If no exact match found, return empty array
+            console.info(`No segments found for videoID ${videoID} in SponsorBlock response`);
             return [];
         }
 

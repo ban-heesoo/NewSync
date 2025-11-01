@@ -1,17 +1,15 @@
-import { loadSettings, saveSettings, updateSettings, getSettings, updateCacheSize, clearCache, setupSettingsMessageListener } from './settingsManager.js';
-import { startFullPreviewSync } from './previewManager.js';
+import { loadSettings, saveSettings, updateSettings, getSettings, updateCacheSize, clearCache, setupSettingsMessageListener, uploadLocalLyrics, getLocalLyricsList, deleteLocalLyrics, updateLocalLyrics, fetchLocalLyrics } from './settingsManager.js';
+import { parseSyncedLyrics, parseAppleMusicLRC, parseAppleTTML, convertToStandardJson, v1Tov2 } from './parser.js';
 
-let currentSettings = {}; // Will be initialized when loaded from storage
+let currentSettings = getSettings();
 
-// Shows a notification bar telling the user to reload their YTM tab
 function showReloadNotification() {
     const notification = document.getElementById('reload-notification');
     if (notification) {
-        notification.style.display = 'flex'; // Use flex to align items
+        notification.style.display = 'flex';
     }
 }
 
-// Hides the notification bar
 function hideReloadNotification() {
     const notification = document.getElementById('reload-notification');
     if (notification) {
@@ -19,39 +17,29 @@ function hideReloadNotification() {
     }
 }
 
-/**
- * Sets up listeners for controls that should save automatically on change
- * Maps DOM element IDs to setting keys and their types
- */
 function setupAutoSaveListeners() {
     const autoSaveControls = [
-        // General
         { id: 'enabled', key: 'isEnabled', type: 'checkbox' },
         { id: 'default-provider', key: 'lyricsProvider', type: 'value' },
-        { id: 'custom-kpoe-url', key: 'customKpoeUrl', type: 'value' }, // Add custom KPoe URL
+        { id: 'custom-kpoe-url', key: 'customKpoeUrl', type: 'value' },
         { id: 'sponsor-block', key: 'useSponsorBlock', type: 'checkbox' },
         { id: 'wordByWord', key: 'wordByWord', type: 'checkbox' },
-        // Appearance
         { id: 'lightweight', key: 'lightweight', type: 'checkbox' },
-        { id: 'fade-past-lines', key: 'fadePastLines', type: 'checkbox' },
         { id: 'hide-offscreen', key: 'hideOffscreen', type: 'checkbox' },
         { id: 'compability-wipe', key: 'compabilityWipe', type: 'checkbox' },
         { id: 'blur-inactive', key: 'blurInactive', type: 'checkbox' },
-        { id: 'dynamic-player-page', key: 'dynamicPlayerPage', type: 'checkbox' },
-        { id: 'dynamic-player-fullscreen', key: 'dynamicPlayerFullscreen', type: 'checkbox' },
+        { id: 'dynamic-player', key: 'dynamicPlayer', type: 'checkbox' },
         { id: 'useSongPaletteFullscreen', key: 'useSongPaletteFullscreen', type: 'checkbox' },
         { id: 'useSongPaletteAllModes', key: 'useSongPaletteAllModes', type: 'checkbox' },
         { id: 'overridePaletteColor', key: 'overridePaletteColor', type: 'value' },
         { id: 'larger-text-mode', key: 'largerTextMode', type: 'value' },
-        // Translation
         { id: 'translation-provider', key: 'translationProvider', type: 'value' },
         { id: 'gemini-model', key: 'geminiModel', type: 'value' },
         { id: 'override-translate-target', key: 'overrideTranslateTarget', type: 'checkbox' },
         { id: 'override-gemini-prompt', key: 'overrideGeminiPrompt', type: 'checkbox' },
-        { id: 'override-gemini-romanize-prompt', key: 'overrideGeminiRomanizePrompt', type: 'checkbox' }, // New auto-save for romanize prompt override
-        { id: 'romanization-provider', key: 'romanizationProvider', type: 'value' }, // Auto-save romanization provider
-        { id: 'gemini-romanization-model', key: 'geminiRomanizationModel', type: 'value' }, // Auto-save Gemini romanization model
-        // Cache
+        { id: 'override-gemini-romanize-prompt', key: 'overrideGeminiRomanizePrompt', type: 'checkbox' },
+        { id: 'romanization-provider', key: 'romanizationProvider', type: 'value' },
+        { id: 'gemini-romanization-model', key: 'geminiRomanizationModel', type: 'value' },
         { id: 'cache-strategy', key: 'cacheStrategy', type: 'value' },
     ];
 
@@ -60,239 +48,122 @@ function setupAutoSaveListeners() {
         if (element) {
             element.addEventListener('change', (e) => {
                 const value = control.type === 'checkbox' ? e.target.checked : e.target.value;
-                const newSetting = { [control.key]: value };
-
-                // Update both the global settings and local reference
-                updateSettings(newSetting);
-                currentSettings = { ...currentSettings, ...newSetting };
+                updateSettings({ [control.key]: value });
                 saveSettings();
-                
-                // Check if dynamic background settings changed
-                const dynamicBackgroundSettings = [
-                    'dynamic-player-page', 'dynamic-player-fullscreen'
-                ];
-                
-                if (dynamicBackgroundSettings.includes(control.id)) {
-                    // Send settings update to YouTube Music tab to apply dynamic background
-                    try {
-                        if (typeof chrome !== 'undefined' && chrome.tabs) {
-                            chrome.tabs.query({ url: "*://music.youtube.com/*" }, (tabs) => {
-                                if (tabs && tabs.length > 0) {
-                                    tabs.forEach(tab => {
-                                        chrome.tabs.sendMessage(tab.id, {
-                                            type: 'NEWSYNC_SETTINGS_UPDATED',
-                                            settings: currentSettings
-                                        }).catch(() => {
-                                            // Tab might not be ready, ignore error
-                                        });
-                                    });
-                                }
-                            });
-                        }
-                    } catch (error) {
-                        console.warn('Failed to notify YouTube Music tab:', error);
-                    }
-                    showStatusMessage('Setting saved!', false, control.id);
-                    return;
-                }
-                
-                // Only show reload notification for settings that require page reload
-                const settingsRequiringReload = [
-                    'default-provider', 'custom-kpoe-url', 'sponsor-block', 
-                    'translation-provider', 'gemini-model', 'romanization-provider', 
-                    'gemini-romanization-model', 'override-translate-target', 
-                    'custom-translate-target', 'override-gemini-prompt', 
-                    'custom-gemini-prompt', 'override-gemini-romanize-prompt', 
-                    'custom-gemini-romanize-prompt'
-                ];
-                
-                if (settingsRequiringReload.includes(control.id)) {
-                    showReloadNotification();
-                } else {
-                    showStatusMessage('Setting saved!', false, control.id);
-                }
-
-                // Handle UI visibility toggles for specific controls
-                if (control.id === 'default-provider') {
-                    toggleKpoeSourcesVisibility();
-                    toggleCustomKpoeUrlVisibility();
-                    toggleLocalLyricsVisibility();
-                } else if (control.id === 'translation-provider') {
-                    toggleGeminiSettingsVisibility();
-                } else if (control.id === 'romanization-provider') {
-                    toggleRomanizationModelVisibility();
-                } else if (control.id === 'override-translate-target') {
-                    toggleTranslateTargetVisibility();
-                } else if (control.id === 'override-gemini-prompt') {
-                    toggleGeminiPromptVisibility();
-                } else if (control.id === 'override-gemini-romanize-prompt') {
-                    toggleGeminiRomanizePromptVisibility();
-                }
+                showReloadNotification();
             });
         }
     });
 }
 
-function updateFormElements(settings) {
-    // General settings
-    document.getElementById('enabled').checked = settings.isEnabled;
-    document.getElementById('default-provider').value = settings.lyricsProvider;
-    document.getElementById('sponsor-block').checked = settings.useSponsorBlock;
-    document.getElementById('lightweight').checked = settings.lightweight;
-    document.getElementById('wordByWord').checked = settings.wordByWord;
-    document.getElementById('fade-past-lines').checked = !!settings.fadePastLines;
-    document.getElementById('hide-offscreen').checked = !!settings.hideOffscreen;
-    document.getElementById('compability-wipe').checked = settings.compabilityWipe;
-    document.getElementById('blur-inactive').checked = settings.blurInactive;
-    document.getElementById('dynamic-player-page').checked = settings.dynamicPlayerPage;
-    document.getElementById('dynamic-player-fullscreen').checked = settings.dynamicPlayerFullscreen;
-    document.getElementById('useSongPaletteFullscreen').checked = settings.useSongPaletteFullscreen;
-    document.getElementById('useSongPaletteAllModes').checked = settings.useSongPaletteAllModes;
-    document.getElementById('overridePaletteColor').value = settings.overridePaletteColor;
-    document.getElementById('larger-text-mode').value = settings.largerTextMode;
-    
-    // Custom KPoe Server URL
-    const customKpoeUrlInput = document.getElementById('custom-kpoe-url');
-    if (customKpoeUrlInput) {
-        customKpoeUrlInput.value = settings.customKpoeUrl || '';
-    }
+function updateUI(settings) {
+    currentSettings = settings;
+    console.log("Updating UI with settings:", currentSettings);
 
-    // Romanization settings
-    document.getElementById('romanization-provider').value = settings.romanizationProvider;
-    document.getElementById('gemini-romanization-model').value = settings.geminiRomanizationModel || 'gemini-1.5-pro-latest';
+    document.getElementById('enabled').checked = currentSettings.isEnabled;
+    document.getElementById('default-provider').value = currentSettings.lyricsProvider;
+    document.getElementById('custom-kpoe-url').value = currentSettings.customKpoeUrl || '';
+    document.getElementById('sponsor-block').checked = currentSettings.useSponsorBlock;
+    document.getElementById('wordByWord').checked = currentSettings.wordByWord;
+    document.getElementById('lightweight').checked = currentSettings.lightweight;
+    document.getElementById('hide-offscreen').checked = currentSettings.hideOffscreen;
+    document.getElementById('compability-wipe').checked = currentSettings.compabilityWipe;
+    document.getElementById('blur-inactive').checked = currentSettings.blurInactive;
+    document.getElementById('dynamic-player').checked = currentSettings.dynamicPlayer;
+    document.getElementById('useSongPaletteFullscreen').checked = currentSettings.useSongPaletteFullscreen;
+    document.getElementById('useSongPaletteAllModes').checked = currentSettings.useSongPaletteAllModes;
+    document.getElementById('overridePaletteColor').value = currentSettings.overridePaletteColor;
+    document.getElementById('larger-text-mode').value = currentSettings.largerTextMode;
+    document.getElementById('romanization-provider').value = currentSettings.romanizationProvider;
+    document.getElementById('gemini-romanization-model').value = currentSettings.geminiRomanizationModel || 'gemini-1.5-pro-latest';
+    document.getElementById('translation-provider').value = currentSettings.translationProvider;
+    document.getElementById('gemini-api-key').value = currentSettings.geminiApiKey || '';
+    document.getElementById('gemini-api-key').type = 'password';
+    document.getElementById('gemini-model').value = currentSettings.geminiModel || 'gemini-1.5-flash';
+    document.getElementById('override-translate-target').checked = currentSettings.overrideTranslateTarget;
+    document.getElementById('custom-translate-target').value = currentSettings.customTranslateTarget || '';
+    document.getElementById('override-gemini-prompt').checked = currentSettings.overrideGeminiPrompt;
+    document.getElementById('custom-gemini-prompt').value = currentSettings.customGeminiPrompt || '';
+    document.getElementById('override-gemini-romanize-prompt').checked = currentSettings.overrideGeminiRomanizePrompt;
+    document.getElementById('custom-gemini-romanize-prompt').value = currentSettings.customGeminiRomanizePrompt || '';
+    document.getElementById('custom-css').value = currentSettings.customCSS;
+    document.getElementById('cache-strategy').value = currentSettings.cacheStrategy;
 
-    // Translation settings
-    document.getElementById('translation-provider').value = settings.translationProvider;
-    const geminiApiKeyInput = document.getElementById('gemini-api-key');
-    geminiApiKeyInput.value = settings.geminiApiKey || '';
-    geminiApiKeyInput.type = 'password'; // Ensure it's hidden by default
-
-    document.getElementById('gemini-model').value = settings.geminiModel || 'gemini-2.5-flash'; // Default to gemini-2.5-flash
-    document.getElementById('override-translate-target').checked = settings.overrideTranslateTarget;
-    document.getElementById('custom-translate-target').value = settings.customTranslateTarget || '';
-    document.getElementById('override-gemini-prompt').checked = settings.overrideGeminiPrompt;
-    document.getElementById('custom-gemini-prompt').value = settings.customGeminiPrompt || '';
-    document.getElementById('override-gemini-romanize-prompt').checked = settings.overrideGeminiRomanizePrompt; // Update UI for new setting
-    document.getElementById('custom-gemini-romanize-prompt').value = settings.customGeminiRomanizePrompt || ''; // Update UI for new setting
-    toggleGeminiSettingsVisibility();
     toggleKpoeSourcesVisibility();
+    toggleCustomKpoeUrlVisibility();
+    toggleGeminiSettingsVisibility();
     toggleTranslateTargetVisibility();
     toggleGeminiPromptVisibility();
-    toggleGeminiRomanizePromptVisibility(); // New visibility toggle for romanize prompt
-    toggleCustomKpoeUrlVisibility(); // New visibility toggle
-    toggleLocalLyricsVisibility(); // New visibility toggle for local lyrics
-    toggleRomanizationModelVisibility(); // New visibility toggle for romanization model
+    toggleGeminiRomanizePromptVisibility();
+    toggleRomanizationModelVisibility();
 
-    // Populate draggable KPoe sources
     populateDraggableSources();
-
-    // Appearance settings
-    document.getElementById('custom-css').value = settings.customCSS;
-
-    // Cache settings
-    document.getElementById('cache-strategy').value = settings.cacheStrategy;
-    updateCacheSize(); // This function is now in settingsManager.js
+    updateCacheSize();
 }
 
-// Update UI elements to reflect current settings
-function updateUI(settings) {
-    currentSettings = { ...settings }; // Create a proper copy of settings
-    
-    // Update all form elements
-    updateFormElements(settings);
-    
-    // Version display is handled in DOMContentLoaded
-}
-
-// Tab navigation
 document.querySelectorAll('.navigation-drawer .nav-item').forEach(item => {
     item.addEventListener('click', (e) => {
         e.preventDefault();
-        // Update active menu item
         document.querySelectorAll('.navigation-drawer .nav-item').forEach(i => i.classList.remove('active'));
         item.classList.add('active');
 
-        // Show corresponding section
         const sectionId = item.getAttribute('data-section');
         document.querySelectorAll('.settings-card').forEach(section => section.classList.remove('active'));
-        const activeSection = document.getElementById(sectionId);
-        if (activeSection) {
-            activeSection.classList.add('active');
-        } else {
-            console.warn(`Section with id "${sectionId}" not found.`);
-        }
+        document.getElementById(sectionId)?.classList.add('active');
     });
 });
 
-// Event listeners for save buttons (now only for manual input fields)
 document.getElementById('save-general').addEventListener('click', () => {
-    const draggableList = document.getElementById('lyrics-source-order-draggable');
-    const orderedSources = Array.from(draggableList.children)
+    const orderedSources = Array.from(document.getElementById('lyrics-source-order-draggable').children)
         .map(item => item.dataset.source);
 
-    const newGeneralSettings = {
-        // Switches and dropdowns are auto-saved. This button only saves the source order and custom KPoe URL.
+    updateSettings({
         lyricsSourceOrder: orderedSources.join(','),
-        customKpoeUrl: document.getElementById('custom-kpoe-url').value, // Save custom KPoe URL
-    };
-    updateSettings(newGeneralSettings);
+        customKpoeUrl: document.getElementById('custom-kpoe-url').value,
+    });
     saveSettings();
-    showStatusMessage('General settings saved!', false, 'save-general');
+    showStatusMessage('general-save-status', 'General settings saved!', false);
 });
 
 document.getElementById('save-appearance').addEventListener('click', () => {
-    const newAppearanceSettings = {
-        // Switches are auto-saved. This button only saves the Custom CSS.
-        customCSS: document.getElementById('custom-css').value,
-    };
-    updateSettings(newAppearanceSettings);
+    updateSettings({ customCSS: document.getElementById('custom-css').value });
     saveSettings();
-    showStatusMessage('Custom CSS saved!', false, 'save-appearance');
+    showStatusMessage('appearance-save-status', 'Custom CSS saved!', false);
 });
 
 document.getElementById('save-translation').addEventListener('click', () => {
-    const newTranslationSettings = {
-        // Switches and dropdowns are auto-saved. This saves text inputs.
+    updateSettings({
         geminiApiKey: document.getElementById('gemini-api-key').value,
         customTranslateTarget: document.getElementById('custom-translate-target').value,
         customGeminiPrompt: document.getElementById('custom-gemini-prompt').value,
-        customGeminiRomanizePrompt: document.getElementById('custom-gemini-romanize-prompt').value // Save new romanization prompt
-    };
-    updateSettings(newTranslationSettings);
+        customGeminiRomanizePrompt: document.getElementById('custom-gemini-romanize-prompt').value
+    });
     saveSettings();
-    showStatusMessage('Translation input fields saved!', false, 'save-translation');
+    showStatusMessage('translation-save-status', 'Translation input fields saved!', false);
 });
 
-// REMOVED: save-cache event listener is no longer needed.
-
-// Clear cache button
 document.getElementById('clear-cache').addEventListener('click', clearCache);
 
-// Message listener for updates (e.g., from background script if settings are changed elsewhere)
 setupSettingsMessageListener(updateUI);
 
-
-// --- Drag and Drop Functionality for KPoe Sources ---
 let draggedItem = null;
 
-// Helper to get display name for a source
 function getSourceDisplayName(sourceName) {
     switch (sourceName) {
-        case 'lyricsplus': return 'Lyrics+ (User Gen.)'; // Shorter for UI
+        case 'lyricsplus': return 'Lyrics+ (User Gen.)';
         case 'apple': return 'Apple Music';
-        case 'spotify': return 'Musixmatch (Spotify)'; // Clarified
+        case 'spotify': return 'Musixmatch (Spotify)';
         case 'musixmatch': return 'Musixmatch (Direct)';
-        case 'musixmatch-word': return 'Musixmatch (Word)'; // Shorter
+        case 'musixmatch-word': return 'Musixmatch (Word)';
         default: return sourceName.charAt(0).toUpperCase() + sourceName.slice(1).replace('-', ' ');
     }
 }
 
 function createDraggableSourceItem(sourceName) {
     const item = document.createElement('div');
-    item.classList.add('draggable-source-item');
+    item.className = 'draggable-source-item';
     item.setAttribute('draggable', 'true');
     item.dataset.source = sourceName;
-
     item.innerHTML = `
         <span class="material-symbols-outlined drag-handle">drag_indicator</span>
         <span class="source-name">${getSourceDisplayName(sourceName)}</span>
@@ -300,13 +171,10 @@ function createDraggableSourceItem(sourceName) {
             <span class="material-symbols-outlined">delete</span>
         </button>
     `;
-
-    const removeButton = item.querySelector('.remove-source-button');
-    removeButton.addEventListener('click', (e) => {
+    item.querySelector('.remove-source-button').addEventListener('click', (e) => {
         e.stopPropagation();
         removeSource(sourceName);
     });
-
     return item;
 }
 
@@ -320,10 +188,9 @@ function populateDraggableSources() {
     draggableContainer.innerHTML = '';
     availableSourcesDropdown.innerHTML = '';
 
-    const currentActiveSources = (currentSettings.lyricsSourceOrder || '').split(',').filter(s => s && s.trim() !== '');
-
+    const currentActiveSources = (currentSettings.lyricsSourceOrder || '').split(',').filter(s => s?.trim());
     currentActiveSources.forEach(source => {
-        if (allowedSources.includes(source.trim())) { // Only add if it's a known allowed source
+        if (allowedSources.includes(source.trim())) {
             draggableContainer.appendChild(createDraggableSourceItem(source.trim()));
         }
     });
@@ -332,11 +199,7 @@ function populateDraggableSources() {
     const addSourceButton = document.getElementById('add-source-button');
 
     if (sourcesToAdd.length === 0) {
-        const option = document.createElement('option');
-        option.value = '';
-        option.textContent = 'All sources added';
-        option.disabled = true;
-        availableSourcesDropdown.appendChild(option);
+        availableSourcesDropdown.innerHTML = '<option value="" disabled>All sources added</option>';
         if (addSourceButton) addSourceButton.disabled = true;
     } else {
         if (addSourceButton) addSourceButton.disabled = false;
@@ -347,92 +210,71 @@ function populateDraggableSources() {
             availableSourcesDropdown.appendChild(option);
         });
     }
-
     addDragDropListeners();
 }
 
-let statusMessageTimeout;
-function showStatusMessage(message, isError = false, buttonIdToAppendAfter = null) {
-    const statusElement = document.getElementById('add-source-status'); // General status for draggable list
-    let targetStatusElement = statusElement;
+let statusMessageTimeout = {};
 
-    // If a buttonId is provided, try to find a place near that button for more specific feedback
-    if (buttonIdToAppendAfter) {
-        const button = document.getElementById(buttonIdToAppendAfter);
-        if (button && button.parentElement && button.parentElement.classList.contains('card-actions')) {
-            let specificStatus = button.parentElement.querySelector('.save-status-message');
-            if (!specificStatus) {
-                specificStatus = document.createElement('p');
-                specificStatus.className = 'status-message save-status-message';
-                button.parentElement.insertBefore(specificStatus, button); // Insert before the button
-            }
-            targetStatusElement = specificStatus;
-        }
-    }
+function showStatusMessage(elementId, message, isError = false) {
+    const targetStatusElement = document.getElementById(elementId);
+    if (!targetStatusElement) return;
 
-    if (targetStatusElement) {
-        clearTimeout(statusMessageTimeout); // Clear existing timeout
-        targetStatusElement.textContent = message;
-        targetStatusElement.style.color = isError ? 'var(--md-sys-color-error)' : 'var(--md-sys-color-primary)';
-        targetStatusElement.style.opacity = '1';
+    clearTimeout(statusMessageTimeout[elementId]);
+    targetStatusElement.textContent = message;
+    targetStatusElement.style.color = isError ? 'var(--md-sys-color-error)' : 'var(--md-sys-color-primary)';
+    targetStatusElement.style.opacity = '1';
 
-        statusMessageTimeout = setTimeout(() => {
-            targetStatusElement.style.opacity = '0';
-            setTimeout(() => { // Ensure text is cleared after fade out
-                if (targetStatusElement.classList.contains('save-status-message')) {
-                    // Only clear if it's a temporary message, not the general add-source-status
-                    targetStatusElement.textContent = '';
-                } else if (targetStatusElement === statusElement) {
-                    statusElement.textContent = ''; // Clear general add-source-status as well
-                }
-            }, 300);
-        }, 3000);
-    }
+    statusMessageTimeout[elementId] = setTimeout(() => {
+        targetStatusElement.style.opacity = '0';
+        setTimeout(() => { targetStatusElement.textContent = ''; }, 300);
+    }, 3000);
 }
 
-
 function addSource() {
-    const availableSourcesDropdown = document.getElementById('available-sources-dropdown');
-    const sourceName = availableSourcesDropdown.value;
-
+    const sourceName = document.getElementById('available-sources-dropdown').value;
     if (!sourceName) {
-        showStatusMessage('Please select a source to add.', true);
+        showStatusMessage('add-source-status', 'Please select a source to add.', true);
         return;
     }
 
-    const sources = (currentSettings.lyricsSourceOrder || '').split(',').filter(s => s && s !== '');
+    const sources = (currentSettings.lyricsSourceOrder || '').split(',').filter(s => s?.trim());
     if (sources.includes(sourceName)) {
-        showStatusMessage(`Source "${getSourceDisplayName(sourceName)}" already exists.`, true);
+        showStatusMessage('add-source-status', `Source "${getSourceDisplayName(sourceName)}" already exists.`, true);
         return;
     }
 
     sources.push(sourceName);
     currentSettings.lyricsSourceOrder = sources.join(',');
-    // No saveSettings() here, will be saved with "Save General"
     populateDraggableSources();
-    showStatusMessage(`"${getSourceDisplayName(sourceName)}" added. Save general settings to apply.`, false);
+    showStatusMessage('add-source-status', `"${getSourceDisplayName(sourceName)}" added. Save to apply.`, false);
 }
 
 function removeSource(sourceName) {
-    const sources = (currentSettings.lyricsSourceOrder || '').split(',').filter(s => s && s !== '');
-    const updatedSources = sources.filter(s => s !== sourceName);
-    currentSettings.lyricsSourceOrder = updatedSources.join(',');
-    // No saveSettings() here
+    const sources = (currentSettings.lyricsSourceOrder || '').split(',').filter(s => s?.trim());
+    currentSettings.lyricsSourceOrder = sources.filter(s => s !== sourceName).join(',');
     populateDraggableSources();
-    showStatusMessage(`"${getSourceDisplayName(sourceName)}" removed. Save general settings to apply.`, false);
+    showStatusMessage('add-source-status', `"${getSourceDisplayName(sourceName)}" removed. Save to apply.`, false);
 }
-
 
 function addDragDropListeners() {
     const draggableContainer = document.getElementById('lyrics-source-order-draggable');
     if (!draggableContainer) return;
 
+    const onDragEnd = () => {
+        if (draggedItem) {
+            draggedItem.classList.remove('dragging');
+        }
+        draggedItem = null;
+        const orderedSources = Array.from(draggableContainer.children).map(item => item.dataset.source);
+        currentSettings.lyricsSourceOrder = orderedSources.join(',');
+        showStatusMessage('add-source-status', 'Source order updated. Save to apply.', false);
+    };
+
+    // Mouse Events
     draggableContainer.addEventListener('dragstart', (e) => {
         if (e.target.classList.contains('draggable-source-item')) {
             draggedItem = e.target;
-            setTimeout(() => {
-                if (draggedItem) draggedItem.classList.add('dragging');
-            }, 0);
+            setTimeout(() => draggedItem?.classList.add('dragging'), 0);
         }
     });
 
@@ -441,31 +283,40 @@ function addDragDropListeners() {
         const afterElement = getDragAfterElement(draggableContainer, e.clientY);
         const currentDraggable = document.querySelector('.draggable-source-item.dragging');
         if (currentDraggable) {
-            if (afterElement == null) {
-                draggableContainer.appendChild(currentDraggable);
-            } else {
+            if (afterElement) {
                 draggableContainer.insertBefore(currentDraggable, afterElement);
+            } else {
+                draggableContainer.appendChild(currentDraggable);
             }
         }
     });
 
-    draggableContainer.addEventListener('dragend', () => {
-        if (draggedItem) {
-            draggedItem.classList.remove('dragging');
+    draggableContainer.addEventListener('dragend', onDragEnd);
+
+    draggableContainer.addEventListener('touchstart', (e) => {
+        if (e.target.closest('.drag-handle')) {
+            draggedItem = e.target.closest('.draggable-source-item');
+            draggedItem?.classList.add('dragging');
         }
-        draggedItem = null;
-        // Update currentSettings.lyricsSourceOrder immediately but don't save to storage yet
-        const orderedSources = Array.from(draggableContainer.children)
-            .map(item => item.dataset.source);
-        currentSettings.lyricsSourceOrder = orderedSources.join(',');
-        // User will click "Save General" to persist this
-        showStatusMessage('Source order updated. Save general settings to apply.', false);
-    });
+    }, { passive: true });
+
+    draggableContainer.addEventListener('touchmove', (e) => {
+        if (!draggedItem) return;
+        e.preventDefault();
+        const touchY = e.touches[0].clientY;
+        const afterElement = getDragAfterElement(draggableContainer, touchY);
+        if (afterElement) {
+            draggableContainer.insertBefore(draggedItem, afterElement);
+        } else {
+            draggableContainer.appendChild(draggedItem);
+        }
+    }, { passive: false });
+
+    draggableContainer.addEventListener('touchend', onDragEnd);
 }
 
 function getDragAfterElement(container, y) {
     const draggableElements = [...container.querySelectorAll('.draggable-source-item:not(.dragging)')];
-
     return draggableElements.reduce((closest, child) => {
         const box = child.getBoundingClientRect();
         const offset = y - box.top - box.height / 2;
@@ -477,48 +328,155 @@ function getDragAfterElement(container, y) {
     }, { offset: -Infinity }).element;
 }
 
-
-// Event listener for Add Source button
 document.getElementById('add-source-button').addEventListener('click', addSource);
 
-// =================== LOCAL LYRICS MANAGEMENT ===================
+document.getElementById('default-provider').addEventListener('change', (e) => {
+    currentSettings.lyricsProvider = e.target.value;
+    toggleKpoeSourcesVisibility();
+    toggleCustomKpoeUrlVisibility();
+    toggleLocalLyricsVisibility();
+});
 
-// Import parser functions
-import { parseSyncedLyrics, parseAppleMusicLRC, parseAppleTTML, v1Tov2, convertToStandardJson } from './parser.js';
+document.getElementById('add-lyrics-fab').addEventListener('click', () => {
+    document.getElementById('upload-lyrics-modal').classList.add('show');
+});
 
-// Import local lyrics functions
-import { uploadLocalLyrics, getLocalLyricsList, deleteLocalLyrics, updateLocalLyrics, fetchLocalLyrics } from './settingsManager.js';
+document.querySelector('#upload-lyrics-modal .close-button').addEventListener('click', () => {
+    document.getElementById('upload-lyrics-modal').classList.remove('show');
+});
+
+window.addEventListener('click', (event) => {
+    const modal = document.getElementById('upload-lyrics-modal');
+    if (event.target === modal) {
+        modal.classList.remove('show');
+    }
+});
+
+document.getElementById('modal-upload-lyrics-button').addEventListener('click', handleUploadLocalLyrics);
+document.getElementById('refresh-local-lyrics-list').addEventListener('click', populateLocalLyricsList);
+
+document.getElementById('override-translate-target').addEventListener('change', (e) => {
+    currentSettings.overrideTranslateTarget = e.target.checked;
+    toggleTranslateTargetVisibility();
+});
+
+document.getElementById('override-gemini-prompt').addEventListener('change', (e) => {
+    currentSettings.overrideGeminiPrompt = e.target.checked;
+    toggleGeminiPromptVisibility();
+});
+
+document.getElementById('override-gemini-romanize-prompt').addEventListener('change', (e) => {
+    currentSettings.overrideGeminiRomanizePrompt = e.target.checked;
+    toggleGeminiRomanizePromptVisibility();
+});
+
+document.getElementById('romanization-provider').addEventListener('change', () => {
+    toggleRomanizationModelVisibility();
+});
+
+document.getElementById('translation-provider').addEventListener('change', (e) => {
+    currentSettings.translationProvider = e.target.value;
+    toggleGeminiSettingsVisibility();
+});
+
+function toggleElementVisibility(elementId, isVisible) {
+    const element = document.getElementById(elementId);
+    if (element) {
+        element.style.display = isVisible ? 'block' : 'none';
+    }
+}
+
+function toggleKpoeSourcesVisibility() {
+    const isVisible = ['kpoe', 'customKpoe'].includes(document.getElementById('default-provider').value);
+    toggleElementVisibility('kpoe-sources-group', isVisible);
+}
+
+function toggleCustomKpoeUrlVisibility() {
+    const isVisible = document.getElementById('default-provider').value === 'customKpoe';
+    toggleElementVisibility('custom-kpoe-url-group', isVisible);
+}
+
+function toggleGeminiSettingsVisibility() {
+    const isGemini = document.getElementById('translation-provider').value === 'gemini';
+    toggleElementVisibility('gemini-api-key-group', isGemini);
+    toggleElementVisibility('gemini-model-group', isGemini);
+    toggleElementVisibility('override-gemini-prompt-group', isGemini);
+    toggleElementVisibility('override-gemini-romanize-prompt-group', isGemini);
+    toggleGeminiPromptVisibility();
+    toggleGeminiRomanizePromptVisibility();
+}
+
+function toggleTranslateTargetVisibility() {
+    const isVisible = document.getElementById('override-translate-target').checked;
+    toggleElementVisibility('custom-translate-target-group', isVisible);
+}
+
+function toggleGeminiPromptVisibility() {
+    const isVisible = document.getElementById('translation-provider').value === 'gemini' && document.getElementById('override-gemini-prompt').checked;
+    toggleElementVisibility('custom-gemini-prompt-group', isVisible);
+}
+
+function toggleGeminiRomanizePromptVisibility() {
+    const isVisible = document.getElementById('translation-provider').value === 'gemini' && document.getElementById('override-gemini-romanize-prompt').checked;
+    toggleElementVisibility('custom-gemini-romanize-prompt-group', isVisible);
+}
+
+function toggleRomanizationModelVisibility() {
+    const isVisible = document.getElementById('romanization-provider').value === 'gemini';
+    toggleElementVisibility('gemini-romanization-model-group', isVisible);
+}
+
+function toggleLocalLyricsVisibility() {
+    const isVisible = document.getElementById('default-provider').value === 'local';
+    toggleElementVisibility('local-lyrics', isVisible);
+}
 
 async function handleUploadLocalLyrics() {
-    const title = document.getElementById('modal-upload-song-title').value.trim();
-    const artist = document.getElementById('modal-upload-artist-name').value.trim();
-    const album = document.getElementById('modal-upload-album-name').value.trim();
-    const songwriter = document.getElementById('modal-upload-songwriter-name').value.trim();
-    const format = document.getElementById('modal-upload-lyrics-format').value;
-    const lyricsFile = document.getElementById('modal-upload-lyrics-file').files[0];
+    const titleInput = document.getElementById('modal-upload-song-title');
+    const artistInput = document.getElementById('modal-upload-artist-name');
+    const albumInput = document.getElementById('modal-upload-album-name');
+    const lyricsFileInput = document.getElementById('modal-upload-lyrics-file');
+    const uploadButton = document.getElementById('modal-upload-lyrics-button');
+    const uploadButtonIcon = uploadButton.querySelector('.material-symbols-outlined');
+
+    const title = titleInput.value.trim();
+    const artist = artistInput.value.trim();
+    const album = albumInput.value.trim();
+    const lyricsFile = lyricsFileInput.files[0];
 
     if (!title || !artist || !lyricsFile) {
-        showStatusMessage('Song Title, Artist Name, and a Lyrics File are required.', true, 'modal-upload-lyrics-button');
+        showStatusMessage('modal-upload-status', 'Song Title, Artist Name, and a Lyrics File are required.', true);
         return;
     }
+
+    const getFileExtension = (filename) => {
+        return filename.split('.').pop().toLowerCase();
+    };
+
+    const format = getFileExtension(lyricsFile.name);
+
+    // Show loading state
+    uploadButton.disabled = true;
+    uploadButtonIcon.textContent = 'hourglass_empty';
+    showStatusMessage('modal-upload-status', 'Uploading lyrics...', false);
 
     const reader = new FileReader();
     reader.onload = async (e) => {
         const lyricsContent = e.target.result;
-        const songInfo = { title, artist, album, songwriter };
+        const songInfo = { title, artist, album };
 
         try {
             let parsedLyrics;
             switch (format) {
-                case 'lrc': // Both LRC and ELRC will use parseSyncedLyrics
+                case 'lrc':
                 case 'elrc':
-                    parsedLyrics = parseSyncedLyrics(lyricsContent, songInfo);
+                    parsedLyrics = parseSyncedLyrics(lyricsContent);
                     break;
                 case 'apple-lrc':
                     parsedLyrics = parseAppleMusicLRC(lyricsContent, songInfo);
                     break;
                 case 'ttml':
-                    parsedLyrics = parseAppleTTML(lyricsContent, 0, false, songInfo);
+                    parsedLyrics = parseAppleTTML(lyricsContent);
                     break;
                 case 'json':
                     parsedLyrics = JSON.parse(lyricsContent);
@@ -536,30 +494,32 @@ async function handleUploadLocalLyrics() {
             const jsonLyrics = format === 'json' ? parsedLyrics : convertToStandardJson(parsedLyrics);
 
             await uploadLocalLyrics(songInfo, jsonLyrics);
-            showStatusMessage('Lyrics uploaded successfully!', false, 'modal-upload-lyrics-button');
-            document.getElementById('modal-upload-song-title').value = '';
-            document.getElementById('modal-upload-artist-name').value = '';
-            document.getElementById('modal-upload-album-name').value = '';
-            document.getElementById('modal-upload-songwriter-name').value = '';
-            document.getElementById('modal-upload-lyrics-file').value = ''; // Clear file input
-            document.getElementById('upload-lyrics-modal').classList.remove('show'); // Close modal
-            populateLocalLyricsList(); // Refresh the list after upload
+            showStatusMessage('modal-upload-status', 'Lyrics uploaded successfully!', false);
+            titleInput.value = '';
+            artistInput.value = '';
+            albumInput.value = '';
+            lyricsFileInput.value = '';
+            document.getElementById('upload-lyrics-modal').classList.remove('show');
+            populateLocalLyricsList();
         } catch (error) {
-            showStatusMessage(`Error uploading lyrics: ${error}`, true, 'modal-upload-lyrics-button');
+            showStatusMessage('modal-upload-status', `Error uploading lyrics: ${error.message || error}`, true);
+        } finally {
+            uploadButton.disabled = false;
+            uploadButtonIcon.textContent = 'upload_file';
         }
     };
     reader.onerror = () => {
-        showStatusMessage('Error reading file.', true, 'modal-upload-lyrics-button');
+        showStatusMessage('modal-upload-status', 'Error reading file.', true);
+        uploadButton.disabled = false;
+        uploadButtonIcon.textContent = 'upload_file';
     };
     reader.readAsText(lyricsFile);
 }
 
-// Global variable to store current editing item
 let currentEditingItem = null;
 
 async function openEditLyricsModal(item) {
     try {
-        // Fetch the actual lyrics data
         const response = await fetchLocalLyrics(item.songId);
         if (response.success) {
             currentEditingItem = {
@@ -571,23 +531,20 @@ async function openEditLyricsModal(item) {
             throw new Error(response.error || 'Failed to fetch lyrics data');
         }
         
-        // Populate the edit modal with current data
         document.getElementById('modal-edit-song-title').value = item.songInfo.title || '';
         document.getElementById('modal-edit-artist-name').value = item.songInfo.artist || '';
         document.getElementById('modal-edit-album-name').value = item.songInfo.album || '';
         document.getElementById('modal-edit-songwriter-name').value = item.songInfo.songwriter || '';
         
-        // Clear the file input
         document.getElementById('modal-edit-lyrics-file').value = '';
         
-        // Show the edit modal
         const modal = document.getElementById('edit-lyrics-modal');
         if (modal) {
             modal.classList.add('show');
         }
     } catch (error) {
         console.error('Error opening edit modal:', error);
-        showStatusMessage(`Error loading lyrics for editing: ${error.message || error}`, true, 'refresh-local-lyrics-list');
+        showStatusMessage('local-lyrics-status', `Error loading lyrics for editing: ${error.message || error}`, true);
     }
 }
 
@@ -600,63 +557,36 @@ async function handleEditLocalLyrics() {
     const lyricsFile = document.getElementById('modal-edit-lyrics-file').files[0];
 
     if (!title || !artist) {
-        showStatusMessage('Song Title and Artist Name are required.', true, 'modal-edit-lyrics-button');
+        showStatusMessage('local-lyrics-status', 'Song Title and Artist Name are required.', true);
         return;
     }
 
     if (!currentEditingItem) {
-        showStatusMessage('No lyrics item selected for editing.', true, 'modal-edit-lyrics-button');
+        showStatusMessage('local-lyrics-status', 'No lyrics item selected for editing.', true);
         return;
     }
 
-    // If no new file is uploaded, just update the metadata
     if (!lyricsFile) {
+        const updatedSongInfo = {
+            title,
+            artist,
+            album,
+            songwriter
+        };
+        
+        const updatedLyrics = currentEditingItem.lyrics;
+        
         try {
-            const updatedSongInfo = { title, artist, album, songwriter };
-            
-            // Update the lyrics metadata in the existing lyrics object
-            const updatedLyrics = {
-                ...currentEditingItem.lyrics,
-                metadata: {
-                    ...currentEditingItem.lyrics.metadata,
-                    title: title,
-                    artist: artist,
-                    album: album,
-                    songWriters: songwriter ? songwriter.split(',').map(name => name.trim()).filter(name => name) : []
-                }
-            };
-            
             await updateLocalLyrics(currentEditingItem.songId, updatedSongInfo, updatedLyrics);
-            
-            showStatusMessage('Lyrics metadata updated successfully!', false, 'modal-edit-lyrics-button');
-            console.log('Settings before closeEditModal:', currentSettings);
+            showStatusMessage('local-lyrics-status', 'Lyrics metadata updated successfully!', false);
             closeEditModal();
-            console.log('Settings after closeEditModal:', currentSettings);
-            populateLocalLyricsList(); // Refresh list
-            console.log('Settings after populateLocalLyricsList:', currentSettings);
-            
-            // Notify content script to refresh lyrics if currently playing
-            try {
-                if (typeof chrome !== 'undefined' && chrome.tabs) {
-                    chrome.tabs.query({active: true, currentWindow: true}, (tabs) => {
-                        if (tabs[0]) {
-                            chrome.tabs.sendMessage(tabs[0].id, {
-                                type: 'REFRESH_LYRICS_AFTER_EDIT',
-                                songId: currentEditingItem.songId
-                            });
-                        }
-                    });
-                }
-            } catch (error) {
-                console.warn('Failed to notify content script:', error);
-            }
+            populateLocalLyricsList();
         } catch (error) {
-            showStatusMessage(`Error updating lyrics: ${error}`, true, 'modal-edit-lyrics-button');
+            showStatusMessage('local-lyrics-status', `Error updating lyrics: ${error}`, true);
         }
         return;
     }
 
-    // If a new file is uploaded, parse and update the lyrics
     const reader = new FileReader();
     reader.onload = async (e) => {
         const lyricsContent = e.target.result;
@@ -665,15 +595,15 @@ async function handleEditLocalLyrics() {
         try {
             let parsedLyrics;
             switch (format) {
-                case 'lrc': // Both LRC and ELRC will use parseSyncedLyrics
+                case 'lrc':
                 case 'elrc':
-                    parsedLyrics = parseSyncedLyrics(lyricsContent, songInfo);
+                    parsedLyrics = parseSyncedLyrics(lyricsContent);
                     break;
                 case 'apple-lrc':
                     parsedLyrics = parseAppleMusicLRC(lyricsContent, songInfo);
                     break;
                 case 'ttml':
-                    parsedLyrics = parseAppleTTML(lyricsContent, 0, false, songInfo);
+                    parsedLyrics = parseAppleTTML(lyricsContent);
                     break;
                 case 'json':
                     parsedLyrics = JSON.parse(lyricsContent);
@@ -692,35 +622,16 @@ async function handleEditLocalLyrics() {
 
             await updateLocalLyrics(currentEditingItem.songId, songInfo, jsonLyrics);
             
-            showStatusMessage('Lyrics updated successfully!', false, 'modal-edit-lyrics-button');
-            console.log('Settings before closeEditModal (file upload):', currentSettings);
+            showStatusMessage('local-lyrics-status', 'Lyrics updated successfully!', false);
             closeEditModal();
-            console.log('Settings after closeEditModal (file upload):', currentSettings);
-            populateLocalLyricsList(); // Refresh list
-            console.log('Settings after populateLocalLyricsList (file upload):', currentSettings);
-            
-            // Notify content script to refresh lyrics if currently playing
-            try {
-                if (typeof chrome !== 'undefined' && chrome.tabs) {
-                    chrome.tabs.query({active: true, currentWindow: true}, (tabs) => {
-                        if (tabs[0]) {
-                            chrome.tabs.sendMessage(tabs[0].id, {
-                                type: 'REFRESH_LYRICS_AFTER_EDIT',
-                                songId: currentEditingItem.songId
-                            });
-                        }
-                    });
-                }
-            } catch (error) {
-                console.warn('Failed to notify content script:', error);
-            }
+            populateLocalLyricsList();
         } catch (error) {
             console.error("Error updating lyrics:", error);
-            showStatusMessage(`Error updating lyrics: ${error.message || error}`, true, 'modal-edit-lyrics-button');
+            showStatusMessage('local-lyrics-status', `Error updating lyrics: ${error.message || error}`, true);
         }
-    };
+    }
     reader.onerror = () => {
-        showStatusMessage('Error reading file.', true, 'modal-edit-lyrics-button');
+        showStatusMessage('local-lyrics-status', 'Error reading file.', true);
     };
     reader.readAsText(lyricsFile);
 }
@@ -732,7 +643,6 @@ function closeEditModal() {
     }
     currentEditingItem = null;
     
-    // Clear form fields
     document.getElementById('modal-edit-song-title').value = '';
     document.getElementById('modal-edit-artist-name').value = '';
     document.getElementById('modal-edit-album-name').value = '';
@@ -741,23 +651,20 @@ function closeEditModal() {
 }
 
 async function populateLocalLyricsList() {
-    console.log('populateLocalLyricsList called, currentSettings:', currentSettings);
     const localLyricsListContainer = document.getElementById('local-lyrics-list');
-    if (!localLyricsListContainer) {
-        console.error('local-lyrics-list container not found');
-        return;
-    }
+    const noLyricsMessage = document.getElementById('no-local-lyrics-message');
+    if (!localLyricsListContainer) return;
 
-    // Clear existing content
-    localLyricsListContainer.innerHTML = '';
+    localLyricsListContainer.innerHTML = ''; // Clear existing list
+    localLyricsListContainer.appendChild(noLyricsMessage); // Re-add the message placeholder
 
     try {
         const lyricsList = await getLocalLyricsList();
-        console.log('Retrieved lyrics list:', lyricsList);
-        
         if (lyricsList.length === 0) {
-            localLyricsListContainer.innerHTML = '<p class="helper-text" id="no-local-lyrics-message">No local lyrics uploaded yet.</p>';
+            noLyricsMessage.style.display = 'block';
             return;
+        } else {
+            noLyricsMessage.style.display = 'none';
         }
 
         lyricsList.forEach(item => {
@@ -777,7 +684,6 @@ async function populateLocalLyricsList() {
                 </div>
             `;
             
-            // Add event listener for edit button
             const editBtn = listItem.querySelector('.edit-source-button');
             if (editBtn) {
                 editBtn.addEventListener('click', async (e) => {
@@ -785,304 +691,63 @@ async function populateLocalLyricsList() {
                     try {
                         await openEditLyricsModal(item);
                     } catch (error) {
-                        showStatusMessage(`Error loading lyrics for editing: ${error}`, true, 'refresh-local-lyrics-list');
+                        showStatusMessage('local-lyrics-status', `Error loading lyrics for editing: ${error}`, true);
                     }
                 });
             }
             
-            // Add event listener for delete button
-            const deleteBtn = listItem.querySelector('.remove-source-button');
-            if (deleteBtn) {
-                deleteBtn.addEventListener('click', async (e) => {
-                    e.stopPropagation();
-                    if (confirm(`Are you sure you want to delete "${item.songInfo.title} - ${item.songInfo.artist}"?`)) {
-                        try {
-                            await deleteLocalLyrics(item.songId);
-                            showStatusMessage('Local lyrics deleted.', false, 'refresh-local-lyrics-list');
-                            populateLocalLyricsList(); // Refresh list after deletion
-                        } catch (error) {
-                            showStatusMessage(`Error deleting lyrics: ${error}`, true, 'refresh-local-lyrics-list');
-                        }
+            listItem.querySelector('.remove-source-button').addEventListener('click', async (e) => {
+                e.stopPropagation();
+                if (confirm(`Are you sure you want to delete "${item.songInfo.title} - ${item.songInfo.artist}"?`)) {
+                    try {
+                        await deleteLocalLyrics(item.songId);
+                        showStatusMessage('local-lyrics-status', 'Local lyrics deleted.', false);
+                        populateLocalLyricsList();
+                    } catch (error) {
+                        showStatusMessage('local-lyrics-status', `Error deleting lyrics: ${error}`, true);
                     }
-                });
-            }
-            
+                }
+            });
             localLyricsListContainer.appendChild(listItem);
         });
     } catch (error) {
         console.error("Failed to load local lyrics list:", error);
-        localLyricsListContainer.innerHTML = `<p class="error-text">Error loading local lyrics: ${error.message || error}</p>`;
-    }
-}
-
-
-// Event listeners for local lyrics
-document.addEventListener('DOMContentLoaded', () => {
-    console.log('Setting up local lyrics event listeners');
-    
-    // Load local lyrics list on page load
-    setTimeout(() => {
-        populateLocalLyricsList();
-    }, 100);
-
-    // FAB button
-    const addLyricsFab = document.getElementById('add-lyrics-fab');
-    if (addLyricsFab) {
-        console.log('FAB button found, adding event listener');
-        addLyricsFab.addEventListener('click', (e) => {
-            e.preventDefault();
-            console.log('FAB clicked, opening modal');
-            const modal = document.getElementById('upload-lyrics-modal');
-            if (modal) {
-                modal.classList.add('show');
-                console.log('Modal should be visible now');
-            } else {
-                console.error('Modal not found');
-            }
-        });
-    } else {
-        console.error('FAB button not found');
-    }
-
-    // Modal close button
-    const closeButton = document.querySelector('#upload-lyrics-modal .close-button');
-    if (closeButton) {
-        closeButton.addEventListener('click', (e) => {
-            e.preventDefault();
-            const modal = document.getElementById('upload-lyrics-modal');
-            if (modal) {
-                modal.classList.remove('show');
-            }
-        });
-    } else {
-        console.error('Close button not found');
-    }
-
-    // Modal close on outside click
-    window.addEventListener('click', (event) => {
-        const modal = document.getElementById('upload-lyrics-modal');
-        if (event.target === modal) {
-            modal.classList.remove('show');
-        }
-    });
-
-    // Upload button
-    const uploadButton = document.getElementById('modal-upload-lyrics-button');
-    if (uploadButton) {
-        uploadButton.addEventListener('click', handleUploadLocalLyrics);
-    } else {
-        console.error('Upload button not found');
-    }
-
-    // Edit modal close button
-    const editCloseButton = document.querySelector('#edit-lyrics-modal .close-button');
-    if (editCloseButton) {
-        editCloseButton.addEventListener('click', (e) => {
-            e.preventDefault();
-            closeEditModal();
-        });
-    } else {
-        console.error('Edit modal close button not found');
-    }
-
-    // Edit modal close on outside click
-    window.addEventListener('click', (event) => {
-        const editModal = document.getElementById('edit-lyrics-modal');
-        if (event.target === editModal) {
-            closeEditModal();
-        }
-    });
-
-    // Edit button
-    const editButton = document.getElementById('modal-edit-lyrics-button');
-    if (editButton) {
-        editButton.addEventListener('click', handleEditLocalLyrics);
-    } else {
-        console.error('Edit button not found');
-    }
-
-    // Refresh button
-    const refreshButton = document.getElementById('refresh-local-lyrics-list');
-    if (refreshButton) {
-        refreshButton.addEventListener('click', populateLocalLyricsList);
-    } else {
-        console.error('Refresh button not found');
-    }
-});
-
-// Function to toggle KPoe sources visibility
-function toggleKpoeSourcesVisibility() {
-    const kpoeSourcesGroup = document.getElementById('kpoe-sources-group');
-    if (kpoeSourcesGroup) {
-        if (currentSettings.lyricsProvider === 'kpoe' || currentSettings.lyricsProvider === 'customKpoe') {
-            kpoeSourcesGroup.style.display = 'block';
-        } else {
-            kpoeSourcesGroup.style.display = 'none';
-        }
-    }
-}
-
-// Event listener for default-provider change is now handled in setupAutoSaveListeners
-
-// Function to toggle Custom KPoe URL visibility
-function toggleCustomKpoeUrlVisibility() {
-    const customKpoeUrlGroup = document.getElementById('custom-kpoe-url-group');
-    if (customKpoeUrlGroup) {
-        if (currentSettings.lyricsProvider === 'customKpoe') {
-            customKpoeUrlGroup.style.display = 'block';
-        } else {
-            customKpoeUrlGroup.style.display = 'none';
-        }
-    }
-}
-
-// Function to toggle Local Lyrics visibility
-function toggleLocalLyricsVisibility() {
-    const localLyricsSection = document.getElementById('local-lyrics');
-    if (localLyricsSection) {
-        // Only show if this section is currently active, otherwise let CSS handle visibility
-        if (localLyricsSection.classList.contains('active')) {
-            localLyricsSection.style.display = 'block';
-        }
-        // If not active, don't force display - let the tab switching logic handle it
-    }
-}
-
-// Event listener for override-translate-target change is now handled in setupAutoSaveListeners
-
-// Event listener for override-gemini-prompt change is now handled in setupAutoSaveListeners
-
-// Event listener for override-gemini-romanize-prompt change is now handled in setupAutoSaveListeners
-
-// Function to toggle Gemini settings visibility (API key, model, prompt override)
-function toggleGeminiSettingsVisibility() {
-    const translationProvider = document.getElementById('translation-provider').value;
-    const geminiApiKeyGroup = document.getElementById('gemini-api-key-group');
-    const geminiModelGroup = document.getElementById('gemini-model-group');
-    const overrideGeminiPromptGroup = document.getElementById('override-gemini-prompt-group');
-    const overrideGeminiRomanizePromptGroup = document.getElementById('override-gemini-romanize-prompt-group'); // Get the new romanize prompt group
-
-    if (geminiApiKeyGroup && geminiModelGroup && overrideGeminiPromptGroup && overrideGeminiRomanizePromptGroup) {
-        if (translationProvider === 'gemini') {
-            geminiApiKeyGroup.style.display = 'block';
-            geminiModelGroup.style.display = 'block'; // Show the model group
-            overrideGeminiPromptGroup.style.display = 'block';
-            overrideGeminiRomanizePromptGroup.style.display = 'block'; // Show the romanize prompt group
-        } else {
-            geminiApiKeyGroup.style.display = 'none';
-            geminiModelGroup.style.display = 'none'; // Hide the model group
-            overrideGeminiPromptGroup.style.display = 'none';
-            overrideGeminiRomanizePromptGroup.style.display = 'none'; // Hide the romanize prompt group
-        }
-    }
-    toggleGeminiPromptVisibility(); // Re-evaluate prompt visibility based on new provider
-    toggleGeminiRomanizePromptVisibility(); // Re-evaluate romanize prompt visibility
-}
-
-// Function to toggle custom translate target visibility
-function toggleTranslateTargetVisibility() {
-    const overrideTranslateTarget = document.getElementById('override-translate-target').checked;
-    const customTranslateTargetGroup = document.getElementById('custom-translate-target-group');
-    if (customTranslateTargetGroup) {
-        if (overrideTranslateTarget) {
-            customTranslateTargetGroup.style.display = 'block';
-        } else {
-            customTranslateTargetGroup.style.display = 'none';
-        }
-    }
-}
-
-// Function to toggle custom Gemini translation prompt visibility
-function toggleGeminiPromptVisibility() {
-    const translationProvider = document.getElementById('translation-provider').value;
-    const overrideGeminiPrompt = document.getElementById('override-gemini-prompt').checked;
-    const customGeminiPromptGroup = document.getElementById('custom-gemini-prompt-group');
-    if (customGeminiPromptGroup) {
-        if (translationProvider === 'gemini' && overrideGeminiPrompt) {
-            customGeminiPromptGroup.style.display = 'block';
-        } else {
-            customGeminiPromptGroup.style.display = 'none';
-        }
-    }
-}
-
-// Function to toggle Gemini Romanization Model visibility
-function toggleRomanizationModelVisibility() {
-    const romanizationProvider = document.getElementById('romanization-provider').value;
-    const geminiRomanizationModelGroup = document.getElementById('gemini-romanization-model-group');
-    if (geminiRomanizationModelGroup) {
-        if (romanizationProvider === 'gemini') {
-            geminiRomanizationModelGroup.style.display = 'block';
-        } else {
-            geminiRomanizationModelGroup.style.display = 'none';
-        }
-    }
-}
-
-// Function to toggle custom Gemini romanization prompt visibility
-function toggleGeminiRomanizePromptVisibility() {
-    const translationProvider = document.getElementById('translation-provider').value;
-    const overrideGeminiRomanizePrompt = document.getElementById('override-gemini-romanize-prompt').checked;
-    const customGeminiRomanizePromptGroup = document.getElementById('custom-gemini-romanize-prompt-group');
-    if (customGeminiRomanizePromptGroup) {
-        if (translationProvider === 'gemini' && overrideGeminiRomanizePrompt) {
-            customGeminiRomanizePromptGroup.style.display = 'block';
-        } else {
-            customGeminiRomanizePromptGroup.style.display = 'none';
-        }
+        noLyricsMessage.textContent = `Error loading local lyrics: ${error.message || error}`;
+        noLyricsMessage.style.display = 'block';
     }
 }
 
 document.getElementById('toggle-gemini-api-key-visibility').addEventListener('click', () => {
     const apiKeyInput = document.getElementById('gemini-api-key');
-    const toggleButtonIcon = document.querySelector('#toggle-gemini-api-key-visibility .material-symbols-outlined');
+    const icon = document.querySelector('#toggle-gemini-api-key-visibility .material-symbols-outlined');
     if (apiKeyInput.type === 'password') {
         apiKeyInput.type = 'text';
-        toggleButtonIcon.textContent = 'visibility_off';
+        icon.textContent = 'visibility_off';
     } else {
         apiKeyInput.type = 'password';
-        toggleButtonIcon.textContent = 'visibility';
+        icon.textContent = 'visibility';
     }
 });
+
 function setAppVersion() {
     try {
-        // Use pBrowser for better compatibility
-        const browser = window.chrome || window.browser;
-        if (browser && browser.runtime && browser.runtime.getManifest) {
-            const manifest = browser.runtime.getManifest();
-            const version = manifest.version;
-            const versionElement = document.querySelector('.version');
-            if (versionElement) {
-                versionElement.textContent = `Version ${version}`;
-            }
-        } else {
-            console.warn("Browser runtime API not available");
-            const versionElement = document.querySelector('.version');
-            if (versionElement) {
-                versionElement.textContent = 'Version unavailable';
-            }
+        const version = chrome.runtime.getManifest().version;
+        const versionElement = document.querySelector('.version');
+        if (versionElement) {
+            versionElement.textContent = `Version ${version}`;
         }
     } catch (e) {
         console.error("Could not retrieve extension version from manifest:", e);
-        const versionElement = document.querySelector('.version');
-        if (versionElement) {
-            versionElement.textContent = 'Version unavailable';
-        }
     }
 }
 
-// Initial load
 document.addEventListener('DOMContentLoaded', () => {
-    // Setup auto-save listeners first, but don't trigger them
-    setupAutoSaveListeners();
-
     loadSettings((settings) => {
-        // Update both local and global settings
-        currentSettings = { ...settings };
-        updateUI(currentSettings);
+        updateUI(settings);
+        setupAutoSaveListeners();
 
         const firstNavItem = document.querySelector('.navigation-drawer .nav-item');
-        const activeSectionId = firstNavItem ? firstNavItem.getAttribute('data-section') : 'general';
+        const activeSectionId = firstNavItem?.getAttribute('data-section') || 'general';
 
         document.querySelectorAll('.navigation-drawer .nav-item').forEach(i => i.classList.remove('active'));
         document.querySelector(`.navigation-drawer .nav-item[data-section="${activeSectionId}"]`)?.classList.add('active');
@@ -1092,47 +757,41 @@ document.addEventListener('DOMContentLoaded', () => {
     });
 
     setAppVersion();
-    
-    // Add event listener for the new reload button
-    const reloadButton = document.getElementById('reload-button');
-    if (reloadButton) {
-        reloadButton.addEventListener('click', () => {
-            try {
-                // Use pBrowser for better compatibility
-                const browser = window.chrome || window.browser;
-                if (browser && browser.tabs && browser.tabs.query) {
-                    // Find the YouTube Music tab and reload it
-                    browser.tabs.query({ url: "*://music.youtube.com/*" }, (tabs) => {
-                        if (browser.runtime.lastError) {
-                            console.error("Error querying tabs:", browser.runtime.lastError);
-                            alert("Error finding YouTube Music tab: " + browser.runtime.lastError.message);
-                            return;
-                        }
-                        if (tabs && tabs.length > 0) {
-                            const ytmTab = tabs[0];
-                            browser.tabs.reload(ytmTab.id, () => {
-                                if (browser.runtime.lastError) {
-                                    console.error("Error reloading tab:", browser.runtime.lastError);
-                                    alert("Error reloading tab: " + browser.runtime.lastError.message);
-                                } else {
-                                    // After reloading, hide the notification and show success message
-                                    hideReloadNotification();
-                                    showStatusMessage('YouTube Music tab reloaded!', false, 'save-general');
-                                }
-                            });
-                        } else {
-                            // Handle case where no YTM tab is open
-                            alert("No YouTube Music tab found. Please open one and try again.");
-                        }
-                    });
-                } else {
-                    console.warn("Browser tabs API not available");
-                    alert("Tab reload feature is not available in this context.");
-                }
-            } catch (error) {
-                console.error("Exception while reloading tab:", error);
-                alert("Error reloading tab: " + error.message);
+
+    document.getElementById('reload-button')?.addEventListener('click', () => {
+        chrome.tabs.query({ url: "*://music.youtube.com/*" }, (tabs) => {
+            if (tabs.length > 0) {
+                chrome.tabs.reload(tabs[0].id, () => {
+                    hideReloadNotification();
+                    showStatusMessage('general-save-status', 'YouTube Music tab reloaded!', false);
+                });
+            } else {
+                alert("No YouTube Music tab found. Please open one and try again.");
             }
         });
+    });
+
+    setTimeout(() => {
+        populateLocalLyricsList();
+    }, 100);
+
+    const editCloseButton = document.querySelector('#edit-lyrics-modal .close-button');
+    if (editCloseButton) {
+        editCloseButton.addEventListener('click', (e) => {
+            e.preventDefault();
+            closeEditModal();
+        });
+    }
+
+    window.addEventListener('click', (event) => {
+        const editModal = document.getElementById('edit-lyrics-modal');
+        if (event.target === editModal) {
+            closeEditModal();
+        }
+    });
+
+    const editButton = document.getElementById('modal-edit-lyrics-button');
+    if (editButton) {
+        editButton.addEventListener('click', handleEditLocalLyrics);
     }
 });

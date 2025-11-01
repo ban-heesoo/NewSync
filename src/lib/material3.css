@@ -1,16 +1,15 @@
-/* Local Material Symbols font fallback */
+/* fallback */
 @font-face {
   font-family: 'Material Symbols Outlined';
   font-style: normal;
-  font-weight: 100 700;
-  font-display: swap;
+  font-weight: 400;
   src: url(material-symbol.woff2) format('woff2');
 }
 
 .material-symbols-outlined {
-  font-family: 'Material Symbols Outlined', 'Material Icons', monospace !important;
-  font-weight: normal !important;
-  font-style: normal !important;
+  font-family: 'Material Symbols Outlined';
+  font-weight: normal;
+  font-style: normal;
   font-size: 24px;
   line-height: 1;
   letter-spacing: normal;
@@ -21,27 +20,4 @@
   direction: ltr;
   -webkit-font-feature-settings: 'liga';
   -webkit-font-smoothing: antialiased;
-  font-variation-settings:
-    'FILL' 0,
-    'wght' 400,
-    'GRAD' 0,
-    'opsz' 24;
-  vertical-align: middle;
-}
-
-/* Ensure Material Symbols are not overridden by any other fonts */
-span.material-symbols-outlined,
-i.material-symbols-outlined,
-.material-symbols-outlined,
-[class*="material-symbols-outlined"] {
-  font-family: 'Material Symbols Outlined', 'Material Icons', monospace !important;
-  font-weight: normal !important;
-  font-style: normal !important;
-}
-
-/* Higher specificity overrides */
-body .material-symbols-outlined,
-html .material-symbols-outlined,
-* .material-symbols-outlined {
-  font-family: 'Material Symbols Outlined', 'Material Icons', monospace !important;
 }

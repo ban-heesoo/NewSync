@@ -86,7 +86,6 @@
 
 html {
     font-size: 16px;
-    /* Base font size */
 }
 
 body {
@@ -96,7 +95,6 @@ body {
     display: flex;
     min-height: 100vh;
     overflow-x: hidden;
-    /* Prevent horizontal scroll on body */
     line-height: 1.5;
 }
 
@@ -106,7 +104,6 @@ body {
     scrollbar-color: var(--md-sys-color-primary) var(--md-sys-color-surface-container-highest);
 }
 
-/* For WebKit browsers */
 *::-webkit-scrollbar {
     width: 8px;
     height: 8px;
@@ -132,10 +129,6 @@ body {
     background: transparent;
 }
 
-
-/* Material Symbols Outlined styles are now in material3.css */
-
-/* Force Material Symbols to override SF Pro Display */
 .material-symbols-outlined {
   font-family: 'Material Symbols Outlined', 'Material Icons', monospace !important;
   font-weight: normal !important;
@@ -152,7 +145,6 @@ body {
     flex-shrink: 0;
     height: 100vh;
     position: fixed;
-    /* Fixed position for sidebar */
     top: 0;
     left: 0;
     overflow-y: auto;
@@ -174,7 +166,6 @@ body {
 
 .drawer-header h1 {
     font-size: 1.375rem;
-    /* 22px */
     font-weight: 500;
     color: var(--md-sys-color-on-surface);
     line-height: 1.2;
@@ -184,35 +175,28 @@ body {
     display: flex;
     flex-direction: column;
     gap: 4px;
-    /* Space between nav items */
     padding: 0 12px;
-    /* Horizontal padding for nav items container */
 }
 
 .nav-item {
     display: flex;
     align-items: center;
     padding: 12px 16px;
-    /* M3 spec: 12px vertical, 16px horizontal */
     border-radius: var(--border-radius-full);
-    /* Pill shape for nav items */
     text-decoration: none;
     color: var(--md-sys-color-on-surface-variant);
     transition: background-color var(--animation-duration) var(--animation-timing-function), color var(--animation-duration) var(--animation-timing-function);
     font-weight: 500;
     font-size: 0.875rem;
-    /* 14px */
 }
 
 .nav-item .material-symbols-outlined {
     margin-right: 12px;
-    /* Space between icon and text */
     font-size: 20px;
 }
 
 .nav-item:hover {
     background-color: var(--md-sys-color-surface-variant);
-    /* Hover state */
     color: var(--md-sys-color-on-surface);
 }
 
@@ -231,7 +215,6 @@ body {
     flex-grow: 1;
     padding: 24px;
     margin-left: 280px;
-    /* Account for fixed sidebar width */
     overflow-y: auto;
     display: flex;
     flex-direction: column;
@@ -240,15 +223,15 @@ body {
 
 /* Reload Notification Bar */
 .reload-notification {
-    display: none; /* Hidden by default */
+    display: none;
     align-items: center;
     justify-content: space-between;
     background-color: var(--md-sys-color-tertiary-container);
     color: var(--md-sys-color-on-tertiary-container);
     padding: 12px 16px;
     border-radius: var(--border-radius-medium);
-    margin: 0 0 0px; /* Adjusted margin */
-    font-size: 0.875rem; /* 14px */
+    margin: 0 0 0px;
+    font-size: 0.875rem;
     font-weight: 500;
     animation: fadeIn 0.3s var(--animation-timing-function);
 }
@@ -259,10 +242,9 @@ body {
 
 .reload-notification .btn {
     margin-left: 16px;
-    padding: 8px 16px; /* Slightly smaller padding */
+    padding: 8px 16px;
     min-height: 36px;
 }
-
 
 /* Settings Card (for each section) */
 .settings-card {
@@ -270,10 +252,8 @@ body {
     border-radius: var(--border-radius-large);
     padding: 24px;
     box-shadow: var(--md-sys-elevation-level-0);
-    /* M3 cards often have subtle or no shadow in dark themes, relying on surface color difference */
     border: 1px solid var(--md-sys-color-outline-variant);
     display: none;
-    /* Hidden by default */
     animation: fadeIn 0.3s var(--animation-timing-function);
 }
 
@@ -295,7 +275,6 @@ body {
 
 .card-title {
     font-size: 1.25rem;
-    /* 20px */
     font-weight: 500;
     color: var(--md-sys-color-title);
     margin-bottom: 24px;
@@ -322,7 +301,7 @@ body {
 }
 
 .category-title {
-    font-size: 0.875rem; /* 14px */
+    font-size: 0.875rem;
     font-weight: 700;
     text-transform: uppercase;
     letter-spacing: 0.05em;
@@ -342,7 +321,6 @@ body {
 .setting-description,
 .helper-text {
     font-size: 0.875rem;
-    /* 14px */
     color: var(--md-sys-color-on-surface-variant);
     margin-top: 8px;
     line-height: 1.4;
@@ -350,9 +328,7 @@ body {
 
 .helper-text {
     font-size: 0.75rem;
-    /* 12px */
 }
-
 
 /* Form Elements */
 .form-group {
@@ -363,13 +339,10 @@ body {
 
 .form-group-label,
 label:not(.switch) {
-    /* Ensure .switch label is not targeted here */
     font-size: 0.875rem;
-    /* 14px */
     font-weight: 500;
     color: var(--md-sys-color-on-surface-variant);
     margin-bottom: 4px;
-    /* Small space before input */
 }
 
 input[type="text"],
@@ -417,7 +390,6 @@ select {
     border: 1px solid var(--md-sys-color-outline);
     border-radius: var(--border-radius-small);
     padding: 12px 40px 12px 16px;
-    /* Extra padding for arrow */
     font-size: 1rem;
     line-height: 1.5;
     cursor: pointer;
@@ -436,10 +408,8 @@ select:focus {
     right: 12px;
     transform: translateY(-50%);
     pointer-events: none;
-    /* Allows click to pass through to select */
     color: var(--md-sys-color-on-surface-variant);
 }
-
 
 /* M3 Switch */
 .switch {
@@ -448,7 +418,6 @@ select:focus {
     cursor: pointer;
     user-select: none;
     padding: 8px 0;
-    /* Vertical padding for better touch target */
 }
 
 .switch input {
@@ -463,15 +432,12 @@ select:focus {
     width: 52px;
     height: 32px;
     background-color: var(--md-sys-color-surface-variant);
-    /* Track color unchecked */
     border-radius: var(--border-radius-full);
     transition: background-color var(--animation-duration) var(--animation-timing-function);
     border: 2px solid var(--md-sys-color-outline);
-    /* Border for unchecked state */
 }
 
 .switch .slider::before {
-    /* Thumb */
     content: "";
     position: absolute;
     height: 20px;
@@ -479,7 +445,6 @@ select:focus {
     left: 4px;
     bottom: 4px;
     background-color: var(--md-sys-color-outline);
-    /* Thumb color unchecked */
     border-radius: 50%;
     transition: transform var(--animation-duration) var(--animation-timing-function), background-color var(--animation-duration) var(--animation-timing-function);
     box-shadow: var(--md-sys-elevation-level-1);
@@ -487,18 +452,15 @@ select:focus {
 
 .switch input:checked+.slider {
     background-color: var(--md-sys-color-primary);
-    /* Track color checked */
     border-color: var(--md-sys-color-primary);
 }
 
 .switch input:checked+.slider::before {
     transform: translateX(20px);
     background-color: var(--md-sys-color-on-primary);
-    /* Thumb color checked */
 }
 
 .switch input:focus-visible+.slider {
-    /* Focus ring */
     outline: 2px solid var(--md-sys-color-primary);
     outline-offset: 2px;
 }
@@ -516,15 +478,11 @@ select:focus {
     justify-content: center;
     padding: 10px 24px;
     border-radius: var(--border-radius-full);
-    /* Pill shape */
     font-family: var(--md-ref-typeface-plain);
     font-size: 0.875rem;
-    /* 14px */
     font-weight: 500;
     text-transform: none;
-    /* M3 often uses sentence case for buttons */
     letter-spacing: 0.00714em;
-    /* 0.1px */
     border: none;
     cursor: pointer;
     transition: background-color var(--animation-duration) var(--animation-timing-function),
@@ -533,7 +491,6 @@ select:focus {
     min-height: 40px;
     text-decoration: none;
     gap: 8px;
-    /* Space between icon and text */
 }
 
 .btn .material-symbols-outlined {
@@ -549,7 +506,6 @@ select:focus {
 
 .btn.btn-filled:hover {
     background-color: color-mix(in srgb, var(--md-sys-color-primary) 92%, var(--md-sys-color-on-primary) 8%);
-    /* M3 hover state: primary + 8% onPrimary */
     box-shadow: var(--md-sys-elevation-level-1);
 }
 
@@ -567,7 +523,6 @@ select:focus {
 
 .btn.btn-outlined:hover {
     background-color: rgba(var(--md-sys-color-primary-rgb, 218, 114, 114), 0.08);
-    /* Primary color with 8% opacity */
 }
 
 .btn.btn-outlined:active {
@@ -583,11 +538,9 @@ select:focus {
     background-color: rgba(var(--md-sys-color-error-rgb, 242, 184, 181), 0.08);
 }
 
-
 /* Tonal Button */
 .btn.btn-tonal {
     background-color: var(--md-sys-color-secondary-container);
-    /* Or primary-container if themed that way */
     color: var(--md-sys-color-on-secondary-container);
     box-shadow: var(--md-sys-elevation-level-0);
 }
@@ -611,7 +564,6 @@ select:focus {
     width: 40px;
     height: 40px;
     padding: 8px;
-    /* Ensures icon is centered */
     display: inline-flex;
     align-items: center;
     justify-content: center;
@@ -635,7 +587,6 @@ select:focus {
     color: var(--md-sys-color-error);
     background-color: rgba(var(--md-sys-color-error-rgb, 242, 184, 181), 0.08);
 }
-
 
 .card-actions {
     margin-top: 32px;
@@ -703,7 +654,6 @@ select:focus {
 }
 
 .draggable-source-item .edit-source-button {
-    /* Uses .btn-icon styles */
 }
 
 .draggable-source-item .edit-source-button.btn-icon:hover {
@@ -712,14 +662,12 @@ select:focus {
 }
 
 .draggable-source-item .remove-source-button {
-    /* Uses .btn-icon styles */
 }
 
 .draggable-source-item .remove-source-button.btn-icon:hover {
     color: var(--md-sys-color-error);
     background-color: rgba(var(--md-sys-color-error-rgb, 242, 184, 181), 0.08);
 }
-
 
 .add-source-container {
     display: flex;
@@ -752,18 +700,13 @@ select:focus {
 }
 
 #lyrics-plus-container-preview {
-    /* Base styles for the preview container - PRESERVED FROM ORIGINAL */
     --yt-spec-text-primary: white;
-    /* M3 mapping */
     --ytmusic-description-shelf-renderer-description-color: white;
-    /* M3 mapping */
     --yt-spec-text-secondary: white;
-    /* M3 mapping */
     --yt-spec-10-percent-layer: rgba(255, 255, 255, 0.1);
 
     width: 100%;
     height: 250px;
-    /* Increased height for better preview */
     overflow-y: auto;
     color: var(--yt-spec-text-primary);
     font-family: 'SF Pro Display', 'YouTube Sans', 'Roboto', 'Noto Naskh Arabic UI', 'Arial', sans-serif;
@@ -773,7 +716,6 @@ select:focus {
     direction: ltr;
     box-sizing: border-box;
     background-color: var(--md-sys-color-surface-container-lowest);
-    /* Darker background */
     border: 1px solid var(--md-sys-color-outline-variant);
     border-radius: var(--border-radius-medium);
     padding: 15px;
@@ -809,7 +751,7 @@ select:focus {
 .about-header-text .version {
     font-size: 0.875rem;
     color: var(--md-sys-color-on-surface-variant);
-    margin-top: -8px; /* Pull it closer to the title */
+    margin-top: -8px;
 }
 
 .about-description {
@@ -833,7 +775,6 @@ select:focus {
 /* Footer */
 .content-footer {
     margin-top: auto;
-    /* Pushes footer to the bottom */
     padding-top: 24px;
     text-align: center;
     font-size: 0.875rem;
@@ -850,43 +791,32 @@ select:focus {
         width: 100%;
         height: auto;
         position: static;
-        /* Stack on top */
         flex-direction: row;
-        /* Horizontal layout for header and nav */
         align-items: center;
         padding: 8px 12px;
-        /* Reduced padding */
         overflow-x: auto;
-        /* Allow horizontal scroll for nav items if too many */
         overflow-y: hidden;
     }
 
     .drawer-header {
         padding: 8px 12px 8px 0;
-        /* Adjust padding */
         flex-shrink: 0;
-        /* Prevent header from shrinking */
     }
 
     .drawer-header h1 {
         font-size: 1.125rem;
-        /* Slightly smaller title */
     }
 
     .drawer-nav {
         flex-direction: row;
-        /* Horizontal nav items */
         gap: 8px;
         flex-grow: 1;
-        /* Allow nav to take remaining space */
         justify-content: flex-start;
-        /* Align items to start */
         padding: 0;
     }
 
     .nav-item {
         padding: 8px 12px;
-        /* Smaller padding for nav items */
         font-size: 0.8rem;
     }
 
@@ -896,7 +826,6 @@ select:focus {
 
     .content-area {
         margin-left: 0;
-        /* Remove margin as sidebar is not fixed */
         padding: 16px;
         gap: 16px;
     }
@@ -913,19 +842,16 @@ select:focus {
 
     .card-actions {
         flex-direction: column;
-        /* Stack buttons on small screens */
         gap: 12px;
     }
 
     .btn {
         width: 100%;
-        /* Full width buttons in stacked actions */
     }
     
     .links-container .btn {
-        flex-grow: 1; /* Make buttons grow to fill space */
+        flex-grow: 1;
     }
-
 
     .add-source-container {
         flex-direction: column;
@@ -940,17 +866,14 @@ select:focus {
 @media (max-width: 480px) {
     html {
         font-size: 15px;
-        /* Slightly smaller base for very small screens */
     }
 
     .drawer-header h1 {
         display: none;
-        /* Hide title text, keep icon */
     }
 
     .nav-item span:not(.material-symbols-outlined) {
         display: none;
-        /* Hide text label on nav items, show only icon */
     }
 
     .nav-item .material-symbols-outlined {
@@ -1010,17 +933,17 @@ select:focus {
    ========================================================================== */
 
 .modal {
-    display: none; /* Hidden by default */
-    position: fixed; /* Stay in place */
-    z-index: 1001; /* Sit on top */
+    display: none;
+    position: fixed;
+    z-index: 1001;
     left: 0;
     top: 0;
-    width: 100%; /* Full width */
-    height: 100%; /* Full height */
-    overflow: auto; /* Enable scroll if needed */
-    background-color: rgba(0,0,0,0.6); /* Black w/ opacity */
-    backdrop-filter: blur(5px); /* Blur background */
-    -webkit-backdrop-filter: blur(5px); /* Safari support */
+    width: 100%;
+    height: 100%;
+    overflow: auto;
+    background-color: rgba(0,0,0,0.6);
+    backdrop-filter: blur(5px);
+    -webkit-backdrop-filter: blur(5px);
     align-items: center;
     justify-content: center;
     animation: fadeInModal 0.3s ease-out;
@@ -1182,30 +1105,28 @@ select:focus {
     }
 }
 
-
 /* ==========================================================================
    FAB AND MODAL FIXES
    ========================================================================== */
 
-/* Only show FAB when local lyrics tab is active */
 #add-lyrics-fab {
     display: none;
     visibility: hidden;
     opacity: 0;
 }
 
-/* Show FAB only when local lyrics section is active */
 #local-lyrics.active #add-lyrics-fab {
     display: flex !important;
     visibility: visible !important;
     opacity: 1 !important;
 }
 
-/* Ensure modal is properly hidden by default */
 #upload-lyrics-modal {
     display: none !important;
 }
 
 #upload-lyrics-modal.show {
     display: flex !important;
+}
+
 }

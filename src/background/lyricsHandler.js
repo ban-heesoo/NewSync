@@ -1,94 +1,18 @@
 // Universal Browser API handle
 const pBrowser = chrome || browser;
-console.log('Service Worker is active.');
+import { createRomanizationPrompt, createTranslationPrompt } from "./geminiHandler.js"
 
-// Extension state monitoring
-let isExtensionEnabled = true;
+/* =================================================================
+   CONSTANTS
+   ================================================================= */
 
-// Monitor extension state changes
-if (pBrowser.management) {
-    // Get initial state
-    pBrowser.management.getSelf().then(extension => {
-        isExtensionEnabled = extension.enabled;
-        console.log('NewSync: Extension enabled state:', isExtensionEnabled);
-    }).catch(error => {
-        console.warn('NewSync: Could not get extension state:', error);
-    });
-
-    // Listen for state changes
-    if (pBrowser.management.onEnabled) {
-        pBrowser.management.onEnabled.addListener((extension) => {
-            if (extension.id === pBrowser.runtime.id) {
-                isExtensionEnabled = true;
-                console.log('NewSync: Extension enabled');
-                notifyContentScriptsAboutStateChange(true);
-            }
-        });
-    }
-
-    if (pBrowser.management.onDisabled) {
-        pBrowser.management.onDisabled.addListener((extension) => {
-            if (extension.id === pBrowser.runtime.id) {
-                isExtensionEnabled = false;
-                console.log('NewSync: Extension disabled');
-                notifyContentScriptsAboutStateChange(false);
-            }
-        });
-    }
-}
-
-// Notify content scripts about extension state changes
-function notifyContentScriptsAboutStateChange(enabled) {
-    try {
-        if (pBrowser.tabs && pBrowser.tabs.query) {
-            pBrowser.tabs.query({ url: "*://*.music.youtube.com/*" }, (tabs) => {
-                if (pBrowser.runtime.lastError) return;
-                if (tabs.length === 0) return;
-                
-                tabs.forEach(tab => {
-                    if (tab.id && pBrowser.tabs.sendMessage) {
-                        pBrowser.tabs.sendMessage(tab.id, {
-                            type: 'NEWSYNC_EXTENSION_STATE_CHANGED',
-                            enabled: enabled
-                        }).catch(() => {
-                            // Tab might not be ready, ignore error
-                        });
-                    }
-                });
-            });
-        }
-    } catch (error) {
-        console.warn("NewSync: Error notifying content scripts about state change:", error);
-    }
-}
-
-// Handle extension state toggle
-function handleToggleExtensionState(enabled, sendResponse) {
-    try {
-        if (pBrowser.management && pBrowser.management.setEnabled) {
-            pBrowser.management.setEnabled(pBrowser.runtime.id, enabled, () => {
-                if (pBrowser.runtime.lastError) {
-                    console.error('NewSync: Error toggling extension:', pBrowser.runtime.lastError);
-                    sendResponse({ success: false, error: pBrowser.runtime.lastError.message });
-                } else {
-                    isExtensionEnabled = enabled;
-                    console.log('NewSync: Extension state toggled to:', enabled);
-                    sendResponse({ success: true, enabled: enabled });
-                }
-            });
-        } else {
-            sendResponse({ success: false, error: 'Management API not available' });
-        }
-    } catch (error) {
-        console.error('NewSync: Error in handleToggleExtensionState:', error);
-        sendResponse({ success: false, error: error.message });
-    }
-}
-
-/* =================== CONSTANTS =================== */
 const CACHE_DB_NAME = "LyricsCacheDB";
 const CACHE_DB_VERSION = 1;
 const LYRICS_OBJECT_STORE = "lyrics";
+
+const TRANSLATIONS_DB_NAME = "TranslationsDB";
+const TRANSLATIONS_DB_VERSION = 1;
+const TRANSLATIONS_OBJECT_STORE = "translations";
 
 const LOCAL_LYRICS_DB_NAME = "LocalLyricsDB";
 const LOCAL_LYRICS_DB_VERSION = 1;
@@ -104,10 +28,7 @@ const MESSAGE_TYPES = {
     GET_LOCAL_LYRICS_LIST: 'GET_LOCAL_LYRICS_LIST',
     DELETE_LOCAL_LYRICS: 'DELETE_LOCAL_LYRICS',
     UPDATE_LOCAL_LYRICS: 'UPDATE_LOCAL_LYRICS',
-    FETCH_LOCAL_LYRICS: 'FETCH_LOCAL_LYRICS',
-    SETTINGS_UPDATED_FROM_PAGE: 'SETTINGS_UPDATED_FROM_PAGE',
-    CLEAR_TRANSLATION_CACHE: 'CLEAR_TRANSLATION_CACHE',
-    UPDATE_DYNAMIC_BG_ONLY: 'UPDATE_DYNAMIC_BG_ONLY'
+    FETCH_LOCAL_LYRICS: 'FETCH_LOCAL_LYRICS'
 };
 
 const CACHE_STRATEGIES = {
@@ -120,7 +41,7 @@ const PROVIDERS = {
     KPOE: 'kpoe',
     CUSTOM_KPOE: 'customKpoe',
     LRCLIB: 'lrclib',
-    LOCAL: 'local',
+    LOCAL: 'local', // New provider for local lyrics
     GEMINI: 'gemini',
     GOOGLE: 'google'
 };
@@ -132,172 +53,18 @@ const KPOE_SERVERS = [
     "https://lyricsplus.prjktla.online"
 ];
 
-/* =================== IN-MEMORY CACHE =================== */
+/* =================================================================
+   IN-MEMORY CACHE
+   ================================================================= */
+
 const lyricsCache = new Map();
 const ongoingFetches = new Map();
 
+/* =================================================================
+   SERVICE WORKER INITIALIZATION & MESSAGE LISTENERS
+   ================================================================= */
 
-/* =================== INDEXEDDB HELPERS =================== */
-
-function openDB() {
-    return new Promise((resolve, reject) => {
-        const request = indexedDB.open(CACHE_DB_NAME, CACHE_DB_VERSION);
-        request.onupgradeneeded = event => {
-            const db = event.target.result;
-            if (!db.objectStoreNames.contains(LYRICS_OBJECT_STORE)) {
-                db.createObjectStore(LYRICS_OBJECT_STORE, { keyPath: "key" });
-            }
-        };
-        request.onsuccess = event => resolve(event.target.result);
-        request.onerror = event => reject(event.target.error);
-    });
-}
-
-function openLocalLyricsDB() {
-    return new Promise((resolve, reject) => {
-        const request = indexedDB.open(LOCAL_LYRICS_DB_NAME, LOCAL_LYRICS_DB_VERSION);
-        request.onupgradeneeded = event => {
-            const db = event.target.result;
-            if (!db.objectStoreNames.contains(LOCAL_LYRICS_OBJECT_STORE)) {
-                db.createObjectStore(LOCAL_LYRICS_OBJECT_STORE, { keyPath: "songId" });
-            }
-        };
-        request.onsuccess = event => resolve(event.target.result);
-        request.onerror = event => reject(event.target.error);
-    });
-}
-
-async function getLyricsFromDB(key) {
-    const db = await openDB();
-    const { cacheStrategy = CACHE_STRATEGIES.AGGRESSIVE } = await storageLocalGet('cacheStrategy');
-
-    if (cacheStrategy === CACHE_STRATEGIES.NONE) {
-        return null;
-    }
-
-    return new Promise((resolve, reject) => {
-        const transaction = db.transaction([LYRICS_OBJECT_STORE], "readonly");
-        const store = transaction.objectStore(LYRICS_OBJECT_STORE);
-        const request = store.get(key);
-
-        request.onsuccess = event => {
-            const result = event.target.result;
-            if (result) {
-                const now = Date.now();
-                const expirationTimes = {
-                    [CACHE_STRATEGIES.AGGRESSIVE]: 2 * 60 * 60 * 1000, // 2 hours
-                    [CACHE_STRATEGIES.MODERATE]: 1 * 60 * 60 * 1000,   // 1 hour
-                };
-                const expirationTime = expirationTimes[cacheStrategy];
-                const age = now - result.timestamp;
-
-                if (age < expirationTime) {
-                    resolve(result.lyrics);
-                } else {
-                    deleteLyricsFromDB(key); // Stale cache
-                    resolve(null);
-                }
-            } else {
-                resolve(null);
-            }
-        };
-        request.onerror = event => reject(event.target.error);
-    });
-}
-
-async function saveLyricsToDB(key, lyrics) {
-    const { cacheStrategy = CACHE_STRATEGIES.AGGRESSIVE } = await storageLocalGet('cacheStrategy');
-    if (cacheStrategy === CACHE_STRATEGIES.NONE) {
-        return;
-    }
-    const db = await openDB();
-    const transaction = db.transaction([LYRICS_OBJECT_STORE], "readwrite");
-    const store = transaction.objectStore(LYRICS_OBJECT_STORE);
-    store.put({ key, lyrics, timestamp: Date.now() });
-}
-
-async function deleteLyricsFromDB(key) {
-    const db = await openDB();
-    const transaction = db.transaction([LYRICS_OBJECT_STORE], "readwrite");
-    const store = transaction.objectStore(LYRICS_OBJECT_STORE);
-    store.delete(key);
-}
-
-async function clearCacheDB() {
-    const db = await openDB();
-    const transaction = db.transaction([LYRICS_OBJECT_STORE], "readwrite");
-    const store = transaction.objectStore(LYRICS_OBJECT_STORE);
-    store.clear();
-}
-
-async function estimateIndexedDBSizeInKB() {
-    const db = await openDB();
-    return new Promise((resolve, reject) => {
-        const transaction = db.transaction([LYRICS_OBJECT_STORE], "readonly");
-        const store = transaction.objectStore(LYRICS_OBJECT_STORE);
-        const request = store.getAll();
-        request.onsuccess = event => {
-            const totalSizeBytes = event.target.result.reduce((acc, record) => {
-                return acc + new TextEncoder().encode(JSON.stringify(record)).length;
-            }, 0);
-            resolve(totalSizeBytes / 1024);
-        };
-        request.onerror = event => reject(event.target.error);
-    });
-}
-
-async function saveLocalLyricsToDB(songId, songInfo, lyrics) {
-    const db = await openLocalLyricsDB();
-    const transaction = db.transaction([LOCAL_LYRICS_OBJECT_STORE], "readwrite");
-    const store = transaction.objectStore(LOCAL_LYRICS_OBJECT_STORE);
-    store.put({ songId, songInfo, lyrics, timestamp: Date.now() });
-}
-
-async function getLocalLyricsFromDB(songId) {
-    const db = await openLocalLyricsDB();
-    return new Promise((resolve, reject) => {
-        const transaction = db.transaction([LOCAL_LYRICS_OBJECT_STORE], "readonly");
-        const store = transaction.objectStore(LOCAL_LYRICS_OBJECT_STORE);
-        const request = store.get(songId);
-        request.onsuccess = event => resolve(event.target.result);
-        request.onerror = event => reject(event.target.error);
-    });
-}
-
-async function getLocalLyricsListFromDB() {
-    const db = await openLocalLyricsDB();
-    return new Promise((resolve, reject) => {
-        const transaction = db.transaction([LOCAL_LYRICS_OBJECT_STORE], "readonly");
-        const store = transaction.objectStore(LOCAL_LYRICS_OBJECT_STORE);
-        const request = store.getAll();
-        request.onsuccess = event => resolve(event.target.result.map(item => ({
-            songId: item.songId,
-            songInfo: item.songInfo,
-            timestamp: item.timestamp
-        })));
-        request.onerror = event => reject(event.target.error);
-    });
-}
-
-async function deleteLocalLyricsFromDB(songId) {
-    const db = await openLocalLyricsDB();
-    const transaction = db.transaction([LOCAL_LYRICS_OBJECT_STORE], "readwrite");
-    const store = transaction.objectStore(LOCAL_LYRICS_OBJECT_STORE);
-    store.delete(songId);
-}
-
-
-/* =================== LOCAL STORAGE HELPER =================== */
-
-function storageLocalGet(keys) {
-    if (typeof browser !== 'undefined' && browser.storage && browser.storage.local) {
-        return browser.storage.local.get(keys);
-    }
-    return new Promise(resolve => chrome.storage.local.get(keys, resolve));
-}
-
-
-/* =================== RUNTIME MESSAGE LISTENERS =================== */
+console.log('Service Worker is active.');
 
 pBrowser.runtime.onMessage.addListener((message, sender, sendResponse) => {
     switch (message.type) {
@@ -307,23 +74,6 @@ pBrowser.runtime.onMessage.addListener((message, sender, sendResponse) => {
 
         case MESSAGE_TYPES.RESET_CACHE:
             handleResetCache(sendResponse);
-            return true;
-
-        case MESSAGE_TYPES.CLEAR_TRANSLATION_CACHE:
-            handleClearTranslationCache(sendResponse);
-            return true;
-
-        case MESSAGE_TYPES.UPDATE_DYNAMIC_BG_ONLY:
-            // Forward to content script to apply dynamic background
-            sendResponse({ success: true });
-            return true;
-
-        case 'TOGGLE_EXTENSION_STATE':
-            handleToggleExtensionState(message.enabled, sendResponse);
-            return true;
-
-        case 'GET_EXTENSION_STATE':
-            sendResponse({ enabled: isExtensionEnabled });
             return true;
 
         case MESSAGE_TYPES.GET_CACHED_SIZE:
@@ -358,109 +108,23 @@ pBrowser.runtime.onMessage.addListener((message, sender, sendResponse) => {
             handleFetchLocalLyrics(message.songId, sendResponse);
             return true;
 
-        case MESSAGE_TYPES.SETTINGS_UPDATED_FROM_PAGE:
-            handleSettingsUpdatedFromPage(message.settings, sendResponse);
-            return true;
-
         default:
             console.warn("Received unknown message type:", message.type);
             return false;
     }
 });
 
-async function handleFetchSponsorSegments(videoId, sendResponse) {
-    try {
-        const segments = await fetchSponsorSegments(videoId);
-        sendResponse({ success: true, segments });
-    } catch (error) {
-        console.error(`Failed to fetch SponsorBlock segments for videoId "${videoId}":`, error);
-        sendResponse({ success: false, error: error.message });
-    }
-}
+/* =================================================================
+   MESSAGE HANDLERS
+   ================================================================= */
 
 async function handleLyricsFetch(songInfo, sendResponse, forceReload) {
     try {
-        const lyrics = await getOrFetchLyrics(songInfo, forceReload);
+        const { lyrics } = await getOrFetchLyrics(songInfo, forceReload);
         sendResponse({ success: true, lyrics, metadata: songInfo });
     } catch (error) {
         console.error(`Failed to fetch lyrics for "${songInfo.title}":`, error);
         sendResponse({ success: false, error: error.message, metadata: songInfo });
-    }
-}
-
-async function handleResetCache(sendResponse) {
-    try {
-        lyricsCache.clear();
-        ongoingFetches.clear();
-        await clearCacheDB();
-        sendResponse({ success: true, message: "Cache reset successfully" });
-    } catch (error) {
-        sendResponse({ success: false, error: error.message });
-    }
-}
-
-async function handleClearTranslationCache(sendResponse) {
-    try {
-        // Clear only translation/romanization cache entries from memory
-        const keysToDelete = [];
-        for (const [key, value] of lyricsCache.entries()) {
-            if (key.includes(' - translate -') || key.includes(' - romanize -')) {
-                keysToDelete.push(key);
-            }
-        }
-        keysToDelete.forEach(key => lyricsCache.delete(key));
-        
-        // Clear translation cache from IndexedDB
-        const db = await openDB();
-        const transaction = db.transaction([LYRICS_OBJECT_STORE], "readwrite");
-        const store = transaction.objectStore(LYRICS_OBJECT_STORE);
-        
-        const clearPromise = new Promise((resolve, reject) => {
-            const request = store.getAll();
-            request.onsuccess = async (event) => {
-                const allItems = event.target.result;
-                const deletePromises = allItems
-                    .filter(item => item.key.includes(' - translate -') || item.key.includes(' - romanize -'))
-                    .map(item => {
-                        return new Promise((resolveDelete, rejectDelete) => {
-                            const deleteRequest = store.delete(item.key);
-                            deleteRequest.onsuccess = () => resolveDelete();
-                            deleteRequest.onerror = () => rejectDelete(deleteRequest.error);
-                        });
-                    });
-                
-                try {
-                    await Promise.all(deletePromises);
-                    resolve();
-                } catch (error) {
-                    reject(error);
-                }
-            };
-            request.onerror = () => reject(request.error);
-        });
-        
-        await clearPromise;
-        
-        sendResponse({ success: true, message: "Translation cache cleared successfully" });
-    } catch (error) {
-        sendResponse({ success: false, error: error.message });
-    }
-}
-
-async function handleGetCacheSize(sendResponse) {
-    try {
-        const sizeKB = await estimateIndexedDBSizeInKB();
-        const db = await openDB();
-        const transaction = db.transaction([LYRICS_OBJECT_STORE], "readonly");
-        const store = transaction.objectStore(LYRICS_OBJECT_STORE);
-        const countRequest = store.count();
-        const cacheCount = await new Promise((resolve, reject) => {
-            countRequest.onsuccess = () => resolve(countRequest.result);
-            countRequest.onerror = () => reject(countRequest.error);
-        });
-        sendResponse({ success: true, sizeKB, cacheCount });
-    } catch (error) {
-        sendResponse({ success: false, error: error.message });
     }
 }
 
@@ -474,9 +138,43 @@ async function handleTranslateLyrics({ songInfo, action, targetLang, forceReload
     }
 }
 
+async function handleFetchSponsorSegments(videoId, sendResponse) {
+    try {
+        const segments = await fetchSponsorSegments(videoId);
+        sendResponse({ success: true, segments });
+    } catch (error) {
+        console.error(`Failed to fetch SponsorBlock segments for videoId "${videoId}":`, error);
+        sendResponse({ success: false, error: error.message });
+    }
+}
+
+async function handleResetCache(sendResponse) {
+    try {
+        lyricsCache.clear();
+        ongoingFetches.clear();
+        await clearCacheDB();
+        await clearTranslationsDB();
+        sendResponse({ success: true, message: "Cache reset successfully" });
+    } catch (error) {
+        sendResponse({ success: false, error: error.message });
+    }
+}
+
+async function handleGetCacheSize(sendResponse) {
+    try {
+        const lyricsStats = await estimateDBSizeInKB(CACHE_DB_NAME, LYRICS_OBJECT_STORE);
+        const translationsStats = await estimateDBSizeInKB(TRANSLATIONS_DB_NAME, TRANSLATIONS_OBJECT_STORE);
+        const sizeKB = lyricsStats.sizeKB + translationsStats.sizeKB;
+        const cacheCount = lyricsStats.count + translationsStats.count;
+        sendResponse({ success: true, sizeKB, cacheCount });
+    } catch (error) {
+        sendResponse({ success: false, error: error.message });
+    }
+}
+
 async function handleUploadLocalLyrics(songInfo, jsonLyrics, sendResponse) {
     try {
-        const songId = `${songInfo.title}-${songInfo.artist}-${Date.now()}`;
+        const songId = `${songInfo.title}-${songInfo.artist}-${Date.now()}`; // Unique ID for local songs
         await saveLocalLyricsToDB(songId, songInfo, jsonLyrics);
         sendResponse({ success: true, message: "Local lyrics uploaded successfully.", songId });
     } catch (error) {
@@ -529,8 +227,9 @@ async function handleFetchLocalLyrics(songId, sendResponse) {
     }
 }
 
-
-/* =================== CORE LYRICS LOGIC =================== */
+/* =================================================================
+   CORE LYRICS & TRANSLATION LOGIC
+   ================================================================= */
 
 async function getOrFetchLyrics(songInfo, forceReload = false) {
     const cacheKey = `${songInfo.title} - ${songInfo.artist} - ${songInfo.album}`;
@@ -538,13 +237,13 @@ async function getOrFetchLyrics(songInfo, forceReload = false) {
     if (!forceReload) {
         if (lyricsCache.has(cacheKey)) return lyricsCache.get(cacheKey);
 
-        const dbCachedLyrics = await getLyricsFromDB(cacheKey);
-        if (dbCachedLyrics) {
-            lyricsCache.set(cacheKey, dbCachedLyrics);
-            return dbCachedLyrics;
+        const dbCacheRecord = await getLyricsFromDB(cacheKey);
+        if (dbCacheRecord) {
+            const result = { lyrics: dbCacheRecord.lyrics, version: dbCacheRecord.version };
+            lyricsCache.set(cacheKey, result);
+            return result;
         }
 
-        // Explicitly check for local lyrics before attempting any external fetches
         const localLyricsList = await getLocalLyricsListFromDB();
         const matchedLocalSong = localLyricsList.find(item =>
             item.songInfo.title === songInfo.title && item.songInfo.artist === songInfo.artist
@@ -553,7 +252,11 @@ async function getOrFetchLyrics(songInfo, forceReload = false) {
             const fetchedLocalLyrics = await getLocalLyricsFromDB(matchedLocalSong.songId);
             if (fetchedLocalLyrics) {
                 console.log(`Found and returning local lyrics for "${songInfo.title}"`);
-                return parseKPoeFormat(fetchedLocalLyrics.lyrics);
+                const lyrics = parseKPoeFormat(fetchedLocalLyrics.lyrics);
+                const version = fetchedLocalLyrics.timestamp || matchedLocalSong.songId;
+                const result = { lyrics, version };
+                lyricsCache.set(cacheKey, result);
+                return result;
             }
         }
     }
@@ -571,9 +274,7 @@ async function getOrFetchLyrics(songInfo, forceReload = false) {
                 'cacheStrategy': CACHE_STRATEGIES.AGGRESSIVE
             });
 
-            const fetchOptions = settings.cacheStrategy === CACHE_STRATEGIES.NONE
-                ? { cache: 'no-store' }
-                : {};
+            const fetchOptions = settings.cacheStrategy === CACHE_STRATEGIES.NONE ? { cache: 'no-store' } : {};
 
             const providersInOrder = [
                 settings.lyricsProvider,
@@ -595,7 +296,6 @@ async function getOrFetchLyrics(songInfo, forceReload = false) {
                         lyrics = await fetchLRCLibLyrics(songInfo, fetchOptions);
                         break;
                     case PROVIDERS.LOCAL:
-                        // For local lyrics, we need to find a match based on songInfo
                         const localLyricsList = await getLocalLyricsListFromDB();
                         const matchedLocalSong = localLyricsList.find(item =>
                             item.songInfo.title === songInfo.title && item.songInfo.artist === songInfo.artist
@@ -619,9 +319,12 @@ async function getOrFetchLyrics(songInfo, forceReload = false) {
                 throw new Error('No lyrics found from any provider.');
             }
 
-            lyricsCache.set(cacheKey, lyrics);
-            await saveLyricsToDB(cacheKey, lyrics);
-            return lyrics;
+            const version = Date.now();
+            const result = { lyrics, version };
+
+            lyricsCache.set(cacheKey, result);
+            await saveLyricsToDB(cacheKey, lyrics, version);
+            return result;
 
         } finally {
             ongoingFetches.delete(cacheKey);
@@ -634,8 +337,30 @@ async function getOrFetchLyrics(songInfo, forceReload = false) {
 
 async function getOrFetchTranslatedLyrics(songInfo, action, targetLang, forceReload = false) {
     const originalLyricsCacheKey = `${songInfo.title} - ${songInfo.artist} - ${songInfo.album}`;
-    
-    // Get settings first to include prompt settings in cache key
+    const translatedLyricsCacheKey = `${originalLyricsCacheKey} - ${action} - ${targetLang}`;
+
+    const { lyrics: originalLyrics, version: originalLyricsVersion } = await getOrFetchLyrics(songInfo, forceReload);
+    if (isEmptyLyrics(originalLyrics)) {
+        throw new Error('Original lyrics not found or empty, cannot perform translation/romanization.');
+    }
+
+    if (!forceReload) {
+        if (lyricsCache.has(translatedLyricsCacheKey)) {
+            const cached = lyricsCache.get(translatedLyricsCacheKey);
+            if (cached.originalVersion === originalLyricsVersion) {
+                return cached.translatedLyrics;
+            }
+        }
+        const dbCached = await getTranslationFromDB(translatedLyricsCacheKey);
+        if (dbCached && dbCached.originalVersion === originalLyricsVersion) {
+            const resultForMemoryCache = { translatedLyrics: dbCached.translatedLyrics, originalVersion: dbCached.originalVersion };
+            lyricsCache.set(translatedLyricsCacheKey, resultForMemoryCache);
+            return dbCached.translatedLyrics;
+        } else if (dbCached) {
+            await deleteTranslationFromDB(translatedLyricsCacheKey);
+        }
+    }
+
     const settings = await storageLocalGet({
         'translationProvider': PROVIDERS.GOOGLE,
         'romanizationProvider': PROVIDERS.GOOGLE,
@@ -649,27 +374,6 @@ async function getOrFetchTranslatedLyrics(songInfo, action, targetLang, forceRel
         'overrideGeminiRomanizePrompt': false,
         'customGeminiRomanizePrompt': '',
     });
-    
-    // Include prompt settings in cache key to ensure cache invalidation when prompts change
-    const promptHash = action === 'translate' 
-        ? `${settings.translationProvider}-${settings.overrideGeminiPrompt ? settings.customGeminiPrompt : 'default'}-${settings.overrideTranslateTarget ? settings.customTranslateTarget : targetLang}`
-        : `${settings.romanizationProvider}-${settings.overrideGeminiRomanizePrompt ? settings.customGeminiRomanizePrompt : 'default'}`;
-    
-    const translatedLyricsCacheKey = `${originalLyricsCacheKey} - ${action} - ${targetLang} - ${promptHash}`;
-
-    if (!forceReload) {
-        if (lyricsCache.has(translatedLyricsCacheKey)) return lyricsCache.get(translatedLyricsCacheKey);
-        const dbCached = await getLyricsFromDB(translatedLyricsCacheKey);
-        if (dbCached) {
-            lyricsCache.set(translatedLyricsCacheKey, dbCached);
-            return dbCached;
-        }
-    }
-
-    const originalLyrics = await getOrFetchLyrics(songInfo, forceReload);
-    if (isEmptyLyrics(originalLyrics)) {
-        throw new Error('Original lyrics not found or empty, cannot perform translation/romanization.');
-    }
 
     let translatedData;
     const actualTargetLang = settings.overrideTranslateTarget && settings.customTranslateTarget ? settings.customTranslateTarget : targetLang;
@@ -686,16 +390,14 @@ async function getOrFetchTranslatedLyrics(songInfo, action, targetLang, forceRel
             translatedData = originalLyrics.data.map((line, index) => ({ ...line, translatedText: translatedTexts[index] || line.text }));
         }
     } else if (action === 'romanize') {
-        // Check if lyrics already contain romanization from backend (applied in parseKPoeFormat)
         const hasPrebuiltRomanization = originalLyrics.data.some(line =>
             line.romanizedText || (line.syllabus && line.syllabus.some(syl => syl.romanizedText))
         );
 
         if (hasPrebuiltRomanization) {
             console.log("Using prebuilt romanization from backend.");
-            translatedData = originalLyrics.data; // Use the lyrics as they are, with prebuilt romanization
+            translatedData = originalLyrics.data;
         } else {
-            // If no prebuilt romanization, proceed with external providers
             const provider = settings.romanizationProvider === PROVIDERS.GEMINI && settings.geminiApiKey ? PROVIDERS.GEMINI : PROVIDERS.GOOGLE;
             translatedData = await (provider === PROVIDERS.GEMINI ? romanizeWithGemini(originalLyrics, settings) : romanizeWithGoogle(originalLyrics));
         }
@@ -705,14 +407,325 @@ async function getOrFetchTranslatedLyrics(songInfo, action, targetLang, forceRel
 
     const finalTranslatedLyrics = { ...originalLyrics, data: translatedData };
 
-    lyricsCache.set(translatedLyricsCacheKey, finalTranslatedLyrics);
-    await saveLyricsToDB(translatedLyricsCacheKey, finalTranslatedLyrics);
+    const resultForMemoryCache = { translatedLyrics: finalTranslatedLyrics, originalVersion: originalLyricsVersion };
+    lyricsCache.set(translatedLyricsCacheKey, resultForMemoryCache);
+    await saveTranslationToDB(translatedLyricsCacheKey, finalTranslatedLyrics, originalLyricsVersion);
 
     return finalTranslatedLyrics;
 }
 
+/* =================================================================
+   INDEXEDDB CACHE MANAGEMENT
+   ================================================================= */
 
-/* =================== TRANSLATION & ROMANIZATION PROVIDERS =================== */
+function openDB() {
+    return new Promise((resolve, reject) => {
+        const request = indexedDB.open(CACHE_DB_NAME, CACHE_DB_VERSION);
+        request.onupgradeneeded = event => {
+            const db = event.target.result;
+            if (!db.objectStoreNames.contains(LYRICS_OBJECT_STORE)) {
+                db.createObjectStore(LYRICS_OBJECT_STORE, { keyPath: "key" });
+            }
+        };
+        request.onsuccess = event => resolve(event.target.result);
+        request.onerror = event => reject(event.target.error);
+    });
+}
+
+function openTranslationsDB() {
+    return new Promise((resolve, reject) => {
+        const request = indexedDB.open(TRANSLATIONS_DB_NAME, TRANSLATIONS_DB_VERSION);
+        request.onupgradeneeded = event => {
+            const db = event.target.result;
+            if (!db.objectStoreNames.contains(TRANSLATIONS_OBJECT_STORE)) {
+                db.createObjectStore(TRANSLATIONS_OBJECT_STORE, { keyPath: "key" });
+            }
+        };
+        request.onsuccess = event => resolve(event.target.result);
+        request.onerror = event => reject(event.target.error);
+    });
+}
+
+function openLocalLyricsDB() {
+    return new Promise((resolve, reject) => {
+        const request = indexedDB.open(LOCAL_LYRICS_DB_NAME, LOCAL_LYRICS_DB_VERSION);
+        request.onupgradeneeded = event => {
+            const db = event.target.result;
+            if (!db.objectStoreNames.contains(LOCAL_LYRICS_OBJECT_STORE)) {
+                db.createObjectStore(LOCAL_LYRICS_OBJECT_STORE, { keyPath: "songId" });
+            }
+        };
+        request.onsuccess = event => resolve(event.target.result);
+        request.onerror = event => reject(event.target.error);
+    });
+}
+
+async function saveLocalLyricsToDB(songId, songInfo, lyrics) {
+    const db = await openLocalLyricsDB();
+    const transaction = db.transaction([LOCAL_LYRICS_OBJECT_STORE], "readwrite");
+    const store = transaction.objectStore(LOCAL_LYRICS_OBJECT_STORE);
+    store.put({ songId, songInfo, lyrics, timestamp: Date.now() });
+}
+
+async function getLocalLyricsFromDB(songId) {
+    const db = await openLocalLyricsDB();
+    return new Promise((resolve, reject) => {
+        const transaction = db.transaction([LOCAL_LYRICS_OBJECT_STORE], "readonly");
+        const store = transaction.objectStore(LOCAL_LYRICS_OBJECT_STORE);
+        const request = store.get(songId);
+        request.onsuccess = event => resolve(event.target.result);
+        request.onerror = event => reject(event.target.error);
+    });
+}
+
+async function getLocalLyricsListFromDB() {
+    const db = await openLocalLyricsDB();
+    return new Promise((resolve, reject) => {
+        const transaction = db.transaction([LOCAL_LYRICS_OBJECT_STORE], "readonly");
+        const store = transaction.objectStore(LOCAL_LYRICS_OBJECT_STORE);
+        const request = store.getAll();
+        request.onsuccess = event => resolve(event.target.result.map(item => ({
+            songId: item.songId,
+            songInfo: item.songInfo,
+            timestamp: item.timestamp
+        })));
+        request.onerror = event => reject(event.target.error);
+    });
+}
+
+async function deleteLocalLyricsFromDB(songId) {
+    const db = await openLocalLyricsDB();
+    const transaction = db.transaction([LOCAL_LYRICS_OBJECT_STORE], "readwrite");
+    const store = transaction.objectStore(LOCAL_LYRICS_OBJECT_STORE);
+    store.delete(songId);
+}
+
+async function getLyricsFromDB(key) {
+    const db = await openDB();
+    const { cacheStrategy = CACHE_STRATEGIES.AGGRESSIVE } = await storageLocalGet('cacheStrategy');
+
+    if (cacheStrategy === CACHE_STRATEGIES.NONE) {
+        return null;
+    }
+
+    return new Promise((resolve, reject) => {
+        const transaction = db.transaction([LYRICS_OBJECT_STORE], "readwrite");
+        const store = transaction.objectStore(LYRICS_OBJECT_STORE);
+        const request = store.get(key);
+
+        request.onsuccess = event => {
+            const result = event.target.result;
+            if (result) {
+                const now = Date.now();
+                const expirationTimes = {
+                    [CACHE_STRATEGIES.AGGRESSIVE]: 2 * 60 * 60 * 1000,
+                    [CACHE_STRATEGIES.MODERATE]: 1 * 60 * 60 * 1000,
+                };
+                const expirationTime = expirationTimes[cacheStrategy];
+                const age = now - result.timestamp;
+
+                if (age < expirationTime) {
+                    resolve(result);
+                } else {
+                    store.delete(key);
+                    resolve(null);
+                }
+            } else {
+                resolve(null);
+            }
+        };
+        request.onerror = event => reject(event.target.error);
+    });
+}
+
+async function saveLyricsToDB(key, lyrics, version) {
+    const { cacheStrategy = CACHE_STRATEGIES.AGGRESSIVE } = await storageLocalGet('cacheStrategy');
+    if (cacheStrategy === CACHE_STRATEGIES.NONE) {
+        return;
+    }
+    const db = await openDB();
+    const transaction = db.transaction([LYRICS_OBJECT_STORE], "readwrite");
+    const store = transaction.objectStore(LYRICS_OBJECT_STORE);
+    store.put({ key, lyrics, version, timestamp: Date.now() });
+}
+
+async function getTranslationFromDB(key) {
+    const db = await openTranslationsDB();
+    return new Promise((resolve, reject) => {
+        const transaction = db.transaction([TRANSLATIONS_OBJECT_STORE], "readonly");
+        const store = transaction.objectStore(TRANSLATIONS_OBJECT_STORE);
+        const request = store.get(key);
+        request.onsuccess = event => resolve(event.target.result);
+        request.onerror = event => reject(event.target.error);
+    });
+}
+
+async function saveTranslationToDB(key, translatedLyrics, originalVersion) {
+    const db = await openTranslationsDB();
+    const transaction = db.transaction([TRANSLATIONS_OBJECT_STORE], "readwrite");
+    const store = transaction.objectStore(TRANSLATIONS_OBJECT_STORE);
+    store.put({ key, translatedLyrics, originalVersion });
+}
+
+async function deleteTranslationFromDB(key) {
+    const db = await openTranslationsDB();
+    const transaction = db.transaction([TRANSLATIONS_OBJECT_STORE], "readwrite");
+    const store = transaction.objectStore(TRANSLATIONS_OBJECT_STORE);
+    store.delete(key);
+}
+
+async function clearCacheDB() {
+    const db = await openDB();
+    const transaction = db.transaction([LYRICS_OBJECT_STORE], "readwrite");
+    const store = transaction.objectStore(LYRICS_OBJECT_STORE);
+    store.clear();
+}
+
+async function clearTranslationsDB() {
+    const db = await openTranslationsDB();
+    const transaction = db.transaction([TRANSLATIONS_OBJECT_STORE], "readwrite");
+    const store = transaction.objectStore(TRANSLATIONS_OBJECT_STORE);
+    store.clear();
+}
+
+async function estimateDBSizeInKB(dbName, storeName) {
+    return new Promise((resolve, reject) => {
+        const request = indexedDB.open(dbName);
+        request.onsuccess = event => {
+            const db = event.target.result;
+            if (!db.objectStoreNames.contains(storeName)) {
+                db.close();
+                resolve({ sizeKB: 0, count: 0 });
+                return;
+            }
+            const transaction = db.transaction([storeName], "readonly");
+            const store = transaction.objectStore(storeName);
+            const getAllRequest = store.getAll();
+            const countRequest = store.count();
+
+            let sizeKB = 0;
+            let count = 0;
+            let completed = 0;
+
+            const checkCompletion = () => {
+                if (++completed === 2) {
+                    db.close();
+                    resolve({ sizeKB, count });
+                }
+            };
+
+            getAllRequest.onsuccess = event => {
+                const totalSizeBytes = event.target.result.reduce((acc, record) => {
+                    return acc + new TextEncoder().encode(JSON.stringify(record)).length;
+                }, 0);
+                sizeKB = totalSizeBytes / 1024;
+                checkCompletion();
+            };
+            getAllRequest.onerror = event => reject(event.target.error);
+
+            countRequest.onsuccess = () => {
+                count = countRequest.result;
+                checkCompletion();
+            };
+            countRequest.onerror = () => reject(countRequest.error);
+        };
+        request.onerror = event => {
+            if (event.target.error.name === 'InvalidStateError' || event.target.error.name === 'NotFoundError') {
+                resolve({ sizeKB: 0, count: 0 });
+            } else {
+                reject(event.target.error);
+            }
+        };
+    });
+}
+
+/* =================================================================
+   EXTERNAL API PROVIDERS - LYRICS & SUBTITLES
+   ================================================================= */
+
+async function fetchKPoeLyrics(songInfo, sourceOrder, forceReload, fetchOptions) {
+    for (const baseUrl of KPOE_SERVERS) {
+        const lyrics = await fetchFromKPoeAPI(baseUrl, songInfo, sourceOrder, forceReload, fetchOptions);
+        if (lyrics) return lyrics;
+    }
+    return null;
+}
+
+async function fetchCustomKPoeLyrics(songInfo, customUrl, sourceOrder, forceReload, fetchOptions) {
+    if (!customUrl) return null;
+    return fetchFromKPoeAPI(customUrl, songInfo, sourceOrder, forceReload, fetchOptions);
+}
+
+async function fetchFromKPoeAPI(baseUrl, songInfo, sourceOrder, forceReload, fetchOptions) {
+    const { title, artist, album, duration } = songInfo;
+    const params = new URLSearchParams({ title, artist, duration });
+    if (album) params.append('album', album);
+    if (sourceOrder) params.append('source', sourceOrder);
+    if (forceReload) params.append('forceReload', 'true');
+
+    const url = `${baseUrl.endsWith('/') ? baseUrl : `${baseUrl}/`}v2/lyrics/get?${params.toString()}`;
+
+    try {
+        const response = await fetch(url, forceReload ? { cache: 'no-store' } : fetchOptions);
+        if (response.ok) {
+            const data = await response.json();
+            return parseKPoeFormat(data);
+        }
+        if (response.status == 404 || response.status == 403) {
+            return null;
+        }
+        console.warn(`Failed to fetch from ${baseUrl} (${response.status}): ${response.statusText}`);
+        return null;
+    } catch (error) {
+        console.error(`Network error fetching from ${baseUrl}:`, error);
+        return null;
+    }
+}
+
+async function fetchLRCLibLyrics(songInfo, fetchOptions = {}) {
+    const params = new URLSearchParams({ artist_name: songInfo.artist, track_name: songInfo.title });
+    if (songInfo.album) params.append('album_name', songInfo.album);
+
+    const url = `https://lrclib.net/api/get?${params.toString()}`;
+
+    try {
+        const response = await fetch(url, fetchOptions);
+        if (!response.ok) return null;
+        const data = await response.json();
+        return parseLRCLibFormat(data);
+    } catch (error) {
+        console.error("Error fetching from LRCLIB:", error);
+        return null;
+    }
+}
+
+async function fetchYouTubeSubtitles(songInfo) {
+    try {
+        const subtitleInfo = songInfo.subtitle;
+        if (!subtitleInfo?.captionTracks?.length) return null;
+
+        const validTracks = subtitleInfo.captionTracks.filter(t => t.kind !== 'asr' && !t.vssId?.startsWith('a.'));
+        const selectedTrack = validTracks.find(t => t.isDefault) || validTracks[0];
+
+        if (!selectedTrack) return null;
+
+        const url = new URL(selectedTrack.baseUrl || selectedTrack.url);
+        url.searchParams.set('fmt', 'json3');
+
+        const response = await fetch(url.toString());
+        if (!response.ok) return null;
+
+        const data = await response.json();
+        return parseYouTubeSubtitles(data, songInfo);
+    } catch (error) {
+        console.error("Error fetching YouTube subtitles:", error);
+        return null;
+    }
+}
+
+/* =================================================================
+   EXTERNAL API PROVIDERS - TRANSLATION & ROMANIZATION
+   ================================================================= */
 
 async function romanizeWithGoogle(originalLyrics) {
     if (originalLyrics.type === "Word") {
@@ -739,7 +752,6 @@ async function romanizeWithGoogle(originalLyrics) {
 async function romanizeWithGemini(originalLyrics, settings) {
     if (!settings.geminiApiKey) throw new Error('Gemini API Key is not provided.');
 
-    // 1. Prepare data for the API: map 'syllabus' to 'chunk'
     const structuredInput = originalLyrics.data.map((line, index) => {
         const lineObject = { original_line_index: index, text: line.text };
         if (line.syllabus?.length) {
@@ -751,10 +763,8 @@ async function romanizeWithGemini(originalLyrics, settings) {
         return lineObject;
     });
 
-    // 2. Fetch the full-length, reconstructed romanized data
     const romanizedResult = await fetchGeminiRomanize(structuredInput, settings);
 
-    // 3. Map the result back to the application's original data structure
     return originalLyrics.data.map((originalLine, index) => {
         const romanizedLine = romanizedResult[index];
 
@@ -763,7 +773,6 @@ async function romanizeWithGemini(originalLyrics, settings) {
             return originalLine;
         }
 
-        // Map 'chunk' array from Gemini back to 'syllabus' for internal use.
         const newSyllabus = romanizedLine.chunk ? romanizedLine.chunk.map((chunk, chunkIndex) => {
             const originalSyllable = originalLine.syllabus?.[chunkIndex] || {};
             const romanizedSyllableText = chunk.text || originalSyllable.text || '';
@@ -782,41 +791,23 @@ async function romanizeWithGemini(originalLyrics, settings) {
     });
 }
 
-/**
- * Fetches translations from Gemini using structured output (`responseSchema`).
- */
 async function fetchGeminiTranslate(texts, targetLang, settings) {
-    const { geminiApiKey, geminiModel, overrideGeminiPrompt, customGeminiPrompt } = settings;
+    const { geminiApiKey, geminiModel } = settings;
     const url = `https://generativelanguage.googleapis.com/v1beta/models/${geminiModel}:generateContent?key=${geminiApiKey}`;
 
-    const translationRules = (overrideGeminiPrompt && customGeminiPrompt)
-        ? customGeminiPrompt
-        : `You are an expert AI Lyrical Translator. Your task is to translate song lyrics into {targetLang}, preserving the original meaning, emotion, and natural flow.
-        RULES:
-        1.  Internally identify the language of each line.
-        2.  Translate ALL non-{targetLang} words/phrases into {targetLang}. Do not just romanize them.
-        3.  If a line is already entirely in {targetLang}, copy it to the output exactly as is.
-        4.  For mixed-language lines, translate the non-{targetLang} parts and integrate them naturally.
-        5.  The final output for each line must sound natural in {targetLang}.`;
-
-    const prompt = `
-        ${translationRules.replace(/{targetLang}/g, targetLang)}
-        
-        Now, process the following lyrics based on these rules.
-        Lyrics to translate:
-        ${JSON.stringify(texts)}
-    `;
+    const prompt = createTranslationPrompt(settings, texts, targetLang);
 
     const requestBody = {
         contents: [{ parts: [{ text: prompt }] }],
         generation_config: {
+            temperature: 0.0,
             response_mime_type: "application/json",
             responseSchema: {
                 type: "OBJECT",
                 properties: {
                     translated_lyrics: {
                         type: "ARRAY",
-                        description: "An array of translated lyric lines, maintaining the original order.",
+                        description: "An array of translated lyric lines, maintaining the original order and count.",
                         items: { type: "STRING" }
                     },
                     target_language: {
@@ -848,26 +839,97 @@ async function fetchGeminiTranslate(texts, targetLang, settings) {
 
     try {
         const parsedJson = JSON.parse(data.candidates[0].content.parts[0].text);
-        if (Array.isArray(parsedJson.translated_lyrics)) {
-            return parsedJson.translated_lyrics;
-        } else {
-            throw new Error('Invalid JSON structure in Gemini response.');
+        
+        if (!Array.isArray(parsedJson.translated_lyrics)) {
+            throw new Error('Invalid JSON structure: translated_lyrics is not an array.');
         }
+        
+        if (parsedJson.translated_lyrics.length !== texts.length) {
+            throw new Error(`Length mismatch: expected ${texts.length} lines, got ${parsedJson.translated_lyrics.length}`);
+        }
+        
+        return parsedJson.translated_lyrics;
     } catch (e) {
         console.error("Gemini response parsing failed:", e, "\nRaw response:", data.candidates[0].content.parts[0].text);
         throw new Error(`Gemini translation failed: Could not parse valid JSON. ${e.message}`);
     }
 }
 
+async function fetchGoogleTranslate(text, targetLang) {
+    if (!text.trim()) return "";
+    const url = `https://translate.googleapis.com/translate_a/single?client=gtx&sl=auto&tl=${targetLang}&dt=t&q=${encodeURIComponent(text)}`;
+    const response = await fetch(url);
+    if (!response.ok) throw new Error(`Google Translate API error: ${response.statusText}`);
+    const data = await response.json();
+    return data?.[0]?.map(segment => segment?.[0]).join('') || text;
+}
 
-/**
- * Pre-processes lyrics for Gemini:
- * 1. Skips purely Latin lines (which don't need romanization).
- * 2. Compacts repeated non-Latin lines to save API tokens.
- * 3. Creates a plan to reconstruct the full list later.
- * @param {Object[]} structuredInput - The original array of lyric objects.
- * @returns {{lyricsForApi: Object[], reconstructionPlan: Object[]}}
- */
+async function fetchGoogleRomanize(texts) {
+    const contextText = texts.join(' ');
+    if (isPurelyLatinScript(contextText)) return texts;
+
+    let sourceLang = 'auto';
+    try {
+        const detectUrl = `https://translate.googleapis.com/translate_a/single?client=gtx&sl=auto&tl=en&dt=t&q=${encodeURIComponent(contextText)}`;
+        const detectResponse = await fetch(detectUrl);
+        if (detectResponse.ok) {
+            const detectData = await detectResponse.json();
+            sourceLang = detectData[2] || 'auto';
+        }
+    } catch (e) {
+        console.error("Language detection for romanization failed, falling back to 'auto'.", e);
+    }
+
+    const romanizedTexts = [];
+    for (const text of texts) {
+        if (isPurelyLatinScript(text)) {
+            romanizedTexts.push(text);
+            continue;
+        }
+        try {
+            const romanizeUrl = `https://translate.googleapis.com/translate_a/single?client=gtx&sl=${sourceLang}&tl=en&hl=en&dt=rm&q=${encodeURIComponent(text)}`;
+            const romanizeResponse = await fetch(romanizeUrl);
+            const romanizeData = await romanizeResponse.json();
+            romanizedTexts.push(romanizeData?.[0]?.[0]?.[3] || text);
+        } catch (error) {
+            console.error(`Error romanizing text "${text}":`, error);
+            romanizedTexts.push(text);
+        }
+    }
+    return romanizedTexts;
+}
+
+
+/* =================================================================
+   EXTERNAL API PROVIDERS - SPONSORBLOCK
+   ================================================================= */
+
+async function fetchSponsorSegments(videoId) {
+    const SPONSORBLOCK_API = "https://sponsor.ajay.app/api/skipSegments";
+    const categories = ["sponsor", "selfpromo", "interaction", "intro", "outro", "preview", "filler", "music_offtopic"];
+    const url = `${SPONSORBLOCK_API}?videoID=${videoId}&categories=[${categories.map(c => `"${c}"`).join(',')}]`;
+
+    try {
+        const response = await fetch(url);
+        if (!response.ok) {
+            if (response.status === 404) {
+                console.log(`SponsorBlock segments not found for videoId: ${videoId}`);
+                return [];
+            }
+            throw new Error(`SponsorBlock API error: ${response.statusText}`);
+        }
+        const segments = await response.json();
+        return segments;
+    } catch (error) {
+        console.error("Error fetching SponsorBlock segments:", error);
+        return [];
+    }
+}
+
+/* =================================================================
+   GEMINI ROMANIZATION - PREPARATION, VALIDATION & HELPERS
+   ================================================================= */
+
 function prepareLyricsForGemini(structuredInput) {
     const lyricsForApi = [];
     const reconstructionPlan = [];
@@ -884,7 +946,12 @@ function prepareLyricsForGemini(structuredInput) {
             reconstructionPlan.push({ type: 'api', apiIndex: contentToApiIndexMap.get(contentKey), originalIndex });
         } else {
             const newApiIndex = lyricsForApi.length;
-            lyricsForApi.push({ ...line, original_line_index: newApiIndex });
+            // Only include chunk if it exists and has content
+            const apiLine = { text: line.text, original_line_index: newApiIndex };
+            if (line.chunk && line.chunk.length > 0) {
+                apiLine.chunk = line.chunk;
+            }
+            lyricsForApi.push(apiLine);
             contentToApiIndexMap.set(contentKey, newApiIndex);
             reconstructionPlan.push({ type: 'api', apiIndex: newApiIndex, originalIndex });
         }
@@ -893,14 +960,7 @@ function prepareLyricsForGemini(structuredInput) {
     return { lyricsForApi, reconstructionPlan };
 }
 
-/**
- * Reconstructs the full-length romanized lyric array from the API's compacted response
- * and the pre-computed reconstruction plan.
- * @param {Object[]} romanizedApiLyrics - The romanized data from the API (for unique non-Latin lines).
- * @param {Object[]} reconstructionPlan - The plan to rebuild the original list structure.
- * @returns {Object[]} The full-length array of romanized lyrics.
- */
-function reconstructRomanizedLyrics(romanizedApiLyrics, reconstructionPlan) {
+function reconstructRomanizedLyrics(romanizedApiLyrics, reconstructionPlan, hasAnyChunks = false) {
     const fullList = [];
     reconstructionPlan.forEach(planItem => {
         let reconstructedLine;
@@ -908,14 +968,14 @@ function reconstructRomanizedLyrics(romanizedApiLyrics, reconstructionPlan) {
             reconstructedLine = {
                 ...planItem.data,
                 text: planItem.data.text,
-                chunk: planItem.data.chunk ? planItem.data.chunk.map(c => ({ ...c, text: c.text })) : undefined,
+                chunk: hasAnyChunks && planItem.data.chunk ? planItem.data.chunk.map(c => ({ ...c, text: c.text })) : undefined,
                 original_line_index: planItem.originalIndex,
             };
         } else {
             const apiResult = romanizedApiLyrics[planItem.apiIndex];
             reconstructedLine = {
                 ...apiResult,
-                original_line_index: planItem.originalIndex, // Restore original index
+                original_line_index: planItem.originalIndex,
             };
         }
         fullList[planItem.originalIndex] = reconstructedLine;
@@ -923,174 +983,41 @@ function reconstructRomanizedLyrics(romanizedApiLyrics, reconstructionPlan) {
     return fullList;
 }
 
-/**
- * Fetches romanizations from Gemini.
- * This version is optimized to skip Latin lines and compact duplicates before calling the API.
- * It uses a multi-turn conversation for a "reflection" step if the first response is invalid.
- * Now supports selective reflection - only asking to fix problematic lines.
- * @param {Object[]} structuredInput - Array of structured lyric lines using 'chunk'.
- * @param {Object} settings - User settings including API key and custom prompts.
- * @returns {Promise<Object[]>} The full-length, reconstructed array of romanized lyric objects.
- */
 async function fetchGeminiRomanize(structuredInput, settings) {
     const { geminiApiKey, geminiRomanizationModel, overrideGeminiRomanizePrompt, customGeminiRomanizePrompt } = settings;
     const url = `https://generativelanguage.googleapis.com/v1beta/models/${geminiRomanizationModel}:generateContent?key=${geminiApiKey}`;
 
     const { lyricsForApi, reconstructionPlan } = prepareLyricsForGemini(structuredInput);
 
+    // Check if any lines have chunks to determine schema type
+    const hasAnyChunks = lyricsForApi.some(line => line.chunk && line.chunk.length > 0);
+
     if (lyricsForApi.length === 0) {
-        return reconstructRomanizedLyrics([], reconstructionPlan);
+        return reconstructRomanizedLyrics([], reconstructionPlan, hasAnyChunks);
     }
 
-    const initialUserPrompt = (overrideGeminiRomanizePrompt && customGeminiRomanizePrompt)
-    ? customGeminiRomanizePrompt : `You are a linguistic expert AI specializing ONLY in precise **natural phonetic romanization** (NOT translation).
-    You MUST follow these rules like a strict compiler. Any violation is an error.
-    
-    # GLOBAL PRINCIPLES
-    1. **Romanization only** – never translate or explain meaning.
-    2. **Natural phonetic style for ALL languages**:
-       - Arabic → assimilate natural sounds: e.g. "fi al-fasl" → "fil fasl", "al-shams" → "ash shams".
-       - Japanese → Hepburn phonetic: "こんにちは" → "konnichiwa".
-       - Korean → spoken style Revised Romanization: "안녕하세요" → "annyeong haseyo".
-       - Chinese → Pinyin without tone marks, natural spacing: "你好" → "ni hao".
-       - Other languages → their most widely recognized **natural phonetic pronunciation**, not academic strict forms.
-    3. **Preserve original segmentation** – do not merge or drop words.
-    4. **No extra text** – never add explanations, notes, or translation.
-    5. **Case & style** – all output in lowercase Latin letters, unless capitalization is required in the source (e.g. names).
-    
-    # GOLDEN RULE
-    - Romanize the **entire line** naturally first.  
-    - THEN split the romanized line into chunks matching the input.  
-    - Chunks are subdivisions of the final romanized line, NOT independent romanizations.  
-    - Always preserve final vowel sounds from the original script if they exist.
-    - Add space if it was a different word, do not trim them.
-    
-    # CHUNK RULES
-    1. Chunk count must **exactly** match input.  
-    2. Every chunk must contain some text (never empty).  
-    3. Distribute text proportionally. Do not merge all into one chunk.  
-    4. Preserve \`chunkIndex\` values strictly.  
-    5. Preserve line order with \`original_line_index\`.  
-    
-    # VALIDATION CHECKLIST
-    Before finalizing, you MUST ensure for every line:
-    - The number of chunks matches input.  
-    - No chunk has empty text.  
-    - Romanization is natural, flowing, and phonetically correct.  
-    - Distribution across chunks is proportional.  
-    
-    # EXAMPLES
-    
-    ### Arabic (natural phonetic)
-    Input: ["أَنْتَ ", "فِي ", "الْفَصْلِ"]  
-    ❌ Wrong: ["anta", "fi", "al-fasli"]  
-    ✅ Correct: ["anta", "fil", "fasli"]
-    
-    Input: ["السلام", "عليكم"]  
-    ❌ Wrong: ["as", "salamualaikum"]  
-    ✅ Correct: ["assalam", "alaikum"]
-    
-    ---
-    
-    ### Japanese (natural phonetic)
-    Input: ["こん", "にち", "は"]  
-    ❌ Wrong: ["konnichiwa", "", ""]  
-    ✅ Correct: ["kon", "nichi", "wa"]
-    
-    ---
-    
-    ### Korean (natural phonetic)
-    Input: ["안녕", "하세요"]  
-    ❌ Wrong: ["annyeong haseyo", ""]  
-    ✅ Correct: ["annyeong", "haseyo"]
-    
-    ---
-    
-    ### Chinese (natural phonetic)
-    Input: ["你", "好"]  
-    ❌ Wrong: ["nihao", ""]  
-    ✅ Correct: ["ni", "hao"]
-    
-    ---
-    
-    # TASK
-    Now, romanize the following lyrics **strictly following all rules above**:
-${JSON.stringify(lyricsForApi, null, 2)}`;
+    const initialUserPrompt = (overrideGeminiRomanizePrompt && customGeminiRomanizePrompt) ?
+        customGeminiRomanizePrompt :
+        createRomanizationPrompt(lyricsForApi, hasAnyChunks);
 
-    const schema = {
-        type: "OBJECT",
-        properties: {
-            romanized_lyrics: {
-                type: "ARRAY",
-                description: "An array of romanized lyric line objects, matching the input array's order and length.",
-                items: {
-                    type: "OBJECT",
-                    properties: {
-                        text: { type: "STRING", description: "The fully romanized text of the entire line." },
-                        original_line_index: { type: "INTEGER", description: "The original index of the line from the input, which must be preserved." },
-                        chunk: {
-                            type: "ARRAY",
-                            nullable: true,
-                            items: {
-                                type: "OBJECT",
-                                properties: {
-                                    text: { type: "STRING", description: "The text of a single romanized chunk. MUST NOT be empty." },
-                                    chunkIndex: { type: "INTEGER", description: "The original index of the chunk, which must be preserved." }
-                                },
-                                required: ["text", "chunkIndex"]
-                            }
-                        }
-                    },
-                    required: ["text", "original_line_index"]
-                }
-            }
-        },
-        required: ["romanized_lyrics"]
-    };
-
-    const selectiveSchema = {
-        type: "OBJECT",
-        properties: {
-            fixed_lines: {
-                type: "ARRAY",
-                description: "An array of corrected romanized lyric line objects for only the problematic lines.",
-                items: {
-                    type: "OBJECT",
-                    properties: {
-                        text: { type: "STRING", description: "The fully romanized text of the entire line." },
-                        original_line_index: { type: "INTEGER", description: "The original index of the line from the input, which must be preserved." },
-                        chunk: {
-                            type: "ARRAY",
-                            nullable: true,
-                            items: {
-                                type: "OBJECT",
-                                properties: {
-                                    text: { type: "STRING", description: "The text of a single romanized chunk. MUST NOT be empty." },
-                                    chunkIndex: { type: "INTEGER", description: "The original index of the chunk, which must be preserved." }
-                                },
-                                required: ["text", "chunkIndex"]
-                            }
-                        }
-                    },
-                    required: ["text", "original_line_index"]
-                }
-            }
-        },
-        required: ["fixed_lines"]
-    };
+    const schema = createRomanizationSchema(hasAnyChunks);
+    const selectiveSchema = createSelectiveRomanizationSchema(hasAnyChunks);
 
     let currentContents = [{ role: 'user', parts: [{ text: initialUserPrompt }] }];
     let lastValidResponse = null;
     const MAX_RETRIES = 5;
+    let sameErrorCount = 0;
+    let lastError = null;
 
     for (let attempt = 1; attempt <= MAX_RETRIES; attempt++) {
         let responseText;
-        const isSelectiveFix = attempt > 1 && lastValidResponse !== null;
+        const isSelectiveFix = attempt > 1 && lastValidResponse !== null && sameErrorCount < 3;
 
         try {
             const requestBody = {
                 contents: currentContents,
                 generation_config: {
+                    temperature: 0.0,
                     response_mime_type: "application/json",
                     responseSchema: isSelectiveFix ? selectiveSchema : schema
                 }
@@ -1151,11 +1078,30 @@ ${JSON.stringify(lyricsForApi, null, 2)}`;
 
         if (validationResult.isValid) {
             console.log(`Gemini romanization succeeded on attempt ${attempt}.`);
-            return reconstructRomanizedLyrics(finalResponse.romanized_lyrics, reconstructionPlan);
+            return reconstructRomanizedLyrics(finalResponse.romanized_lyrics, reconstructionPlan, hasAnyChunks);
         } else {
             console.warn(`Attempt ${attempt} failed validation. Errors: ${validationResult.errors.join(', ')}`);
+
+            // Check if same error is repeating
+            const currentError = validationResult.errors[0];
+            if (currentError === lastError) {
+                sameErrorCount++;
+            } else {
+                sameErrorCount = 1;
+                lastError = currentError;
+            }
+
             if (attempt === MAX_RETRIES) {
                 throw new Error(`Gemini romanization failed after ${MAX_RETRIES} attempts. Final validation errors: ${validationResult.errors.join(', ')}`);
+            }
+
+            // If same error repeating, start fresh conversation
+            if (sameErrorCount >= 3) {
+                console.log("Same error repeating, starting fresh conversation");
+                currentContents = [{ role: 'user', parts: [{ text: initialUserPrompt }] }];
+                sameErrorCount = 0;
+                lastValidResponse = null;
+                continue;
             }
 
             const problematicLines = getProblematicLines(lyricsForApi, finalResponse, validationResult.detailedErrors);
@@ -1163,55 +1109,10 @@ ${JSON.stringify(lyricsForApi, null, 2)}`;
             currentContents.push({ role: 'model', parts: [{ text: responseText }] });
 
             if (problematicLines.length > 0 && problematicLines.length < lyricsForApi.length * 0.8) {
-                // IMPROVED: More specific selective fix prompt
-                const selectivePrompt = `CRITICAL ERROR CORRECTION NEEDED: Your previous response had structural errors in ${problematicLines.length} specific lines.
-
-**MOST COMMON ERRORS TO FIX:**
-1. Empty chunks - chunks with "" or no text
-2. Uneven distribution - one chunk gets all text, others empty  
-3. Chunk count mismatch
-
-**SPECIFIC LINES THAT NEED FIXING:**
-${JSON.stringify(problematicLines.map(line => ({
-                    original_line_index: line.original_line_index,
-                    original_text: line.text,
-                    required_chunk_count: line.chunk ? line.chunk.length : 0,
-                    original_chunks: line.chunk ? line.chunk.map(c => c.text) : null,
-                    errors: validationResult.detailedErrors.find(e => e.lineIndex === line.original_line_index)?.errors || []
-                })), null, 2)}
-
-**CORRECTION RULES:**
-1. Every chunk MUST have non-empty text
-2. Distribute text proportionally across chunks
-3. Never leave chunks empty while others have all the text
-4. Match the exact chunk count specified
-
-PROVIDE ONLY THE CORRECTED LINES in this format:
-{
-  "fixed_lines": [
-    // Only the corrected lines with proper chunk distribution
-  ]
-}`;
-
+                const selectivePrompt = createSelectiveFixPrompt(problematicLines, validationResult, hasAnyChunks);
                 currentContents.push({ role: 'user', parts: [{ text: selectivePrompt }] });
             } else {
-                // Full re-generation prompt with better guidance
-                const fullPrompt = `CRITICAL STRUCTURAL ERRORS DETECTED: Your previous response had major issues with chunk distribution and text partitioning.
-
-**MOST SERIOUS ERRORS:**
-${validationResult.errors.slice(0, 10).join('\n- ')}${validationResult.errors.length > 10 ? '\n- ... and more' : ''}
-
-**REMEMBER THE GOLDEN RULE:** 
-1. Romanize the FULL LINE text first
-2. Then intelligently split that romanized text into chunks
-3. NEVER leave any chunk empty
-4. Distribute text proportionally
-
-**Original lyrics for reference:**
-${JSON.stringify(lyricsForApi, null, 2)}
-
-PROVIDE A COMPLETE CORRECTED RESPONSE with proper chunk distribution.`;
-
+                const fullPrompt = createFullRetryPrompt(validationResult, lyricsForApi, hasAnyChunks);
                 currentContents.push({ role: 'user', parts: [{ text: fullPrompt }] });
             }
         }
@@ -1220,18 +1121,122 @@ PROVIDE A COMPLETE CORRECTED RESPONSE with proper chunk distribution.`;
     throw new Error("Unexpected error: Gemini romanization process completed without success or explicit failure.");
 }
 
-/**
- * Extracts problematic lines based on validation errors
- * @param {Object[]} originalLyricsForApi - The original lyrics sent to API
- * @param {Object} response - The response from Gemini
- * @param {Object[]} detailedErrors - Detailed error information per line
- * @returns {Object[]} Array of problematic lines that need fixing
- */
+
+function createRomanizationSchema(hasAnyChunks) {
+    const baseSchema = {
+        type: "OBJECT",
+        properties: {
+            romanized_lyrics: {
+                type: "ARRAY",
+                description: "An array of romanized lyric line objects, matching the input array's order and length.",
+                items: {
+                    type: "OBJECT",
+                    properties: {
+                        text: { type: "STRING", description: "The fully romanized text of the entire line." },
+                        original_line_index: { type: "INTEGER", description: "The original index of the line from the input, which must be preserved." }
+                    },
+                    required: ["text", "original_line_index"]
+                }
+            }
+        },
+        required: ["romanized_lyrics"]
+    };
+
+    if (hasAnyChunks) {
+        baseSchema.properties.romanized_lyrics.items.properties.chunk = {
+            type: "ARRAY",
+            nullable: true,
+            description: "ONLY include if the original line had chunks. Otherwise omit entirely.",
+            items: {
+                type: "OBJECT",
+                properties: {
+                    text: { type: "STRING", description: "The text of a single romanized chunk. MUST NOT be empty." },
+                    chunkIndex: { type: "INTEGER", description: "The original index of the chunk, which must be preserved." }
+                },
+                required: ["text", "chunkIndex"]
+            }
+        };
+    }
+
+    return baseSchema;
+}
+
+function createSelectiveRomanizationSchema(hasAnyChunks) {
+    const baseSchema = {
+        type: "OBJECT",
+        properties: {
+            fixed_lines: {
+                type: "ARRAY",
+                description: "An array of corrected romanized lyric line objects for only the problematic lines.",
+                items: {
+                    type: "OBJECT",
+                    properties: {
+                        text: { type: "STRING", description: "The fully romanized text of the entire line." },
+                        original_line_index: { type: "INTEGER", description: "The original index of the line from the input, which must be preserved." }
+                    },
+                    required: ["text", "original_line_index"]
+                }
+            }
+        },
+        required: ["fixed_lines"]
+    };
+
+    if (hasAnyChunks) {
+        baseSchema.properties.fixed_lines.items.properties.chunk = {
+            type: "ARRAY",
+            nullable: true,
+            description: "ONLY include if the original line had chunks. Otherwise omit entirely.",
+            items: {
+                type: "OBJECT",
+                properties: {
+                    text: { type: "STRING", description: "The text of a single romanized chunk. MUST NOT be empty." },
+                    chunkIndex: { type: "INTEGER", description: "The original index of the chunk, which must be preserved." }
+                },
+                required: ["text", "chunkIndex"]
+            }
+        };
+    }
+
+    return baseSchema;
+}
+
+function createSelectiveFixPrompt(problematicLines, validationResult, hasAnyChunks) {
+    return `CRITICAL ERROR CORRECTION NEEDED: Your previous response had structural errors.
+
+**MOST CRITICAL RULE**: ${hasAnyChunks ?
+            'Only add chunk arrays to lines that originally had them. Do not add chunks to line-only lyrics.' :
+            'These are LINE-SYNCED lyrics only. DO NOT add any chunk arrays to any lines.'
+        }
+
+**SPECIFIC LINES THAT NEED FIXING:**
+${JSON.stringify(problematicLines.map(line => ({
+            original_line_index: line.original_line_index,
+            original_text: line.text,
+            had_chunks: !!(line.chunk && line.chunk.length > 0),
+            errors: validationResult.detailedErrors.find(e => e.lineIndex === line.original_line_index)?.errors || []
+        })), null, 2)}
+
+PROVIDE ONLY THE CORRECTED LINES in the proper format.`;
+}
+
+function createFullRetryPrompt(validationResult, lyricsForApi, hasAnyChunks) {
+    return `CRITICAL STRUCTURAL ERRORS DETECTED: Your previous response had major structural issues.
+
+**MOST SERIOUS ERROR**: ${hasAnyChunks ?
+            'You are adding chunk arrays to lines that should not have them. Only lines that originally had chunks should have chunk arrays in the output.' :
+            'You are adding chunk arrays when these lyrics are LINE-SYNCED only. DO NOT add any chunk arrays.'
+        }
+
+**Original lyrics structure for reference:**
+${JSON.stringify(lyricsForApi, null, 2)}
+
+PROVIDE A COMPLETE CORRECTED RESPONSE respecting the original structure.`;
+}
+
 function getProblematicLines(originalLyricsForApi, response, detailedErrors = []) {
     const problematicLines = [];
     const problematicIndices = new Set();
 
-    // Extract line indices from detailed errors
     if (detailedErrors && detailedErrors.length > 0) {
         detailedErrors.forEach(error => {
             if (error.lineIndex !== undefined) {
@@ -1240,7 +1245,6 @@ function getProblematicLines(originalLyricsForApi, response, detailedErrors = []
         });
     }
 
-    // validation with specific focus on empty chunks and distribution
     if (response.romanized_lyrics) {
         response.romanized_lyrics.forEach((line, index) => {
             const originalLine = originalLyricsForApi[index];
@@ -1249,8 +1253,10 @@ function getProblematicLines(originalLyricsForApi, response, detailedErrors = []
             let hasIssue = false;
             const issues = [];
 
-            // Check for empty chunks (high priority issue)
-            if (Array.isArray(line.chunk) && line.chunk.length > 0) {
+            // Check for unwanted chunk arrays
+            const originalHasChunks = Array.isArray(originalLine.chunk) && originalLine.chunk.length > 0;
+
+            if (originalHasChunks && Array.isArray(line.chunk) && line.chunk.length > 0) {
                 const emptyChunks = line.chunk.filter(chunk => !chunk.text || chunk.text.trim() === '');
                 if (emptyChunks.length > 0) {
                     hasIssue = true;
@@ -1258,7 +1264,6 @@ function getProblematicLines(originalLyricsForApi, response, detailedErrors = []
                     console.log(`Line ${index}: Empty chunks detected:`, line.chunk.map(c => `"${c.text}"`));
                 }
 
-                // Check for uneven distribution (another high priority issue)
                 const nonEmptyChunks = line.chunk.filter(chunk => chunk.text && chunk.text.trim() !== '');
                 if (nonEmptyChunks.length === 1 && line.chunk.length > 1) {
                     hasIssue = true;
@@ -1266,14 +1271,12 @@ function getProblematicLines(originalLyricsForApi, response, detailedErrors = []
                     console.log(`Line ${index}: Uneven distribution:`, line.chunk.map(c => `"${c.text}"`));
                 }
 
-                // Check for chunk count mismatch
                 if (originalLine.chunk && originalLine.chunk.length !== line.chunk.length) {
                     hasIssue = true;
                     issues.push(`chunk count mismatch (expected ${originalLine.chunk.length}, got ${line.chunk.length})`);
                 }
             }
 
-            // Add other validation checks...
             if (line.original_line_index !== index) {
                 hasIssue = true;
                 issues.push(`incorrect line index`);
@@ -1291,7 +1294,6 @@ function getProblematicLines(originalLyricsForApi, response, detailedErrors = []
         });
     }
 
-    // Create problematic lines array
     problematicIndices.forEach(index => {
         if (originalLyricsForApi[index]) {
             problematicLines.push({
@@ -1305,19 +1307,13 @@ function getProblematicLines(originalLyricsForApi, response, detailedErrors = []
     return problematicLines;
 }
 
-/**
- * Merges selective fixes into the last valid response
- * @param {Object} lastValidResponse - The last response that was mostly correct
- * @param {Object[]} fixedLines - Array of corrected lines
- * @returns {Object} Merged response with fixes applied
- */
 function mergeSelectiveFixes(lastValidResponse, fixedLines) {
     if (!lastValidResponse || !lastValidResponse.romanized_lyrics) {
         console.warn('No valid previous response to merge with, using fixed lines as base');
         return { romanized_lyrics: fixedLines };
     }
 
-    const mergedResponse = JSON.parse(JSON.stringify(lastValidResponse)); // Deep copy
+    const mergedResponse = JSON.parse(JSON.stringify(lastValidResponse));
 
     console.log(`Merging ${fixedLines.length} selective fixes into previous response`);
 
@@ -1338,13 +1334,6 @@ function mergeSelectiveFixes(lastValidResponse, fixedLines) {
     return mergedResponse;
 }
 
-/**
- * Validates the structural integrity of the Gemini romanization response.
- * Enhanced version that provides detailed error information per line.
- * @param {Object[]} originalLyricsForApi - The compacted array of lyric objects sent to the API.
- * @param {Object} geminiResponse - The parsed JSON object received from Gemini.
- * @returns {{isValid: boolean, errors: string[], detailedErrors: Object[]}} Validation result.
- */
 function validateRomanizationResponse(originalLyricsForApi, geminiResponse) {
     const errors = [];
     const detailedErrors = [];
@@ -1363,7 +1352,6 @@ function validateRomanizationResponse(originalLyricsForApi, geminiResponse) {
         const originalLine = originalLyricsForApi[index];
         const lineErrors = [];
 
-        // Basic validation
         if (romanizedLine.original_line_index !== index) {
             const error = `Line ${index}: 'original_line_index' is incorrect. Expected ${index}, got ${romanizedLine.original_line_index}.`;
             errors.push(error);
@@ -1379,7 +1367,12 @@ function validateRomanizationResponse(originalLyricsForApi, geminiResponse) {
         const originalHasChunks = Array.isArray(originalLine.chunk) && originalLine.chunk.length > 0;
         const romanizedHasChunks = Array.isArray(romanizedLine.chunk);
 
-        if (originalHasChunks) {
+        // Key fix: Check for unwanted chunk arrays
+        if (!originalHasChunks && romanizedHasChunks) {
+            const error = `Line ${index}: A 'chunk' array was provided, but the original did not have one.`;
+            errors.push(error);
+            lineErrors.push(error);
+        } else if (originalHasChunks) {
             if (!romanizedHasChunks) {
                 const error = `Line ${index}: A 'chunk' array was expected but is missing.`;
                 errors.push(error);
@@ -1395,10 +1388,6 @@ function validateRomanizationResponse(originalLyricsForApi, geminiResponse) {
                     lineErrors.push(...chunkValidationResult.errors);
                 }
             }
-        } else if (romanizedHasChunks) {
-            const error = `Line ${index}: A 'chunk' array was provided, but the original did not have one.`;
-            errors.push(error);
-            lineErrors.push(error);
         }
 
         if (lineErrors.length > 0) {
@@ -1415,7 +1404,6 @@ function validateRomanizationResponse(originalLyricsForApi, geminiResponse) {
 function validateChunkDistribution(originalLine, romanizedLine, lineIndex) {
     const errors = [];
 
-    // Check for empty chunks
     const emptyChunks = romanizedLine.chunk.filter((chunk, idx) =>
         !chunk.text || chunk.text.trim() === ''
     );
@@ -1424,7 +1412,6 @@ function validateChunkDistribution(originalLine, romanizedLine, lineIndex) {
         errors.push(`Line ${lineIndex}: Found ${emptyChunks.length} empty chunk(s)`);
     }
 
-    // Check for uneven distribution (one chunk gets all text, others empty)
     const nonEmptyChunks = romanizedLine.chunk.filter(chunk =>
         chunk.text && chunk.text.trim() !== ''
     );
@@ -1433,7 +1420,6 @@ function validateChunkDistribution(originalLine, romanizedLine, lineIndex) {
         errors.push(`Line ${lineIndex}: All text concentrated in one chunk while others are empty`);
     }
 
-    // Advanced text coherence check with better algorithm
     const coherenceResult = validateTextCoherence(romanizedLine, lineIndex);
     if (!coherenceResult.isValid) {
         errors.push(...coherenceResult.errors);
@@ -1445,21 +1431,17 @@ function validateChunkDistribution(originalLine, romanizedLine, lineIndex) {
 function validateTextCoherence(romanizedLine, lineIndex) {
     const errors = [];
 
-    // Get texts
     const mergedChunkText = romanizedLine.chunk.map(c => c.text || '').join('');
     const lineText = romanizedLine.text || '';
 
-    // Normalize for comparison (remove extra spaces, convert to lowercase)
     const normalizedMerged = normalizeTextForComparison(mergedChunkText);
     const normalizedLine = normalizeTextForComparison(lineText);
 
     if (normalizedMerged !== normalizedLine) {
-        // Calculate similarity using multiple metrics
         const distance = levenshteinDistance(normalizedMerged, normalizedLine);
         const maxLength = Math.max(normalizedMerged.length, normalizedLine.length);
         const percentageDifference = (maxLength === 0) ? 0 : (distance / maxLength) * 100;
 
-        // More lenient threshold for romanization differences
         if (percentageDifference > 20) {
             errors.push(`Line ${lineIndex}: Significant text mismatch (${percentageDifference.toFixed(1)}% difference)`);
             console.log(`Text mismatch details:
@@ -1473,157 +1455,53 @@ function validateTextCoherence(romanizedLine, lineIndex) {
     return { isValid: errors.length === 0, errors };
 }
 
-function normalizeTextForComparison(text) {
-    return text
-        .replace(/\s+/g, ' ')  // Replace multiple spaces with single space
-        .trim()
-        .toLowerCase()
-        .replace(/[^\w\s]/g, ''); // Remove punctuation for better comparison
-}
+/* =================================================================
+   DATA PARSERS
+   ================================================================= */
 
+function parseKPoeFormat(data) {
+    if (!data?.lyrics || !Array.isArray(data.lyrics) || data.lyrics.length === 0) return null;
+    return {
+        type: data.type,
+        data: data.lyrics.map(item => {
+            const startTime = Number(item.time || 0) / 1000;
+            const duration = Number(item.duration || 0) / 1000;
+            const syllabus = (item.syllabus || []).map(syl => ({
+                text: syl.text || '',
+                time: Number(syl.time || 0),
+                duration: Number(syl.duration || 0),
+                isBackground: syl.isBackground || false
+            }));
+            const element = item.element || [];
 
+            let lineRomanizedText = undefined;
+            let romanizedSyllabus = undefined;
 
-async function fetchGoogleTranslate(text, targetLang) {
-    if (!text.trim()) return "";
-    const url = `https://translate.googleapis.com/translate_a/single?client=gtx&sl=auto&tl=${targetLang}&dt=t&q=${encodeURIComponent(text)}`;
-    const response = await fetch(url);
-    if (!response.ok) throw new Error(`Google Translate API error: ${response.statusText}`);
-    const data = await response.json();
-    return data?.[0]?.map(segment => segment?.[0]).join('') || text;
-}
+            if (item.transliteration) {
+                if (item.transliteration.syllabus && item.transliteration.syllabus.length === syllabus.length) {
+                    romanizedSyllabus = syllabus.map((syl, index) => ({
+                        ...syl,
+                        romanizedText: item.transliteration.syllabus[index].text || syl.text
+                    }));
+                    lineRomanizedText = item.transliteration.text || item.text;
+                } else if (item.transliteration.text) {
+                    lineRomanizedText = item.transliteration.text;
+                }
+            }
 
-async function fetchGoogleRomanize(texts) {
-    const contextText = texts.join(' ');
-    if (isPurelyLatinScript(contextText)) return texts;
-
-    let sourceLang = 'auto';
-    try {
-        const detectUrl = `https://translate.googleapis.com/translate_a/single?client=gtx&sl=auto&tl=en&dt=t&q=${encodeURIComponent(contextText)}`;
-        const detectResponse = await fetch(detectUrl);
-        if (detectResponse.ok) {
-            const detectData = await detectResponse.json();
-            sourceLang = detectData[2] || 'auto';
-        }
-    } catch (e) {
-        console.error("Language detection for romanization failed, falling back to 'auto'.", e);
-    }
-
-    const romanizedTexts = [];
-    for (const text of texts) {
-        if (isPurelyLatinScript(text)) {
-            romanizedTexts.push(text);
-            continue;
-        }
-        try {
-            const romanizeUrl = `https://translate.googleapis.com/translate_a/single?client=gtx&sl=${sourceLang}&tl=en&hl=en&dt=rm&q=${encodeURIComponent(text)}`;
-            const romanizeResponse = await fetch(romanizeUrl);
-            const romanizeData = await romanizeResponse.json();
-            romanizedTexts.push(romanizeData?.[0]?.[0]?.[3] || text);
-        } catch (error) {
-            console.error(`Error romanizing text "${text}":`, error);
-            romanizedTexts.push(text);
-        }
-    }
-    return romanizedTexts;
-}
-
-
-/* =================== LYRICS SOURCE PROVIDERS & PARSERS =================== */
-
-async function fetchFromKPoeAPI(baseUrl, songInfo, sourceOrder, forceReload, fetchOptions) {
-    const { title, artist, album, duration } = songInfo;
-    const params = new URLSearchParams({ title, artist, duration });
-    if (album) params.append('album', album);
-    if (sourceOrder) params.append('source', sourceOrder);
-    if (forceReload) params.append('forceReload', 'true');
-
-    const url = `${baseUrl.endsWith('/') ? baseUrl : `${baseUrl}/`}v2/lyrics/get?${params.toString()}`;
-
-    try {
-        const response = await fetch(url, forceReload ? { cache: 'no-store' } : fetchOptions);
-        if (response.ok) {
-            const data = await response.json();
-            return parseKPoeFormat(data);
-        }
-        if (response.status == 404 || response.status == 403) {
-            return null;
-        }
-        console.warn(`Failed to fetch from ${baseUrl} (${response.status}): ${response.statusText}`);
-        return null;
-    } catch (error) {
-        console.error(`Network error fetching from ${baseUrl}:`, error);
-        return null;
-    }
-}
-
-async function fetchKPoeLyrics(songInfo, sourceOrder, forceReload, fetchOptions) {
-    for (const baseUrl of KPOE_SERVERS) {
-        const lyrics = await fetchFromKPoeAPI(baseUrl, songInfo, sourceOrder, forceReload, fetchOptions);
-        if (lyrics) return lyrics;
-    }
-    return null;
-}
-
-async function fetchCustomKPoeLyrics(songInfo, customUrl, sourceOrder, forceReload, fetchOptions) {
-    if (!customUrl) return null;
-    return fetchFromKPoeAPI(customUrl, songInfo, sourceOrder, forceReload, fetchOptions);
-}
-
-async function fetchLRCLibLyrics(songInfo, fetchOptions = {}) {
-    const params = new URLSearchParams({ artist_name: songInfo.artist, track_name: songInfo.title });
-    if (songInfo.album) params.append('album_name', songInfo.album);
-
-    const url = `https://lrclib.net/api/get?${params.toString()}`;
-
-    try {
-        const response = await fetch(url, fetchOptions);
-        if (!response.ok) return null;
-        const data = await response.json();
-        return parseLRCLibFormat(data);
-    } catch (error) {
-        console.error("Error fetching from LRCLIB:", error);
-        return null;
-    }
-}
-
-async function fetchYouTubeSubtitles(songInfo) {
-    try {
-        const subtitleInfo = songInfo.subtitle;
-        if (!subtitleInfo?.captionTracks?.length) return null;
-
-        const validTracks = subtitleInfo.captionTracks.filter(t => t.kind !== 'asr' && !t.vssId?.startsWith('a.'));
-        const selectedTrack = validTracks.find(t => t.isDefault) || validTracks[0];
-
-        if (!selectedTrack) return null;
-
-        const url = new URL(selectedTrack.baseUrl);
-        url.searchParams.set('fmt', 'json3');
-
-        const response = await fetch(url.toString());
-        if (!response.ok) return null;
-
-        const data = await response.json();
-        return parseYouTubeSubtitles(data, songInfo);
-    } catch (error) {
-        console.error("Error fetching YouTube subtitles:", error);
-        return null;
-    }
-}
-
-function parseYouTubeSubtitles(data, songInfo) {
-    if (!data?.events?.length) return null;
-    const parsedLines = data.events
-        .map(event => {
-            const text = event.segs?.map(seg => seg.utf8).join(' ').trim();
-            if (!text) return null;
-            const startTime = event.tStartMs / 1000;
-            const duration = event.dDurationMs / 1000;
-            return { text, startTime, endTime: startTime + duration, duration };
-        })
-        .filter(Boolean);
-
-    if (parsedLines.length === 0) return null;
-    return { type: 'Line', data: parsedLines, metadata: { ...songInfo, source: "YouTube Captions" } };
+            return {
+                text: item.text || '',
+                startTime,
+                duration,
+                endTime: startTime + duration,
+                syllabus: romanizedSyllabus || syllabus,
+                element,
+                romanizedText: lineRomanizedText
+            };
+        }),
+        metadata: { ...data.metadata, source: `${data.metadata.source} (KPoe)` },
+        ignoreSponsorblock: data.ignoreSponsorblock || data.metadata.ignoreSponsorblock
+    };
 }
 
 function parseLRCLibFormat(data) {
@@ -1652,56 +1530,32 @@ function parseLRCLibFormat(data) {
     };
 }
 
-function parseKPoeFormat(data) {
-    if (!data?.lyrics || !Array.isArray(data.lyrics) || data.lyrics.length === 0) return null;
-    return {
-        type: data.type,
-        data: data.lyrics.map(item => {
-            const startTime = Number(item.time || 0) / 1000;
-            const duration = Number(item.duration || 0) / 1000;
-            const syllabus = (item.syllabus || []).map(syl => ({
-                text: syl.text || '',
-                time: Number(syl.time || 0),
-                duration: Number(syl.duration || 0),
-                isBackground: syl.isBackground || false
-            }));
-            const element = item.element || [];
+function parseYouTubeSubtitles(data, songInfo) {
+    if (!data?.events?.length) return null;
+    const parsedLines = data.events
+        .map(event => {
+            const text = event.segs?.map(seg => seg.utf8).join(' ').trim();
+            if (!text) return null;
+            const startTime = event.tStartMs / 1000;
+            const duration = event.dDurationMs / 1000;
+            return { text, startTime, endTime: startTime + duration, duration };
+        })
+        .filter(Boolean);
 
-            let lineRomanizedText = undefined;
-            let romanizedSyllabus = undefined;
-
-            // Check for prebuilt transliteration from backend
-            if (item.transliteration) {
-                // Prioritize syllabus-level transliteration if available and lengths match
-                if (item.transliteration.syllabus && item.transliteration.syllabus.length === syllabus.length) {
-                    romanizedSyllabus = syllabus.map((syl, index) => ({
-                        ...syl,
-                        romanizedText: item.transliteration.syllabus[index].text || syl.text
-                    }));
-                    lineRomanizedText = item.transliteration.text || item.text; // Use line-level transliteration text
-                } else if (item.transliteration.text) {
-                    // Fallback to line-level transliteration if syllabus doesn't match or is missing
-                    lineRomanizedText = item.transliteration.text;
-                }
-            }
-
-            return {
-                text: item.text || '',
-                startTime,
-                duration,
-                endTime: startTime + duration,
-                syllabus: romanizedSyllabus || syllabus, // Use romanizedSyllabus if available, otherwise original
-                element,
-                romanizedText: lineRomanizedText // Add line-level romanized text
-            };
-        }),
-        metadata: { ...data.metadata, source: data.metadata.source },
-        ignoreSponsorblock: data.ignoreSponsorblock || data.metadata.ignoreSponsorblock
-    };
+    if (parsedLines.length === 0) return null;
+    return { type: 'Line', data: parsedLines, metadata: { ...songInfo, source: "YouTube Captions" } };
 }
 
+/* =================================================================
+   UTILITY FUNCTIONS
+   ================================================================= */
 
-/* =================== UTILITY FUNCTIONS =================== */
+function storageLocalGet(keys) {
+    if (typeof browser !== 'undefined' && browser.storage && browser.storage.local) {
+        return browser.storage.local.get(keys);
+    }
+    return new Promise(resolve => chrome.storage.local.get(keys, resolve));
+}
 
 function isEmptyLyrics(lyrics) {
     return !lyrics || !lyrics.data || lyrics.data.length === 0 || lyrics.data.every(line => !line.text);
@@ -1709,6 +1563,14 @@ function isEmptyLyrics(lyrics) {
 
 function isPurelyLatinScript(text) {
     return /^[\p{Script=Latin}\p{N}\p{P}\p{S}\s]*$/u.test(text);
+}
+
+function normalizeTextForComparison(text) {
+    return text
+        .replace(/\s+/g, ' ')
+        .trim()
+        .toLowerCase()
+        .replace(/[^\w\s]/g, '');
 }
 
 function levenshteinDistance(s1, s2) {
@@ -1724,74 +1586,11 @@ function levenshteinDistance(s1, s2) {
         for (let i = 1; i <= s1.length; i++) {
             const indicator = (s1[i - 1] === s2[j - 1]) ? 0 : 1;
             track[j][i] = Math.min(
-                track[j][i - 1] + 1, // deletion
-                track[j - 1][i] + 1, // insertion
-                track[j - 1][i - 1] + indicator // substitution
+                track[j][i - 1] + 1,
+                track[j - 1][i] + 1,
+                track[j - 1][i - 1] + indicator
             );
         }
     }
     return track[s2.length][s1.length];
-}
-
-// SponsorBlock fetching and timing adjustment functions moved from lyricsManager.js
-async function fetchSponsorSegments(videoId) {
-    const SPONSORBLOCK_API = "https://sponsor.ajay.app/api/skipSegments";
-    const categories = ["sponsor", "selfpromo", "interaction", "intro", "outro", "preview", "filler", "music_offtopic"];
-    const url = `${SPONSORBLOCK_API}?videoID=${videoId}&categories=[${categories.map(c => `"${c}"`).join(',')}]`;
-
-    try {
-        const response = await fetch(url);
-        if (!response.ok) {
-            if (response.status === 404) {
-                console.log(`SponsorBlock segments not found for videoId: ${videoId}`);
-                return [];
-            }
-            throw new Error(`SponsorBlock API error: ${response.statusText}`);
-        }
-        const segments = await response.json();
-        return segments;
-    } catch (error) {
-        console.error("Error fetching SponsorBlock segments:", error);
-        return [];
-    }
-}
-
-// Handle settings update from settings page
-function handleSettingsUpdatedFromPage(settings, sendResponse) {
-    console.log('Settings updated from settings page:', settings);
-    
-    try {
-        // Send settings update to all YouTube Music tabs
-        pBrowser.tabs.query({ url: ["*://*.music.youtube.com/*"] }, (tabs) => {
-            if (pBrowser.runtime.lastError) {
-                console.error("Error querying tabs:", pBrowser.runtime.lastError);
-                sendResponse({ success: false, error: pBrowser.runtime.lastError.message });
-                return;
-            }
-            
-            if (tabs.length === 0) {
-                console.log('No YouTube Music tabs found');
-                sendResponse({ success: true, message: 'No tabs to update' });
-                return;
-            }
-            
-            // Send message to each tab
-            tabs.forEach(tab => {
-                if (tab.id && pBrowser.tabs.sendMessage) {
-                    pBrowser.tabs.sendMessage(tab.id, {
-                        type: 'NEWSYNC_SETTINGS_UPDATED',
-                        settings: settings
-                    }).catch(error => {
-                        console.warn(`Failed to send message to tab ${tab.id}:`, error);
-                    });
-                }
-            });
-            
-            console.log(`Sent settings update to ${tabs.length} tab(s)`);
-            sendResponse({ success: true, tabsUpdated: tabs.length });
-        });
-    } catch (error) {
-        console.error("Error handling settings update:", error);
-        sendResponse({ success: false, error: error.message });
-    }
 }

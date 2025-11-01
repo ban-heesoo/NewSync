@@ -1,8 +1,5 @@
-// ==========================================================================
-// LYRICS PARSERS FOR MULTIPLE FORMATS
-// ==========================================================================
 
-export function parseSyncedLyrics(lrcContent, songInfo = {}) {
+export function parseSyncedLyrics(lrcContent) {
   const lineTimeRegex = /\[(\d+):(\d{2})(?:[.,](\d+))?\]/g;
   const wordTimeRegex = /<(\d+):(\d{2})(?:[.,](\d+))?>/g;
 
@@ -22,21 +19,6 @@ export function parseSyncedLyrics(lrcContent, songInfo = {}) {
   const lines = lrcContent.split('\n');
   const parsedLyrics = [];
   const isEnhanced = /<(\d+):(\d{2})/.test(lrcContent);
-  const metadata = {};
-  
-  // Parse metadata tags
-  const metadataRegex = /^\[(ti|ar|al|by|offset):(.+)\]$/;
-  
-  for (const line of lines) {
-    const trimmedLine = line.trim();
-    if (!trimmedLine) continue;
-    
-    const metadataMatch = trimmedLine.match(metadataRegex);
-    if (metadataMatch) {
-      const [, tag, value] = metadataMatch;
-      metadata[tag] = value;
-    }
-  }
 
   lines.forEach(line => {
     const lineTimeMatches = [...line.matchAll(lineTimeRegex)];
@@ -121,25 +103,13 @@ export function parseSyncedLyrics(lrcContent, songInfo = {}) {
     !isNaN(line.time)
   );
 
-  // Parse songwriter information from input or LRC metadata
-  let songWriters = [];
-  if (songInfo.songwriter) {
-    // Split by comma and clean up names
-    songWriters = songInfo.songwriter.split(',').map(name => name.trim()).filter(name => name);
-  } else if (metadata.by) {
-    // Fallback to LRC [by:] tag if available
-    songWriters = [metadata.by.trim()];
-  }
-
   return {
     KpoeTools: '1.0-parseSyncedLyrics-LRC',
     type: isEnhanced ? 'Word' : 'Line',
     metadata: {
-      source: "Apple Music",
-      songWriters: songWriters,
-      title: metadata.ti || songInfo.title || '',
-      artist: metadata.ar || songInfo.artist || '',
-      album: metadata.al || songInfo.album || '',
+      source: "Local Files",
+      songWriters: [],
+      title: '',
       language: '',
       agents: {},
       totalDuration: ''
@@ -149,7 +119,150 @@ export function parseSyncedLyrics(lrcContent, songInfo = {}) {
   };
 }
 
-export function parseAppleTTML(ttml, offset = 0, separate = false, songInfo = {}) {
+export function parseAppleMusicLRC(lrcContent, songInfo = {}) {
+  const lines = lrcContent.split('\n');
+  const parsedLines = [];
+  const metadata = {};
+  
+  const metadataRegex = /^\[(ti|ar|al|by|offset):(.+)\]$/;
+  
+  for (const line of lines) {
+    const trimmedLine = line.trim();
+    if (!trimmedLine) continue;
+    
+    const metadataMatch = trimmedLine.match(metadataRegex);
+    if (metadataMatch) {
+      const [, tag, value] = metadataMatch;
+      metadata[tag] = value;
+      continue;
+    }
+    
+    const timeRegex = /\[(\d{2}):(\d{2})\.(\d{2,3})\](.*)/;
+    const match = trimmedLine.match(timeRegex);
+    
+    if (match) {
+      const [, minutes, seconds, centiseconds, text] = match;
+      const startTime = parseInt(minutes) * 60 + parseInt(seconds) + parseInt(centiseconds) / (centiseconds.length === 2 ? 100 : 1000);
+      
+      const enhancedRegex = /<(\d{2}):(\d{2})\.(\d{2,3})>/g;
+      const enhancedMatches = [...text.matchAll(enhancedRegex)];
+      
+      if (enhancedMatches.length > 0) {
+        const words = [];
+        const timestamps = text.match(/<\d{2}:\d{2}\.\d{2,3}>/g) || [];
+        
+        if (timestamps.length > 0) {
+          let cleanText = text.replace(/^v\d+:\s*/, '');
+          
+          for (let i = 0; i < timestamps.length; i++) {
+            const timestamp = timestamps[i];
+            const [, wordMin, wordSec, wordCenti] = timestamp.match(/<(\d{2}):(\d{2})\.(\d{2,3})>/);
+            const wordTime = parseInt(wordMin) * 60 + parseInt(wordSec) + parseInt(wordCenti) / (wordCenti.length === 2 ? 100 : 1000);
+            
+            const timestampIndex = cleanText.indexOf(timestamp);
+            const nextTimestamp = timestamps[i + 1];
+            let wordText = '';
+            
+            if (nextTimestamp) {
+              const nextIndex = cleanText.indexOf(nextTimestamp);
+              wordText = cleanText.substring(timestampIndex + timestamp.length, nextIndex);
+            } else {
+              wordText = cleanText.substring(timestampIndex + timestamp.length);
+            }
+            
+            wordText = wordText.replace(/<\d{2}:\d{2}\.\d{2,3}>/g, '');
+            
+            if (wordText.trim()) {
+              let duration = 1000;
+              if (i < timestamps.length - 1) {
+                const nextTimestamp = timestamps[i + 1];
+                const [, nextMin, nextSec, nextCenti] = nextTimestamp.match(/<(\d{2}):(\d{2})\.(\d{2,3})>/);
+                const nextTime = parseInt(nextMin) * 60 + parseInt(nextSec) + parseInt(nextCenti) / (nextCenti.length === 2 ? 100 : 1000);
+                duration = (nextTime - wordTime) * 1000;
+              }
+              
+              duration = Math.max(Math.min(duration, 3000), 200);
+              
+              words.push({
+                text: wordText,
+                time: wordTime * 1000,
+                duration: duration,
+                isLineEnding: i === timestamps.length - 1,
+                isBackground: false,
+                element: { singer: 'v1' }
+              });
+            }
+          }
+        }
+        
+        if (words.length > 0) {
+          const endTime = words[words.length - 1].time / 1000 + (words[words.length - 1].duration / 1000);
+          const cleanText = text.replace(/<\d{2}:\d{2}\.\d{2,3}>/g, '').replace(/^v\d+:\s*/, '').trim();
+
+          parsedLines.push({
+            time: startTime * 1000,
+            duration: (endTime - startTime) * 1000,
+            text: cleanText,
+            syllabus: words,
+            element: { 
+              key: "", 
+              songPart: "", 
+              singer: 'v1' 
+            }
+          });
+        }
+      } else {
+        const endTime = startTime + 4;
+        parsedLines.push({
+          time: startTime * 1000,
+          duration: (endTime - startTime) * 1000,
+          text: text.trim(),
+          syllabus: [],
+          element: { 
+            key: "", 
+            songPart: "", 
+            singer: 'v1' 
+          }
+        });
+      }
+    }
+  }
+  
+  parsedLines.sort((a, b) => a.time - b.time);
+  
+  for (let i = 0; i < parsedLines.length - 1; i++) {
+    parsedLines[i].duration = parsedLines[i + 1].time - parsedLines[i].time;
+  }
+  
+  const hasSyllabus = parsedLines.some(line => line.syllabus && line.syllabus.length > 0);
+  
+  let songWriters = [];
+  if (songInfo.songwriter) {
+    songWriters = songInfo.songwriter.split(',').map(name => name.trim()).filter(name => name);
+  } else if (metadata.by) {
+    songWriters = [metadata.by.trim()];
+  }
+
+  return {
+    KpoeTools: '1.0-parseAppleMusicLRC-EnhancedLRC',
+    type: hasSyllabus ? 'Word' : 'Line',
+    metadata: {
+      source: "Apple Music",
+      songWriters: songWriters,
+      title: metadata.ti || songInfo.title || 'Unknown',
+      artist: metadata.ar || songInfo.artist || 'Unknown',
+      album: metadata.al || songInfo.album || '',
+      language: '',
+      agents: {},
+      totalDuration: '',
+      offset: metadata.offset || 0
+    },
+    lyrics: parsedLines,
+    cached: 'None'
+  };
+}
+
+export function parseAppleTTML(ttml, offset = 0, separate = false) {
   const KPOE = '1.0-ConvertTTMLtoJSON-DOMParser';
 
   const NS = {
@@ -228,11 +341,7 @@ export function parseAppleTTML(ttml, offset = 0, separate = false, songInfo = {}
   const timingMode = getAttr(root, NS.itunes, 'timing', 'itunes:timing') || 'Word';
 
   const metadata = {
-    source: 'Apple Music', 
-    songWriters: [], 
-    title: songInfo.title || '',
-    artist: songInfo.artist || '',
-    album: songInfo.album || '',
+    source: 'Local Files', songWriters: [], title: '',
     language: getAttr(root, NS.xml, 'lang', 'xml:lang') || '',
     agents: {},
     totalDuration: getAttr(doc.getElementsByTagName('body')[0], null, 'dur', 'dur') || '',
@@ -260,7 +369,6 @@ export function parseAppleTTML(ttml, offset = 0, separate = false, songInfo = {}
     if (metaContent) {
       const titleEl = metaContent.getElementsByTagName('ttm:title')[0] || metaContent.getElementsByTagName('title')[0];
       if (titleEl) metadata.title = decodeHtmlEntities(titleEl.textContent.trim());
-      else if (songInfo.title) metadata.title = songInfo.title;
 
       const songwritersEl = metaContent.getElementsByTagName('songwriters')[0];
       if (songwritersEl) {
@@ -269,9 +377,6 @@ export function parseAppleTTML(ttml, offset = 0, separate = false, songInfo = {}
           const name = decodeHtmlEntities(songwriterNodes[i].textContent.trim());
           if (name) metadata.songWriters.push(name);
         }
-      } else if (songInfo.songwriter) {
-        // Fallback to input songwriter information
-        metadata.songWriters = songInfo.songwriter.split(',').map(name => name.trim()).filter(name => name);
       }
     }
   }
@@ -443,21 +548,6 @@ export function parseAppleTTML(ttml, offset = 0, separate = false, songInfo = {}
         }
 
         lyrics.push(currentLine);
-      } else {
-        // Line-based fallback: use <p begin/end> when no timed spans exist
-        const pBegin = getAttr(p, null, 'begin', 'begin');
-        const pEnd = getAttr(p, null, 'end', 'end');
-        const lineTextRaw = p.textContent || '';
-        const lineText = decodeHtmlEntities(lineTextRaw).trim();
-        if (pBegin && pEnd && lineText) {
-          lyrics.push({
-            time: timeToMs(pBegin) + offset,
-            duration: Math.max(0, timeToMs(pEnd) - timeToMs(pBegin)),
-            text: lineText,
-            syllabus: [],
-            element: { key, songPart, singer }
-          });
-        }
       }
     }
   }
@@ -467,7 +557,6 @@ export function parseAppleTTML(ttml, offset = 0, separate = false, songInfo = {}
     type: timingMode,
     metadata,
     lyrics,
-    data: lyrics,
   };
 }
 
@@ -578,171 +667,6 @@ export function v1Tov2(data) {
     ignoreSponsorblock: data.ignoreSponsorblock || undefined,
     lyrics: groupedLyrics,
     cached: data.cached || 'None'
-  };
-}
-
-// Apple Music LRC Parser - handles enhanced LRC format with voice tags and background vocals
-export function parseAppleMusicLRC(lrcContent, songInfo = {}) {
-  const lines = lrcContent.split('\n');
-  const parsedLines = [];
-  const metadata = {};
-  
-  // Parse metadata tags
-  const metadataRegex = /^\[(ti|ar|al|by|offset):(.+)\]$/;
-  
-  for (const line of lines) {
-    const trimmedLine = line.trim();
-    if (!trimmedLine) continue;
-    
-    // Check for metadata
-    const metadataMatch = trimmedLine.match(metadataRegex);
-    if (metadataMatch) {
-      const [, tag, value] = metadataMatch;
-      metadata[tag] = value;
-      continue;
-    }
-    
-    // Check for timestamp line
-    const timeRegex = /\[(\d{2}):(\d{2})\.(\d{2,3})\](.*)/;
-    const match = trimmedLine.match(timeRegex);
-    
-    if (match) {
-      const [, minutes, seconds, centiseconds, text] = match;
-      const startTime = parseInt(minutes) * 60 + parseInt(seconds) + parseInt(centiseconds) / (centiseconds.length === 2 ? 100 : 1000);
-      
-      // Check if this is enhanced LRC with word-by-word timing
-      const enhancedRegex = /<(\d{2}):(\d{2})\.(\d{2,3})>/g;
-      const enhancedMatches = [...text.matchAll(enhancedRegex)];
-      
-      if (enhancedMatches.length > 0) {
-        // Enhanced LRC with word-by-word timing
-        const words = [];
-        
-        // Parse enhanced LRC with word-by-word timing
-        const timestamps = text.match(/<\d{2}:\d{2}\.\d{2,3}>/g) || [];
-        
-        if (timestamps.length > 0) {
-          // Remove v1: prefix first
-          let cleanText = text.replace(/^v\d+:\s*/, '');
-          
-          // Extract words with their timestamps
-          for (let i = 0; i < timestamps.length; i++) {
-            const timestamp = timestamps[i];
-            const [, wordMin, wordSec, wordCenti] = timestamp.match(/<(\d{2}):(\d{2})\.(\d{2,3})>/);
-            const wordTime = parseInt(wordMin) * 60 + parseInt(wordSec) + parseInt(wordCenti) / (wordCenti.length === 2 ? 100 : 1000);
-            
-            // Find the text after this timestamp until the next timestamp
-            const timestampIndex = cleanText.indexOf(timestamp);
-            const nextTimestamp = timestamps[i + 1];
-            let wordText = '';
-            
-            if (nextTimestamp) {
-              const nextIndex = cleanText.indexOf(nextTimestamp);
-              wordText = cleanText.substring(timestampIndex + timestamp.length, nextIndex);
-            } else {
-              wordText = cleanText.substring(timestampIndex + timestamp.length);
-            }
-            
-            // Clean the word text (remove any remaining timestamps) but preserve spaces
-            wordText = wordText.replace(/<\d{2}:\d{2}\.\d{2,3}>/g, '');
-            
-            if (wordText.trim()) {
-              // Calculate duration based on next timestamp or default
-              let duration = 1000; // Default 1 second
-              if (i < timestamps.length - 1) {
-                const nextTimestamp = timestamps[i + 1];
-                const [, nextMin, nextSec, nextCenti] = nextTimestamp.match(/<(\d{2}):(\d{2})\.(\d{2,3})>/);
-                const nextTime = parseInt(nextMin) * 60 + parseInt(nextSec) + parseInt(nextCenti) / (nextCenti.length === 2 ? 100 : 1000);
-                duration = (nextTime - wordTime) * 1000;
-              }
-              
-              // Ensure duration is reasonable (not too short, not too long)
-              duration = Math.max(Math.min(duration, 3000), 200); // Between 200ms and 3s
-              
-              words.push({
-                text: wordText, // Keep original spacing (including leading/trailing spaces)
-                time: wordTime * 1000, // Convert to milliseconds
-                duration: duration,
-                isLineEnding: i === timestamps.length - 1,
-                isBackground: false,
-                element: { singer: 'v1' }
-              });
-            }
-          }
-        }
-        
-        if (words.length > 0) {
-          const endTime = words[words.length - 1].time / 1000 + (words[words.length - 1].duration / 1000);
-          // Clean text by removing all timestamp tags and v1: prefix
-          const cleanText = text.replace(/<\d{2}:\d{2}\.\d{2,3}>/g, '').replace(/^v\d+:\s*/, '').trim();
-
-          parsedLines.push({
-            time: startTime * 1000, // Convert to milliseconds
-            duration: (endTime - startTime) * 1000, // Convert to milliseconds
-            text: cleanText,
-            syllabus: words,
-            element: { 
-              key: "", 
-              songPart: "", 
-              singer: 'v1' 
-            }
-          });
-        }
-      } else {
-        // Regular LRC line
-        const endTime = startTime + 4; // Default 4 second duration
-        parsedLines.push({
-          time: startTime * 1000, // Convert to milliseconds
-          duration: (endTime - startTime) * 1000, // Convert to milliseconds
-          text: text.trim(),
-          syllabus: [],
-          element: { 
-            key: "", 
-            songPart: "", 
-            singer: 'v1' 
-          }
-        });
-      }
-    }
-  }
-  
-  // Sort by time
-  parsedLines.sort((a, b) => a.time - b.time);
-  
-  // Calculate durations based on next line's time
-  for (let i = 0; i < parsedLines.length - 1; i++) {
-    parsedLines[i].duration = parsedLines[i + 1].time - parsedLines[i].time;
-  }
-  
-  // Determine type based on whether we have syllabus data
-  const hasSyllabus = parsedLines.some(line => line.syllabus && line.syllabus.length > 0);
-  
-  // Parse songwriter information from input or LRC metadata
-  let songWriters = [];
-  if (songInfo.songwriter) {
-    // Split by comma and clean up names
-    songWriters = songInfo.songwriter.split(',').map(name => name.trim()).filter(name => name);
-  } else if (metadata.by) {
-    // Fallback to LRC [by:] tag if available
-    songWriters = [metadata.by.trim()];
-  }
-
-  return {
-    KpoeTools: '1.0-parseAppleMusicLRC-EnhancedLRC',
-    type: hasSyllabus ? 'Word' : 'Line',
-    metadata: {
-      source: "Apple Music",
-      songWriters: songWriters,
-      title: metadata.ti || songInfo.title || 'Unknown',
-      artist: metadata.ar || songInfo.artist || 'Unknown',
-      album: metadata.al || songInfo.album || '',
-      language: '',
-      agents: {},
-      totalDuration: '',
-      offset: metadata.offset || 0
-    },
-    lyrics: parsedLines,
-    cached: 'None'
   };
 }
 

@@ -1,82 +1,12 @@
 /* ==========================================================================
-   SF PRO FONT DECLARATIONS - ONLINE CDN
-   ========================================================================== */
-@import url('https://fonts.cdnfonts.com/css/sf-pro-display');
-
-/* Fallback font declarations using CDN */
-@font-face {
-    font-family: 'SF Pro Display';
-    src: url('https://fonts.cdnfonts.com/s/59278/SFPRODISPLAYREGULAR.woff') format('woff');
-    font-weight: 400;
-    font-style: normal;
-    font-display: swap;
-}
-
-@font-face {
-    font-family: 'SF Pro Display';
-    src: url('https://fonts.cdnfonts.com/s/59278/SFPRODISPLAYREGULARITALIC.woff') format('woff');
-    font-weight: 400;
-    font-style: italic;
-    font-display: swap;
-}
-
-@font-face {
-    font-family: 'SF Pro Display';
-    src: url('https://fonts.cdnfonts.com/s/59278/SFPRODISPLAYLIGHT.woff') format('woff');
-    font-weight: 300;
-    font-style: normal;
-    font-display: swap;
-}
-
-@font-face {
-    font-family: 'SF Pro Display';
-    src: url('https://fonts.cdnfonts.com/s/59278/SFPRODISPLAYSEMIBOLD.woff') format('woff');
-    font-weight: 600;
-    font-style: normal;
-    font-display: swap;
-}
-
-@font-face {
-    font-family: 'SF Pro Display';
-    src: url('https://fonts.cdnfonts.com/s/59278/SFPRODISPLAYBOLD.woff') format('woff');
-    font-weight: 700;
-    font-style: normal;
-    font-display: swap;
-}
-
-/* Legacy SF Pro font for backward compatibility */
-@font-face {
-    font-family: 'SF Pro Display';
-    src: url('https://fonts.cdnfonts.com/s/59278/SFPRODISPLAYREGULAR.woff') format('woff');
-    font-weight: 400;
-    font-style: normal;
-    font-display: swap;
-}
-
-/* ==========================================================================
-   PATCHING & INITIAL SETUP
-   ========================================================================== */
-
-/* Hide default YouTube Music lyrics UI components when Lyrics Plus is active */
-ytmusic-section-list-renderer[page-type="MUSIC_PAGE_TYPE_TRACK_LYRICS"] #contents.ytmusic-section-list-renderer,
-ytmusic-message-renderer.style-scope.ytmusic-tab-renderer[style=""],
-ytmusic-tab-renderer:has(#lyrics-plus-container[style*="display: block"]) ytmusic-message-renderer,
-ytmusic-tab-renderer:has(#lyrics-plus-container[style*="display: block"]) .loading-spinner {
-    display: none !important;
-}
-
-ytmusic-app-layout[player-fullscreened] .song-media-controls.ytmusic-player {
-    background: none;
-}
-
-/* ==========================================================================
    LYRICS PLUS - BASE CONTAINER & LAYOUT
    ========================================================================== */
 
 /* --- Base Variables & Palette --- */
-.lyrics-plus-integrated {
-    --lyplus-song-white-pallete: #ffffff85;
+#lyrics-plus-container {
     --lyplus-lyrics-pallete: #ffffff;
+    --lyplus-song-white-pallete: #ffffff85;
+    --lyplus-lyrics-pallete: #fff;
 
     --lyplus-padding-base: 1em;
     --lyplus-padding-line: 10px;
@@ -100,79 +30,63 @@ ytmusic-app-layout[player-fullscreened] .song-media-controls.ytmusic-player {
     --lyplus-font-size-button: 18px;
     --lyplus-font-size-dropdown-option: 13px;
 
-    --lyplus-text-primary: #ffffff;
+    --lyplus-text-primary: #fff;
     --lyplus-text-secondary: #ffffff85;
     --lyplus-text-tertiary: #ffffff7a;
     --lyplus-text-inactive: #ffffff31;
-    --lyplus-text-button: #ffffff;
+    --lyplus-text-button: rgba(255, 255, 255, 0.87);
     --lyplus-text-translation-active: #ffffffa4;
+    --lyplus-text-translation-inactive: #ffffffa4;
 
     --lyplus-blur-amount: 0.07em;
     --lyplus-blur-amount-near: 0.035em;
 }
 
-/* Use song-art palette for lyrics in word-by-word mode */
-ytmusic-player-page[video-mode]:not([is-video-truncation-fix-enabled])[player-fullscreened] .lyrics-plus-integrated.use-song-palette-fullscreen.word-by-word-mode,
-.lyrics-plus-integrated.use-song-palette-all-modes.word-by-word-mode {
-    --lyplus-lyrics-pallete: var(--lyplus-song-pallete);
-}
-
-/* Use white-variant of song-art palette for lyrics in line-by-line mode */
-ytmusic-player-page[video-mode]:not([is-video-truncation-fix-enabled])[player-fullscreened] .lyrics-plus-integrated.use-song-palette-fullscreen.line-by-line-mode,
-.lyrics-plus-integrated.use-song-palette-all-modes.line-by-line-mode {
-    --lyplus-lyrics-pallete: var(--lyplus-song-white-pallete);
-}
-
-/* Allow JS to force an override color */
-.lyrics-plus-integrated.override-palette-color {
+#lyrics-plus-container.override-palette-color {
     --lyplus-lyrics-pallete: var(--lyplus-override-pallete) !important;
 }
 
 /* --- Main Container --- */
-.lyrics-plus-integrated {
+#lyrics-plus-container {
     display: none;
     width: 100%;
     height: max-content;
     padding-top: var(--lyplus-padding-base);
     box-sizing: border-box;
-    color: var(--yt-spec-text-primary), var(--lyplus-text-primary);
+    color: var(--yt-spec-text-primary, var(--lyplus-text-primary));
     font-family: 'SF Pro Display', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
     font-weight: bolder;
     direction: ltr;
-    transform: translateZ(0); /* Promotes to its own layer */
+    transform: translateZ(0);
 }
 
-.lyrics-plus-integrated.lyrics-plus-message {
+#lyrics-plus-container.lyrics-plus-message {
     height: 100%;
 }
 
 /* --- Scroll Behavior & Performance --- */
-ytmusic-tab-renderer:has(#lyrics-plus-container[style*="display: block"]) {
+#lyrics-plus-container-parent {
     --lyrics-scroll-padding-top: 25%;
-    overflow: hidden !important;
+    overflow: hidden;
     scrollbar-width: none;
-    will-change: scroll-position; /* Hint to browser for scroll optimization */
-}
-
-ytmusic-app-layout[is-mweb-modernization-enabled] #lyrics-plus-container[style*="display: block"] {
-    --lyrics-scroll-padding-top: 10%;
+    will-change: scroll-position;
 }
 
 /* Disable transitions during touch-scrolling for 1:1 feedback */
-.lyrics-plus-integrated.touch-scrolling .lyrics-line,
-.lyrics-plus-integrated.touch-scrolling .lyrics-plus-metadata {
+#lyrics-plus-container.touch-scrolling .lyrics-line,
+#lyrics-plus-container.touch-scrolling .lyrics-plus-metadata {
     transition: none !important;
 }
 
 /* Apply smooth gliding transition for mouse-wheel scrolling */
-.lyrics-plus-integrated.wheel-scrolling .lyrics-line,
-.lyrics-plus-integrated.wheel-scrolling .lyrics-plus-metadata {
+#lyrics-plus-container.wheel-scrolling .lyrics-line,
+#lyrics-plus-container.wheel-scrolling .lyrics-plus-metadata {
     transition: transform 0.3s ease-out !important;
 }
 
 /* --- Selection Styles --- */
-.lyrics-plus-integrated *::selection,
-.lyrics-plus-integrated *::-moz-selection {
+#lyrics-plus-container *::selection,
+#lyrics-plus-container *::-moz-selection {
     background: #ffffff21;
     color: var(--lyplus-text-primary);
 }
@@ -192,59 +106,18 @@ ytmusic-app-layout[is-mweb-modernization-enabled] #lyrics-plus-container[style*=
     transform: translateY(var(--lyrics-scroll-offset, 0px)) translateZ(1px);
     transition: opacity 0.3s ease, transform 0.4s ease var(--lyrics-line-delay, 0ms), filter 0.3s ease;
     will-change: transform, filter, opacity;
-    /* Performance: only render lines when they are close to the viewport */
     content-visibility: auto;
     contain-intrinsic-size: 100% 3em;
+    text-rendering: optimizeLegibility;
+    white-space: pre-wrap;
+    overflow-wrap: break-word;
 }
 
 /* --- Line States & Modifiers --- */
 .lyrics-line.active {
     opacity: 1;
     color: var(--lyplus-lyrics-pallete, var(--lyplus-text-primary));
-    will-change: transform, opacity; /* Refine will-change for active state */
-}
-
-/* Fade-out for past lines when enabled - ONLY in fullscreen mode */
-ytmusic-player-page[player-fullscreened] .lyrics-plus-integrated.fade-past-lines .lyrics-line {
-    transition: opacity 0.9s cubic-bezier(0.22, 0.61, 0.36, 1), transform 0.4s ease var(--lyrics-line-delay, 0ms), filter 0.3s ease;
-}
-ytmusic-player-page[player-fullscreened] .lyrics-plus-integrated.fade-past-lines .lyrics-line.lyrics-gap {
-    transition: padding .3s .5s, height .3s .5s, opacity .2s .5s, transform .3s var(--lyrics-line-delay, 0ms);
-}
-ytmusic-player-page[player-fullscreened] .lyrics-plus-integrated.fade-past-lines .lyrics-line:not(.active):not(.lyrics-gap):not(.past) {
-    opacity: 0.55;
-}
-ytmusic-player-page[player-fullscreened] .lyrics-plus-integrated.fade-past-lines .lyrics-line.past:not(.active):not(.lyrics-gap) {
-    opacity: 0;
-    pointer-events: none;
-    will-change: opacity;
-}
-
-/* Ensure clickable lyrics lines in fullscreen */
-ytmusic-player-page[player-fullscreened] .lyrics-plus-integrated .lyrics-line:not(.past) {
-    pointer-events: auto;
-}
-
-/* In fade-past-lines mode, ensure translation fades uniformly with main lyrics (no extra dimming) - ONLY in fullscreen */
-ytmusic-player-page[player-fullscreened] .lyrics-plus-integrated.fade-past-lines .lyrics-translation-container {
-    opacity: 1; /* avoid stacking 0.8 with parent line opacity */
-}
-/* Apply same rule to romanization for uniform fade - ONLY in fullscreen */
-ytmusic-player-page[player-fullscreened] .lyrics-plus-integrated.fade-past-lines .lyrics-romanization-container {
-    opacity: 1;
-}
-
-/* In fade-past-lines mode, keep background vocals expanded for past lines so they fade with the main line - ONLY in fullscreen */
-ytmusic-player-page[player-fullscreened] .lyrics-plus-integrated.fade-past-lines .lyrics-line.past .background-vocal-container {
-    max-height: 10em;
-    opacity: 1;
-}
-
-/* Allow default gap animation to handle scale-down; no forced transform here */
-
-/* Slightly stronger emphasis for current line in fade mode - ONLY in fullscreen */
-ytmusic-player-page[player-fullscreened] .lyrics-plus-integrated.fade-past-lines .lyrics-line.active .main-vocal-container {
-    transform: scale3d(1.001, 1.001, 1);
+    will-change: transform, opacity;
 }
 
 .lyrics-line.singer-right {
@@ -262,26 +135,19 @@ ytmusic-player-page[player-fullscreened] .lyrics-plus-integrated.fade-past-lines
     }
 }
 
-/* Modern mobile layout font size */
-ytmusic-app-layout[is-mweb-modernization-enabled] .lyrics-plus-integrated .lyrics-line {
-    font-size: 34px;
-}
-
-/* --- Inactive Line Blurring --- */
-.lyrics-plus-integrated.blur-inactive-enabled:not(.not-focused) .lyrics-line:not(.active):not(.lyrics-gap) {
+#lyrics-plus-container.blur-inactive-enabled:not(.not-focused) .lyrics-line:not(.active):not(.lyrics-gap),
+#lyrics-plus-container.blur-inactive-enabled:not(.not-focused) .lyrics-plus-metadata:not(.lyrics-activest) {
     filter: blur(var(--lyplus-blur-amount));
 }
 
-/* Apply a lesser blur to lines immediately adjacent to the active one */
-ytmusic-player-page:not([player-fullscreened]) .lyrics-plus-integrated.blur-inactive-enabled:not(.not-focused) .lyrics-line:not(.active)[class*="next-"]:not(.lyrics-gap),
-.lyrics-plus-integrated.blur-inactive-enabled:not(.not-focused) .lyrics-line.pre-active-line:not(.lyrics-gap):not(.active),
-.lyrics-plus-integrated.blur-inactive-enabled:not(.not-focused) .lyrics-line.next-active-line:not(.lyrics-gap):not(.active),
-.lyrics-plus-integrated.blur-inactive-enabled:not(.not-focused) .lyrics-line.lyrics-activest:not(.active):not(.lyrics-gap) {
-    filter: blur(0.035em);
+#lyrics-plus-container.blur-inactive-enabled:not(.not-focused) .lyrics-line.pre-active-line:not(.lyrics-gap):not(.active),
+#lyrics-plus-container.blur-inactive-enabled:not(.not-focused) .lyrics-line.next-active-line:not(.lyrics-gap):not(.active),
+#lyrics-plus-container.blur-inactive-enabled:not(.not-focused) .lyrics-line.lyrics-activest:not(.active):not(.lyrics-gap) {
+    filter: blur(var(--lyplus-blur-amount-near));
 }
 
-/* --- Offscreen Performance Optimization --- */
-.lyrics-plus-integrated.hide-offscreen .lyrics-line.viewport-hidden * {
+
+#lyrics-plus-container.hide-offscreen .lyrics-line.viewport-hidden * {
     visibility: hidden;
     background: none;
     animation: none !important;
@@ -290,21 +156,21 @@ ytmusic-player-page:not([player-fullscreened]) .lyrics-plus-integrated.blur-inac
 }
 
 /* --- Directionality & Text Alignment --- */
-/* For mixed LTR/RTL lyrics, align based on singer class, not text direction alone */
-.lyrics-plus-integrated.mixed-direction-lyrics.dual-side-lyrics .lyrics-line.rtl-text.singer-left {
+#lyrics-plus-container.mixed-direction-lyrics.dual-side-lyrics .lyrics-line.rtl-text.singer-left {
     text-align: left;
 }
-.lyrics-plus-integrated.mixed-direction-lyrics.dual-side-lyrics .lyrics-line.rtl-text.singer-right {
+
+#lyrics-plus-container.mixed-direction-lyrics.dual-side-lyrics .lyrics-line.rtl-text.singer-right {
     text-align: right;
 }
 
-/* Adjust transform-origin for animation based on alignment/direction */
 .lyrics-line.singer-right:not(.rtl-text) .main-vocal-container,
 .lyrics-line.rtl-text:not(.singer-right) .main-vocal-container,
-.lyrics-plus-integrated.mixed-direction-lyrics.dual-side-lyrics .lyrics-line.rtl-text.singer-right .main-vocal-container {
+#lyrics-plus-container.mixed-direction-lyrics.dual-side-lyrics .lyrics-line.rtl-text.singer-right .main-vocal-container {
     transform-origin: right;
 }
-.lyrics-plus-integrated.mixed-direction-lyrics.dual-side-lyrics .lyrics-line.rtl-text.singer-left .main-vocal-container {
+
+#lyrics-plus-container.mixed-direction-lyrics.dual-side-lyrics .lyrics-line.rtl-text.singer-left .main-vocal-container {
     transform-origin: left;
 }
 
@@ -336,11 +202,12 @@ ytmusic-player-page:not([player-fullscreened]) .lyrics-plus-integrated.blur-inac
 }
 
 .lyrics-line.active .background-vocal-container {
-    max-height: 10em; /* Large enough to not clip */
+    max-height: 10em;
     opacity: 1;
     transition: max-height .6s, opacity .6s, padding .6s;
     will-change: max-height, opacity, padding;
 }
+
 .lyrics-line.active .background-vocal {
     opacity: 1;
 }
@@ -354,7 +221,7 @@ ytmusic-player-page:not([player-fullscreened]) .lyrics-plus-integrated.blur-inac
 .lyrics-line .lyrics-syllable {
     display: inline-block;
     color: var(--lyplus-text-secondary);
-    white-space: break-spaces;
+    white-space: normal;
     font-kerning: none;
     font-variant-ligatures: none;
     font-feature-settings: "liga" 0;
@@ -367,30 +234,30 @@ ytmusic-player-page:not([player-fullscreened]) .lyrics-plus-integrated.blur-inac
 .lyrics-line .lyrics-syllable.finished {
     background-color: var(--lyplus-lyrics-pallete, var(--lyplus-text-primary));
 }
-/* Disable transition for finished syllables on the active line for instant feedback */
+
 .lyrics-line.active .lyrics-syllable.finished {
-    transition: transform 0.8s ease !important;
+    transition: transform 1s ease !important;
 }
+
 .lyrics-line:not(.active) .lyrics-syllable.finished {
     transition: color 0.18s;
 }
 
-/* --- Syllable Wipe Animation Setup (on Active Line) --- */
 .lyrics-line.active:not(.lyrics-gap) .lyrics-syllable {
-    transform: translateY(0.001%) translateZ(1px); /* Subtle transform to trigger GPU */
-    transition: transform 0.8s ease, background-color 0.5s, color 0.5s;
+    transform: translateY(0.001%) translateZ(1px);
+    transition: transform 1s ease, background-color 0.5s, color 0.5s;
     will-change: transform, background;
 }
 
-/* Initial state for wipe effect */
+#lyrics-plus-container.compability-wipe .lyrics-line.active:not(.lyrics-gap) .lyrics-syllable,
 .lyrics-line.active:not(.lyrics-gap) .lyrics-syllable.highlight,
-.lyrics-plus-integrated.compability-wipe .lyrics-line.active:not(.lyrics-gap) .lyrics-syllable,
 .lyrics-line.active:not(.lyrics-gap) .lyrics-syllable.pre-highlight {
     background-repeat: no-repeat;
     background-image: linear-gradient(90deg, #ffffff00 0%, var(--lyplus-lyrics-pallete, #fff) 50%, #0000 100%), linear-gradient(90deg, var(--lyplus-lyrics-pallete, #fff) 100%, #0000 100%);
     background-size: 0.5em 100%, 0% 100%;
     background-position: -0.5em 0%, -0.25em 0%;
 }
+
 .lyrics-line.active:not(.lyrics-gap) .lyrics-syllable.highlight.rtl-text,
 .lyrics-line.active:not(.lyrics-gap) .lyrics-syllable.pre-highlight.rtl-text {
     direction: rtl;
@@ -398,8 +265,8 @@ ytmusic-player-page:not([player-fullscreened]) .lyrics-plus-integrated.blur-inac
     background-position: calc(100% + 0.5em) 0%, right;
 }
 
-.lyrics-line.active:not(.lyrics-gap) .lyrics-syllable.highlight,
-.lyrics-word.growable:has(.lyrics-syllable.highlight) .lyrics-syllable {
+#lyrics-plus-container:not(.lightweight-mode) .lyrics-line.active:not(.lyrics-gap) .lyrics-syllable.highlight,
+#lyrics-plus-container:not(.lightweight-mode) .lyrics-word.growable:has(.lyrics-syllable.highlight) .lyrics-syllable {
     transform: translateY(-3.5%) translateZ(1px);
 }
 
@@ -407,7 +274,6 @@ ytmusic-player-page:not([player-fullscreened]) .lyrics-plus-integrated.blur-inac
     background-image: none;
 }
 
-/* JS controls animation timing via CSS variables */
 .lyrics-syllable.pre-highlight {
     animation-name: pre-wipe-universal;
     animation-duration: var(--pre-wipe-duration);
@@ -415,6 +281,7 @@ ytmusic-player-page:not([player-fullscreened]) .lyrics-plus-integrated.blur-inac
     animation-timing-function: linear;
     animation-fill-mode: forwards;
 }
+
 .lyrics-syllable.pre-highlight.rtl-text {
     animation-name: pre-wipe-universal-rtl;
 }
@@ -462,10 +329,6 @@ ytmusic-player-page:not([player-fullscreened]) .lyrics-plus-integrated.blur-inac
     background-position: -0.5em 0%, -0.25em 0%;
 }
 
-/* ==========================================================================
-   LYRICS GAP (INSTRUMENTAL) STYLES
-   ========================================================================== */
-
 .lyrics-line.lyrics-gap {
     height: 0;
     padding: 0 var(--lyplus-padding-gap);
@@ -475,6 +338,7 @@ ytmusic-player-page:not([player-fullscreened]) .lyrics-plus-integrated.blur-inac
     background-clip: unset;
     transition: padding .3s .5s, height .3s .5s, opacity .2s .5s, transform .3s var(--lyrics-line-delay, 0ms);
 }
+
 .lyrics-line.lyrics-gap.active {
     height: 1em;
     padding: var(--lyplus-padding-gap);
@@ -486,10 +350,12 @@ ytmusic-player-page:not([player-fullscreened]) .lyrics-plus-integrated.blur-inac
 .lyrics-line.lyrics-gap .main-vocal-container {
     transform: translateY(-25%) scale(1) translateZ(0);
 }
+
 .lyrics-line.lyrics-gap:not(.active) .main-vocal-container {
     animation: gap-ended 0.8s ease;
     transform: translateY(-25%) scale(0) translateZ(0);
 }
+
 .lyrics-line.lyrics-gap.active .main-vocal-container .lyrics-word {
     animation: gap-loop 4s ease infinite alternate;
     will-change: transform;
@@ -505,11 +371,13 @@ ytmusic-player-page:not([player-fullscreened]) .lyrics-plus-integrated.blur-inac
     background-color: rgba(255, 255, 255, 0.36);
     background-clip: unset;
 }
+
 .lyrics-line.lyrics-gap.active .lyrics-syllable.highlight,
 .lyrics-line.lyrics-gap.active .lyrics-syllable.finished,
 .lyrics-line.lyrics-gap:not(.active) .lyrics-syllable {
     background-color: var(--lyplus-lyrics-pallete);
 }
+
 .lyrics-line.lyrics-gap.active .lyrics-syllable.finished {
     animation: none !important;
 }
@@ -529,103 +397,22 @@ ytmusic-player-page:not([player-fullscreened]) .lyrics-plus-integrated.blur-inac
     transition: opacity 0.3s ease, transform 0.6s cubic-bezier(0.23, 1, 0.32, 1) var(--lyrics-line-delay, 0ms), filter 0.3s ease;
     transition-delay: var(--lyrics-line-delay, 0ms);
 }
+
 span.lyrics-song-writters {
     display: block;
-    margin-top: 1em;
-    color: #ffffff7a;
-    font-size: 1.6em;
+    margin-top: var(--lyplus-padding-base);
+    color: var(--lyplus-text-tertiary);
+    font-size: var(--lyplus-font-size-metadata);
 }
+
 span.lyrics-source-provider {
     display: block;
     height: 150%;
-    margin-bottom: 1em;
-    color: #ffffff31;
-    font-size: 1.5em;
+    margin-bottom: var(--lyplus-padding-base);
+    color: var(--lyplus-text-inactive);
+    font-size: var(--lyplus-font-size-provider);
 }
 
-/* --- Song Information Display (Fullscreen) --- */
-.lyrics-song-info {
-    display: none; /* Hidden by default, shown only in fullscreen */
-    position: fixed;
-    top: 60%;
-    left: 25%;
-    transform: translateX(-50%);
-    text-align: left;
-    z-index: 1000;
-    pointer-events: auto; /* Enable pointer events for clickable elements */
-    max-width: 25rem;
-    width: 100%;
-}
-
-/* Enforce SF Pro like main lyrics (no other fonts) */
-.lyrics-song-info,
-#lyrics-song-title,
-#lyrics-song-artist {
-    font-family: 'SF Pro Display' !important;
-}
-
-#lyrics-song-title {
-    font-size: 1.7rem;
-    font-weight: 700;
-    color: #ffffffeb;
-    margin: 0 0 0.25rem 0;
-    /* text-shadow: 0 2px 8px rgba(0, 0, 0, 0.6); */
-    line-height: 1.1;
-}
-
-#lyrics-song-artist {
-    font-size: 1.7rem;
-    font-weight: 700;
-    color: #ffffffa3;
-    margin: 0;
-    /* text-shadow: 0 1px 4px rgba(0, 0, 0, 0.6); */
-    line-height: 1.1;
-}
-
-#lyrics-song-artist a.lyrics-clickable-artist,
-#lyrics-song-artist a.lyrics-clickable-album {
-    color: inherit !important;
-    text-decoration: none !important;
-    transition: opacity 0.2s ease;
-    cursor: pointer !important;
-    pointer-events: auto !important;
-    display: inline !important;
-}
-
-#lyrics-song-artist a.lyrics-clickable-artist:hover,
-#lyrics-song-artist a.lyrics-clickable-album:hover {
-    text-decoration: underline !important;
-}
-
-.lyrics-song-info a {
-    color: inherit !important;
-    pointer-events: auto !important;
-}
-
-/* Show song info only in fullscreen mode */
-ytmusic-player-page[player-fullscreened] .lyrics-song-info {
-    display: block !important;
-}
-
-/* Additional fullscreen selectors for better compatibility */
-#main-panel .lyrics-song-info {
-    display: none;
-}
-
-ytmusic-player-page[player-fullscreened] #main-panel .lyrics-song-info {
-    display: block !important;
-}
-
-/* Fallback for when added to body */
-body .lyrics-song-info {
-    display: none;
-}
-
-ytmusic-player-page[player-fullscreened] body .lyrics-song-info {
-    display: block !important;
-}
-
-/* --- Placeholders for scrolling --- */
 .lyrics-plus-empty {
     display: block;
     height: 100vh;
@@ -633,6 +420,7 @@ ytmusic-player-page[player-fullscreened] body .lyrics-song-info {
     transition: transform 0.6s cubic-bezier(0.23, 1, 0.32, 1) var(--lyrics-line-delay, 0ms);
     transition-delay: var(--lyrics-line-delay, 0ms);
 }
+
 .lyrics-plus-empty-fixed {
     position: fixed;
     top: 0;
@@ -643,9 +431,8 @@ ytmusic-player-page[player-fullscreened] body .lyrics-song-info {
     transform: none !important;
 }
 
-/* --- Status Messages (Loading, Not Found) --- */
-.lyrics-plus-integrated .text-loading,
-.lyrics-plus-integrated .text-not-found {
+#lyrics-plus-container .text-loading,
+#lyrics-plus-container .text-not-found {
     display: block;
     position: absolute;
     top: 30%;
@@ -656,42 +443,29 @@ ytmusic-player-page[player-fullscreened] body .lyrics-song-info {
     text-shadow: 0 2px 10px rgba(255, 255, 255, 0.2);
     transition: opacity 0.3s ease;
 }
-.lyrics-plus-integrated .text-not-found {
+
+#lyrics-plus-container .text-not-found {
     opacity: 0.7;
-    animation: none !important; /* prevent first-appear flick */
-    transform: none !important; /* avoid residual translate from animations */
-    will-change: opacity; /* hint, but no layout shift */
+    animation: fadeInUp 0.6s ease-out;
 }
-/* Fade-out for not-found message only in fullscreen video mode when auto-hide is applied */
-ytmusic-player-page[video-mode][player-fullscreened] .lyrics-plus-integrated.lyrics-plus-message .text-not-found.auto-hide {
-    opacity: 0;
-}
-.lyrics-plus-integrated .text-loading {
+
+#lyrics-plus-container .text-loading {
     opacity: 0.8;
     animation: pulse 1.5s ease-in-out infinite;
-    transform: scale(1);
-    transition: transform 0.4s ease-out, opacity 0.4s ease-out;
 }
-.lyrics-plus-integrated .text-loading.scale-out {
-    transform: scale(0.3);
-    opacity: 0;
-}
-.lyrics-plus-integrated .text-loading:after {
+
+#lyrics-plus-container .text-loading:after {
     content: "...";
     display: inline-block;
     width: 0;
     overflow: hidden;
     vertical-align: bottom;
     text-overflow: clip;
-    mask-image: linear-gradient(to right, #FFF 90%, transparent 100%);
-    mask-size: 200% 100%;
+    margin-left: 0.1em;
+    mask-image: linear-gradient(to right, #FFF 100%, transparent 100%);
+    mask-size: 100% 100%;
     mask-repeat: no-repeat;
     animation: ellipsis 3s ease-in-out infinite;
-    transform: scale(1);
-    transition: transform 0.4s ease-out;
-}
-.lyrics-plus-integrated .text-loading.scale-out:after {
-    transform: scale(0.3);
 }
 
 /* ==========================================================================
@@ -700,7 +474,7 @@ ytmusic-player-page[video-mode][player-fullscreened] .lyrics-plus-integrated.lyr
 
 /* --- Buttons --- */
 #lyrics-plus-buttons-wrapper {
-    display: none; /* Hidden by default */
+    display: none;
     position: absolute;
     bottom: 1em;
     right: 1em;
@@ -709,90 +483,13 @@ ytmusic-player-page[video-mode][player-fullscreened] .lyrics-plus-integrated.lyr
     justify-content: center;
     gap: 10px;
 }
-/* Show buttons only when lyrics are visible */
-ytmusic-tab-renderer:has(#lyrics-plus-container[style*="display: block"]) #lyrics-plus-buttons-wrapper {
-    display: flex;
-}
 
-/* ==========================================================================
-   UP NEXT TAB BUTTONS
-   ========================================================================== */
-
-/* Buttons wrapper for Up next tab */
-#upnext-buttons-wrapper {
-    display: none; /* Hidden by default */
-    position: absolute;
-    bottom: 1em;
-          right: -1.5em;
-    width: 20%;
-    box-sizing: border-box;
-    justify-content: center;
-    gap: 10px;
-    z-index: 100; /* Lower than lyrics buttons */
-}
-
-/* Hide up next buttons when lyrics are visible */
-ytmusic-tab-renderer:has(#lyrics-plus-container[style*="display: block"]) #upnext-buttons-wrapper {
+ytmusic-tab-renderer:has(#lyrics-plus-container:has(.text-loading)) #lyrics-plus-buttons-wrapper,
+ytmusic-tab-renderer:has(#lyrics-plus-container:has(.text-not-found)) #lyrics-plus-buttons-wrapper,
+ytmusic-tab-renderer:has(#lyrics-plus-container.lyrics-plus-message:not(:has(.lyrics-line))) #lyrics-plus-buttons-wrapper {
     display: none !important;
-}
-
-#upnext-lyrics-button {
-    width: 48px;
-    height: 48px;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    cursor: pointer;
-    font-size: 18px;
-    font-weight: normal;
-    line-height: 1;
-    color: rgba(255, 255, 255, 0.9);
-    background: rgba(255, 255, 255, 0.08);
-    border: none;
-    border-radius: 12px;
-    box-shadow: 0 8px 32px 0 rgba(0,0,0,0.15);
-    backdrop-filter: blur(16px);
-    -webkit-backdrop-filter: blur(16px);
-    transition: all 0.3s ease;
-    writing-mode: horizontal-tb;
-    direction: ltr;
-    text-orientation: mixed;
-}
-
-#upnext-lyrics-button:hover {
-    background: rgba(255, 255, 255, 0.15);
-    box-shadow: 0 12px 40px 0 rgba(0,0,0,0.25);
-    color: #fff;
-    transform: translateY(-2px);
-}
-
-#upnext-lyrics-button:active {
-    background: rgba(255, 255, 255, 0.05);
-    color: rgba(255, 255, 255, 0.7);
-    transform: translateY(0);
-}
-
-/* Fullscreen button enhancements for Up next button */
-ytmusic-player-page[player-fullscreened] #upnext-lyrics-button {
-    background: rgba(30, 30, 30, 0.38) !important;
-    border-radius: 12px !important;
-    box-shadow: 0 12px 40px rgba(0, 0, 0, 0.6) !important;
-    backdrop-filter: blur(28px) !important;
-    -webkit-backdrop-filter: blur(28px) !important;
-    color: rgba(255, 255, 255, 0.9) !important;
-    border: none !important;
-    transition: all 0.3s ease !important;
-}
-
-ytmusic-player-page[player-fullscreened] #upnext-lyrics-button:hover {
-    background-color: rgba(255, 255, 255, 0.25) !important;
-    transform: scale(1.15) !important;
-    box-shadow: 0 12px 40px rgba(0, 0, 0, 0.6) !important;
-    border-color: rgba(255, 255, 255, 0.5) !important;
-}
-
-ytmusic-player-page[player-fullscreened] #upnext-lyrics-button:active {
-    transform: scale(0.95) !important;
+    opacity: 0 !important;
+    pointer-events: none !important;
 }
 
 #lyrics-plus-translate-button,
@@ -820,7 +517,6 @@ ytmusic-player-page[player-fullscreened] #upnext-lyrics-button:active {
     transform: scale(1.1);
 }
 
-/* Three-dot menu styling */
 #lyrics-plus-translate-button {
     font-size: 16px;
     font-weight: normal;
@@ -855,7 +551,37 @@ ytmusic-player-page[player-fullscreened] #upnext-lyrics-button:active {
     transform: translateY(0);
 }
 
-/* Fullscreen button enhancements */
+#lyrics-plus-reload-button {
+    font-size: 16px;
+    font-weight: normal;
+    line-height: 1;
+    width: 40px;
+    height: 40px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: 12px;
+    background: rgba(255, 255, 255, 0.08);
+    box-shadow: 0 8px 32px 0 rgba(0,0,0,0.15);
+    backdrop-filter: blur(16px);
+    -webkit-backdrop-filter: blur(16px);
+    color: rgba(255, 255, 255, 0.9);
+    transition: all 0.3s ease;
+}
+
+#lyrics-plus-reload-button:hover {
+    background: rgba(255, 255, 255, 0.15);
+    box-shadow: 0 12px 40px 0 rgba(0,0,0,0.25);
+    color: #fff;
+    transform: translateY(-2px);
+}
+
+#lyrics-plus-reload-button:active {
+    background: rgba(255, 255, 255, 0.05);
+    color: rgba(255, 255, 255, 0.7);
+    transform: translateY(0);
+}
+
 ytmusic-player-page[player-fullscreened] #lyrics-plus-translate-button,
 ytmusic-player-page[player-fullscreened] #lyrics-plus-reload-button {
     background: rgba(30, 30, 30, 0.38) !important;
@@ -888,139 +614,121 @@ ytmusic-player-page[player-fullscreened] #lyrics-plus-reload-button:active {
     color: inherit;
 }
 
-#lyrics-plus-reload-button {
-    font-size: 16px;
-    font-weight: normal;
-    line-height: 1;
-    width: 40px;
-    height: 40px;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    border-radius: 12px;
-    background: rgba(255, 255, 255, 0.08);
-    box-shadow: 0 8px 32px 0 rgba(0,0,0,0.15);
-    backdrop-filter: blur(16px);
-    -webkit-backdrop-filter: blur(16px);
-    color: rgba(255, 255, 255, 0.9);
-    transition: all 0.3s ease;
-}
-
-#lyrics-plus-reload-button:hover {
-    background: rgba(255, 255, 255, 0.15);
-    box-shadow: 0 12px 40px 0 rgba(0,0,0,0.25);
-    color: #fff;
-    transform: translateY(-2px);
-}
-
-#lyrics-plus-reload-button:active {
-    background: rgba(255, 255, 255, 0.05);
-    color: rgba(255, 255, 255, 0.7);
-    transform: translateY(0);
-}
-
-/* Translation Dropdown Menu */
+/* --- Dropdown Menu --- */
 #lyrics-plus-translation-dropdown {
     position: absolute;
     bottom: calc(100% + 8px);
     left: 50%;
     transform: translateX(-50%);
-    background: rgba(255, 255, 255, 0.08);
-    border-radius: 16px;
-    box-shadow: 0 8px 32px 0 rgba(0,0,0,0.15);
+    /*background: #1e1e1e;*/
+    backdrop-filter: blur(30px) saturate(180%);
+    -webkit-backdrop-filter: blur(30px) saturate(180%);
+    background: rgba(30, 30, 30, 0.5) !important;
+    border-radius: 10px;
+    border: 1.5px solid rgba(255, 255, 255, 0.15);
+    box-shadow: 0 10px 30px rgba(0, 0, 0, 0.45);
     z-index: 1001;
-    min-width: 140px;
+    min-width: 180px;
     overflow: hidden;
-    padding: 8px;
-    backdrop-filter: blur(16px);
-    -webkit-backdrop-filter: blur(16px);
-    font-family: 'SF Pro Display', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
-    color: rgba(255, 255, 255, 0.9);
-    transition: all 0.3s ease;
+    padding: 0;
+    font-family: -apple-system, BlinkMacSystemFont, 'SF Pro', Helvetica, Arial, sans-serif;
+    color: rgba(255, 255, 255, 0.95);
 }
 
-/* Fullscreen dropdown styling */
 ytmusic-player-page[player-fullscreened] #lyrics-plus-translation-dropdown {
-    background: rgba(30, 30, 30, 0.38) !important;
-    box-shadow: 0 12px 40px rgba(0, 0, 0, 0.6) !important;
-    backdrop-filter: blur(28px) !important;
-    -webkit-backdrop-filter: blur(28px) !important;
+    /*background: #1e1e1e !important;*/
+    backdrop-filter: blur(30px) saturate(180%) !important;
+    -webkit-backdrop-filter: blur(30px) saturate(180%) !important;
+    background: rgba(30, 30, 30, 0.5) !important;
+    box-shadow: 0 10px 30px rgba(0, 0, 0, 0.45) !important;
+    border: 1.5px solid rgba(255, 255, 255, 0.15) !important;
     top: 50% !important;
     bottom: auto !important;
     right: calc(100% + 12px) !important;
     left: auto !important;
     transform: translateY(-50%) !important;
-    border: none !important;
     z-index: 1001 !important;
 }
 
 #lyrics-plus-translation-dropdown .dropdown-option {
     display: flex;
     align-items: center;
-    justify-content: space-between;
-    padding: 10px 18px;
-    color: #ffffff;
-    font-size: 15px;
-    line-height: 1.4;
+    gap: 10px;
+    padding: 10px 12px;
+    color: rgba(255, 255, 255, 0.95);
+    font: 400 13px/1.23 -apple-system, BlinkMacSystemFont, 'SF Pro', Helvetica, Arial, sans-serif;
     cursor: pointer;
-    transition: background-color 0.2s, color 0.2s;
     text-align: left;
     white-space: nowrap;
-    border-radius: 8px;
-    font-weight: normal;
-    transition: background 0.15s;
-    border: 1.5px solid transparent;
+    border: 0;
+    background: rgba(255, 255, 255, 0.06);
+    transition: background 0.2s;
+    border-radius: 0;
+}
+
+#lyrics-plus-translation-dropdown .dropdown-option:first-child {
+    border-radius: 10px 10px 0 0;
+}
+
+#lyrics-plus-translation-dropdown .dropdown-option:last-child {
+    border-radius: 0 0 10px 10px;
+}
+
+#lyrics-plus-translation-dropdown .dropdown-option:only-child {
+    border-radius: 10px;
 }
 
 #lyrics-plus-translation-dropdown .dropdown-option:hover {
-    background: rgba(255,255,255,0.08) !important;
-    color: #fff !important;
-    border: 1.5px solid rgba(255,255,255,0.18) !important;
-    box-shadow: 0 2px 8px 0 rgba(0,0,0,0.10) !important;
-    transition: background 0.2s, color 0.2s, border 0.2s, box-shadow 0.2s;
+    background: rgba(255, 255, 255, 0.12) !important;
+    color: rgba(255, 255, 255, 0.95) !important;
 }
 
 #lyrics-plus-translation-dropdown .dropdown-option.active {
-    background: none !important;
-    font-weight: normal !important;
-    border: 1.5px solid transparent;
+    background: rgba(255, 255, 255, 0.06);
+    font-weight: 400;
 }
 
 #lyrics-plus-translation-dropdown .dropdown-option.active:hover {
-    background: rgba(255,255,255,0.08) !important;
-    color: #fff !important;
-    border: 1.5px solid rgba(255,255,255,0.18) !important;
-    box-shadow: 0 2px 8px 0 rgba(0,0,0,0.10) !important;
-    transition: background 0.2s, color 0.2s, border 0.2s, box-shadow 0.2s;
+    background: rgba(255, 255, 255, 0.12) !important;
+    color: rgba(255, 255, 255, 0.95) !important;
 }
 
 #lyrics-plus-translation-dropdown .dropdown-option.disabled {
-    color: #888;
+    color: rgba(255, 255, 255, 0.4);
     cursor: not-allowed;
-    background: none;
-    font-weight: normal;
+    background: rgba(255, 255, 255, 0.06);
     opacity: 0.6;
-    border: 1.5px solid transparent;
 }
 
 #lyrics-plus-translation-dropdown .dropdown-icon {
     margin-left: auto;
     display: flex;
     align-items: center;
-    height: 22px;
-    width: 22px;
-    min-width: 22px;
-    min-height: 22px;
+    justify-content: center;
+    height: 16px;
+    width: 16px;
+    min-width: 16px;
+    min-height: 16px;
+    flex-shrink: 0;
 }
 
 #lyrics-plus-translation-dropdown .dropdown-icon svg {
     width: 100% !important;
     height: 100% !important;
     display: block;
+    fill: currentColor;
+    color: inherit;
 }
 
 #lyrics-plus-translation-dropdown.hidden {
     display: none;
+}
+
+#lyrics-plus-translation-dropdown .dropdown-separator {
+    height: 1px;
+    background: rgba(255, 255, 255, 0.12);
+    margin: 4px 0;
+    border: 0;
 }
 
 .dropdown-option img, 
@@ -1033,67 +741,118 @@ ytmusic-player-page[player-fullscreened] #lyrics-plus-translation-dropdown {
 
 .dropdown-option span {
     flex: 1;
-    margin-right: 8px;
+}
+
+#lyrics-plus-translation-dropdown .dropdown-option:focus-visible {
+    outline: 2px solid rgba(255, 122, 182, 0.6);
+    outline-offset: -2px;
+}
+/* --- Song Information Display (Fullscreen) --- */
+.lyrics-song-info {
+    display: none;
+    position: fixed;
+    top: 60%;
+    left: 25%;
+    transform: translateX(-50%);
+    text-align: left;
+    z-index: 1000;
+    pointer-events: auto;
+    max-width: 25rem;
+    width: 100%;
+}
+
+.lyrics-song-info,
+#lyrics-song-title,
+#lyrics-song-artist {
+    font-family: 'SF Pro Display' !important;
+}
+
+#lyrics-song-title {
+    font-size: 1.7rem;
+    font-weight: 700;
+    color: #ffffffeb;
+    margin: 0 0 0.25rem 0;
+    line-height: 1.1;
+}
+
+#lyrics-song-artist {
+    font-size: 1.7rem;
+    font-weight: 700;
+    color: #ffffffa3;
+    margin: 0;
+    line-height: 1.1;
+}
+
+#lyrics-song-artist a.lyrics-clickable-artist,
+#lyrics-song-artist a.lyrics-clickable-album {
+    color: inherit !important;
+    text-decoration: none !important;
+    transition: opacity 0.2s ease;
+    cursor: pointer !important;
+    pointer-events: auto !important;
+    display: inline !important;
+}
+
+#lyrics-song-artist a.lyrics-clickable-artist:hover,
+#lyrics-song-artist a.lyrics-clickable-album:hover {
+    text-decoration: underline !important;
+}
+
+.lyrics-song-info a {
+    color: inherit !important;
+    pointer-events: auto !important;
+}
+
+ytmusic-player-page[player-fullscreened] .lyrics-song-info {
+    display: block !important;
+}
+
+#main-panel .lyrics-song-info {
+    display: none;
+}
+
+ytmusic-player-page[player-fullscreened] #main-panel .lyrics-song-info {
+    display: block !important;
+}
+
+body .lyrics-song-info {
+    display: none;
+}
+
+ytmusic-player-page[player-fullscreened] body .lyrics-song-info {
+    display: block !important;
 }
 
 /* --- Translated/Romanized Text --- */
 .lyrics-translation-container,
 .lyrics-romanization-container {
-    padding-top: 0.1em;
-    opacity: 0.8;
+    padding-top: 0.2em;
+    opacity: 0.9;
     font-size: var(--lyplus-font-size-subtext);
     overflow-wrap: break-word;
-    color: var(--lyplus-text-secondary); /* Match inactive main lyrics color by default */
+    color: var(--lyplus-text-tertiary);
     pointer-events: none;
     user-select: none;
     -webkit-user-select: none;
     -moz-user-select: none;
     -ms-user-select: none;
-    transition: opacity 0.3s ease, color 0.18s ease; /* Smooth color change like main lyrics */
-}
-.lyrics-line.active .lyrics-translation-container {
-    color: var(--lyplus-lyrics-pallete, var(--lyplus-text-primary)); /* Bright like active main lyrics */
-}
-.lyrics-line.active .lyrics-romanization-container {
-    color: var(--lyplus-lyrics-pallete, var(--lyplus-text-primary)); /* Use same color as main lyrics */
-}
-.lyrics-romanization-container {
-    direction: ltr !important; /* Always force LTR for romanization */
+    transition: opacity 0.3s ease, color 0.5s;
 }
 
-/* Ensure romanized lyrics use same color as main lyrics when inactive */
-.lyrics-line:not(.active) .lyrics-romanization-container {
-    color: var(--lyplus-text-secondary); /* Same as inactive main lyrics */
+.lyrics-line.active .lyrics-translation-container {
+    color: var(--lyplus-lyrics-pallete, var(--lyplus-text-primary));
 }
+
+.lyrics-line.active .lyrics-romanization-container {
+    color: var(--lyplus-lyrics-pallete, var(--lyplus-text-primary));
+}
+
+.lyrics-romanization-container {
+    direction: ltr !important;
+}
+
 .lyrics-romanization-container.rtl-text {
     direction: rtl !important;
-    /* Always force LTR for big-mode */
-}
-
-/* ==========================================================================
-   ROMANIZED BIG MODE - Controls which text appears larger
-   ========================================================================== */
-
-/* When romanized-big-mode is active (largerTextMode = "romanization") */
-.lyrics-plus-integrated.romanized-big-mode .lyrics-line .main-vocal-container {
-    /* Main container shows romanized text (larger) */
-    font-size: 1em; /* Normal size */
-}
-
-.lyrics-plus-integrated.romanized-big-mode .lyrics-line .lyrics-romanization-container {
-    /* Romanization container shows original text (smaller) */
-    font-size: 0.6em; /* Smaller size */
-}
-
-/* When romanized-big-mode is NOT active (largerTextMode = "lyrics") */
-.lyrics-plus-integrated:not(.romanized-big-mode) .lyrics-line .main-vocal-container {
-    /* Main container shows original text (larger) */
-    font-size: 1em; /* Normal size */
-}
-
-.lyrics-plus-integrated:not(.romanized-big-mode) .lyrics-line .lyrics-romanization-container {
-    /* Romanization container shows romanized text (smaller) */
-    font-size: 0.6em; /* Smaller size */
 }
 
 /* ==========================================================================
@@ -1101,7 +860,7 @@ ytmusic-player-page[player-fullscreened] #lyrics-plus-translation-dropdown {
    ========================================================================== */
 
 .lyplus-blur-container {
-    display: none; /* Hidden by default, activated by player state */
+    display: none;
     position: fixed;
     top: 0;
     left: 0;
@@ -1114,6 +873,7 @@ ytmusic-player-page[player-fullscreened] #lyrics-plus-translation-dropdown {
     content-visibility: auto;
     contain-intrinsic-size: 100% 100%;
 }
+
 .lyplus-blur-background {
     position: absolute;
     top: -20px;
@@ -1125,6 +885,7 @@ ytmusic-player-page[player-fullscreened] #lyrics-plus-translation-dropdown {
     filter: blur(10px) brightness(0.4);
     transform: scale(1.1);
 }
+
 .lyplus-gradient-overlay {
     position: absolute;
     top: 0;
@@ -1134,6 +895,7 @@ ytmusic-player-page[player-fullscreened] #lyrics-plus-translation-dropdown {
     opacity: 1;
     background: linear-gradient(180deg, rgba(0, 0, 0, 0.8) 0%, rgba(0, 0, 0, 0.6) 50%, rgba(0, 0, 0, 0.8) 100%);
 }
+
 .lyplus-blur-container::after {
     content: '';
     position: absolute;
@@ -1144,6 +906,10 @@ ytmusic-player-page[player-fullscreened] #lyrics-plus-translation-dropdown {
     height: 100%;
     backdrop-filter: brightness(0.47) saturate(1.7) contrast(1.3);
 }
+#layout.dynamic-player[player-ui-state="PLAYER_PAGE_OPEN"] .lyplus-blur-container::after {
+    backdrop-filter: brightness(0.47) saturate(1.7) contrast(1.3);
+}
+
 canvas#lyplus-webgl-canvas {
     position: absolute;
     top: 50%;
@@ -1154,366 +920,10 @@ canvas#lyplus-webgl-canvas {
     transform: translate(-50%, -50%);
 }
 
-/* --- Dynamic Player UI Integration --- */
-
-/* Show blur background when player page is open or in fullscreen */
-#layout.dynamic-player[player-ui-state="PLAYER_PAGE_OPEN"] .lyplus-blur-container,
-#layout.dynamic-player[is-mweb-modernization-enabled][player-ui-state="MINIPLAYER_IN_PLAYER_PAGE"] .lyplus-blur-container,
-ytmusic-app #layout.dynamic-player[player-ui-state="FULLSCREEN"] .lyplus-blur-container {
-    display: block;
-    opacity: 1;
-}
-
-/* Make backgrounds transparent to reveal the blur container */
-#layout.dynamic-player[player-ui-state="PLAYER_PAGE_OPEN"] #mini-guide-background,
-#layout.dynamic-player[player-ui-state="PLAYER_PAGE_OPEN"] #nav-bar-background,
-#layout.dynamic-player[player-ui-state="PLAYER_PAGE_OPEN"] #guide-wrapper,
-#layout.dynamic-player[player-ui-state="PLAYER_PAGE_OPEN"] ytmusic-player-page#player-page,
-#layout.dynamic-player[player-ui-state="PLAYER_PAGE_OPEN"] #player-bar-background,
-#layout.dynamic-player[player-ui-state="PLAYER_PAGE_OPEN"] ytmusic-player-bar,
-#layout.dynamic-player[player-ui-state="PLAYER_PAGE_OPEN"] #nav-bar-divider.ytmusic-app-layout {
-    background: transparent !important;
-}
-
-#layout.dynamic-player[player-ui-state="PLAYER_PAGE_OPEN"] #nav-bar-divider.ytmusic-app-layout,
-#layout.dynamic-player[player-ui-state="MINIPLAYER_IN_PLAYER_PAGE"] #nav-bar-divider.ytmusic-app-layout,
-#layout.dynamic-player[player-ui-state="PLAYER_PAGE_OPEN"] #mini-guide-background,
-#layout.dynamic-player[player-ui-state="PLAYER_PAGE_OPEN"] #nav-bar-background {
-    border-color: transparent !important;
-}
-
-/* Style adjustments for modern mobile view */
-#layout.dynamic-player[is-mweb-modernization-enabled] .side-panel.ytmusic-player-page,
-#layout.dynamic-player[is-mweb-modernization-enabled][player-page-ui-state="TABS_VIEW"] #side-panel.ytmusic-player-page,
-#layout.dynamic-player[is-mweb-modernization-enabled][player-ui-state="PLAYER_PAGE_OPEN"] .background-gradient,
-#layout.dynamic-player[is-mweb-modernization-enabled][player-ui-state="MINIPLAYER_IN_PLAYER_PAGE"] .background-gradient,
-#layout.dynamic-player[is-mweb-modernization-enabled][player-ui-state="MINIPLAYER_IN_PLAYER_PAGE"] #player-page,
-#layout.dynamic-player[is-mweb-modernization-enabled][player-ui-state="MINIPLAYER_IN_PLAYER_PAGE"] #top-player-bar,
-#layout.dynamic-player[is-mweb-modernization-enabled][player-ui-state="MINIPLAYER_IN_PLAYER_PAGE"] #player-bar-background,
-#layout.dynamic-player[is-mweb-modernization-enabled][player-ui-state="MINIPLAYER_IN_PLAYER_PAGE"] #nav-bar-background,
-#layout.dynamic-player[is-mweb-modernization-enabled][player-ui-state="MINIPLAYER_IN_PLAYER_PAGE"] #mini-guide,
-#layout.dynamic-player[is-mweb-modernization-enabled][player-ui-state="MINIPLAYER_IN_PLAYER_PAGE"] #mini-guide-background,
-#layout.dynamic-player[is-mweb-modernization-enabled][player-ui-state="PLAYER_PAGE_OPEN"] #mini-guide {
-    background: none !important;
-}
-/* Hide the default image to prevent conflict with our blur container */
-#layout.dynamic-player .background-image {
-    visibility: hidden !important;
-}
-
-#layout.dynamic-player[player-ui-state="PLAYER_PAGE_OPEN"] .lyplus-blur-container::after {
-    backdrop-filter: brightness(0.47) saturate(1.7) contrast(1.3);
-}
-#layout.dynamic-player[player-ui-state="PLAYER_PAGE_OPEN"] ytmusic-player-bar {
-    backdrop-filter: blur(20px);
-}
-#layout.dynamic-player[player-ui-state="PLAYER_PAGE_OPEN"] :not([player-fullscreened]) ytmusic-player {
-    border: none;
-    border-radius: 1em;
-    box-shadow: 0 1em 3em #00000038;
-}
-
-/* ==========================================================================
-   DESKTOP & FULLSCREEN STYLES (@media)
-   ========================================================================== */
-
- @media (min-width: 615px) {
-     /* --- General Adjustments --- */
-     /* Show buttons in fullscreen mode with proper positioning */
-     ytmusic-player-page[player-fullscreened] #lyrics-plus-buttons-wrapper {
-         display: flex !important;
-         position: fixed !important;
-         bottom: 100px !important;
-         right: 35px !important;
-         z-index: 2 !important;
-         width: auto !important;
-         margin: 0 !important;
-         top: auto !important;
-         pointer-events: auto !important;
-         align-items: center !important; /* Center items vertically */
-     }
-
-     /* Video mode fullscreen button positioning - same as artwork mode (top-right) */
-     ytmusic-player-page[video-mode][player-fullscreened] #lyrics-plus-buttons-wrapper {
-         top: 20px !important;
-         right: 20px !important;
-         bottom: auto !important;
-     }
-
-     ytmusic-player-page[player-fullscreened] #lyrics-plus-buttons-wrapper {
-         opacity: 0;
-         pointer-events: none;
-         transition: opacity 0.2s;
-     }
-
-
-
-     ytmusic-player-page[player-fullscreened]:hover #lyrics-plus-buttons-wrapper,
-     ytmusic-player-page[player-fullscreened] #lyrics-plus-buttons-wrapper:hover,
-     ytmusic-player-page[player-fullscreened] #lyrics-plus-buttons-wrapper:has(#lyrics-plus-translation-dropdown:not(.hidden)) {
-         opacity: 1;
-         pointer-events: auto;
-     }
-
-     ytmusic-player-page[player-fullscreened] #lyrics-plus-translate-button,
-     ytmusic-player-page[player-fullscreened] #lyrics-plus-reload-button {
-         opacity: 0;
-         pointer-events: none;
-         transition: opacity 0.2s;
-     }
-
-     /* Video mode buttons - remove individual styling, use same as artwork mode */
-
-
-
-     ytmusic-player-page[player-fullscreened] #lyrics-plus-buttons-wrapper:hover #lyrics-plus-translate-button,
-     ytmusic-player-page[player-fullscreened] #lyrics-plus-buttons-wrapper:hover #lyrics-plus-reload-button,
-     ytmusic-player-page[player-fullscreened] #lyrics-plus-buttons-wrapper:has(#lyrics-plus-translation-dropdown:not(.hidden)) #lyrics-plus-translate-button,
-     ytmusic-player-page[player-fullscreened] #lyrics-plus-buttons-wrapper:has(#lyrics-plus-translation-dropdown:not(.hidden)) #lyrics-plus-reload-button {
-         opacity: 1;
-         pointer-events: auto;
-     }
-
-     ytmusic-player-page[player-fullscreened] #lyrics-plus-translation-dropdown {
-         opacity: 0;
-         pointer-events: none;
-         transition: opacity 0.2s;
-     }
-
-     ytmusic-player-page[player-fullscreened] #lyrics-plus-buttons-wrapper:hover #lyrics-plus-translation-dropdown,
-     ytmusic-player-page[player-fullscreened] #lyrics-plus-translation-dropdown:not(.hidden) {
-         opacity: 1;
-         pointer-events: auto;
-     }
-
-     /* Only hide player bar when extension buttons are visible in fullscreen */
-     ytmusic-player-page[player-fullscreened]:has(#lyrics-plus-buttons-wrapper:hover) ytmusic-app-layout[show-fullscreen-controls] > [slot="player-bar"] {
-         display: none !important;
-     }
-
-    /* --- Non-Video, Non-Fullscreen Player Page --- */
-    ytmusic-player-page:not([video-mode]):not([player-fullscreened]):not([player-ui-state="MINIPLAYER"]) #player.ytmusic-player-page {
-        left: 50%;
-        max-width: 400px !important;
-        transform: translateX(-55%);
-    }
-    ytmusic-player-page:not([is-mweb-modernization-enabled])[player-fullscreened] .av.ytmusic-player-page {
-        width: 40% !important;
-    }
-
-    /* --- Non-Video, Fullscreen Player Page --- */
-    ytmusic-player-page:not([video-mode]):not([is-video-truncation-fix-enabled])[player-fullscreened]:has(.lyrics-plus-integrated[style*="display: block"]) #player.ytmusic-player-page {
-        top: calc(50% - var(--ytmusic-nav-bar-height));
-        left: 30%;
-        width: 45rem;
-        height: 45rem;
-        border: none;
-        border-radius: 1em;
-        box-shadow: 0 1em 3em #00000038;
-        mask-image: none !important;
-        transform: translate(-60%, -50%);
-    }
-    /* Disable transitions on artwork and related elements to prevent animation on fullscreen toggle */
-    #player.ytmusic-player-page,
-    .av.ytmusic-player-page,
-    ytmusic-player-page #side-panel {
-        transition: none !important;
-    }
-    /* Not-found delayed center animation (fullscreen, artwork mode) */
-    /* Initial not-found: keep default artwork position, show message centered */
-    ytmusic-player-page:not([video-mode])[player-fullscreened] .lyrics-plus-integrated.lyrics-plus-message .text-not-found {
-        position: absolute; /* match loading */
-        top: 30%;
-        left: 0;
-        transform: none;
-        width: 100%;
-        text-align: center;
-        z-index: 3;
-        transition: opacity .6s ease;
-    }
-    /* When animation class is added, slide artwork to center and fade out text */
-    ytmusic-player-page:not([video-mode]):not([is-video-truncation-fix-enabled])[player-fullscreened]:has(.lyrics-plus-integrated.lyrics-plus-message.animate-not-found-center) #player.ytmusic-player-page {
-        left: 50% !important;
-        transform: translate(-50%, -50%) !important;
-        transition: left .6s ease, transform .6s ease !important;
-
-    }
-    ytmusic-player-page:not([video-mode])[player-fullscreened] .lyrics-plus-integrated.lyrics-plus-message.animate-not-found-center .text-not-found {
-        opacity: 0;
-    }
-    /* Ensure artwork returns to normal position when lyrics are actually displayed */
-    ytmusic-player-page:not([video-mode]):not([is-video-truncation-fix-enabled])[player-fullscreened]:has(.lyrics-plus-integrated[style*="display: block"]):not(:has(.lyrics-plus-integrated.lyrics-plus-message)) #player.ytmusic-player-page,
-    ytmusic-player-page:not([video-mode]):not([is-video-truncation-fix-enabled])[player-fullscreened]:has(.lyrics-plus-integrated[style*="display: block"] .lyrics-line) #player.ytmusic-player-page {
-        left: 30% !important;
-        transform: translate(-60%, -50%) !important;
-    }
-    /* Force artwork back to left when loading new song (overrides not-found center) */
-    ytmusic-player-page:not([video-mode]):not([is-video-truncation-fix-enabled])[player-fullscreened]:has(.lyrics-plus-integrated[style*="display: block"] .text-loading) #player.ytmusic-player-page {
-        left: 30% !important;
-        transform: translate(-60%, -50%) !important;
-    }
-    ytmusic-app-layout:not([is-mweb-modernization-enabled])[player-fullscreened] > [slot="player-page"] {
-        width: 100% !important;
-        height: 100% !important;
-        background: none !important;
-    }
-    ytmusic-app-layout:not([is-mweb-modernization-enabled])[player-fullscreened] > [slot="player-page"] .tab-header-container {
-        display: none !important;
-    }
-    ytmusic-app-layout:not([is-mweb-modernization-enabled])[player-fullscreened] > [slot="player-page"] #side-panel {
-        min-width: 50%;
-        mask-image: linear-gradient(to bottom, transparent 0%, black 26%, black 70%, transparent 100%);
-        transform: translateY(-8.8rem);
-        pointer-events: auto !important;
-    }
-    ytmusic-app-layout:not([is-mweb-modernization-enabled])[player-fullscreened] .lyplus-blur-container .lyplus-gradient-overlay {
-        opacity: 0;
-    }
-    ytmusic-app-layout:not([is-mweb-modernization-enabled])[player-fullscreened] > [slot="player-page"] .lyrics-plus-integrated {
-        margin-top: 10%;
-        padding-top: calc(1em + 40%);
-    }
-    ytmusic-app-layout:not([is-mweb-modernization-enabled])[player-fullscreened] > [slot="player-page"] #side-panel .lyrics-line {
-        margin-bottom: .5rem;
-        font-size: 4.5rem;
-    }
-    ytmusic-app-layout:not([is-mweb-modernization-enabled])[player-fullscreened] > [slot="player-page"] .lyrics-line:not(.active) .main-vocal-container {
-        transform: scale3d(0.8, 0.8, 0.95);
-    }
-    ytmusic-player-page:not([is-video-truncation-fix-enabled])[player-fullscreened] #lyrics-plus-container[style*="display: block"] {
-        scroll-padding-top: 35%;
-        scroll-padding-block-start: 35%;
-    }
-
-    /* --- Video-Mode, Fullscreen (Karaoke Style) --- */
-    /* Remove border from album art in video mode fullscreen */
-    ytmusic-player-page[video-mode][player-fullscreened] #player.ytmusic-player-page {
-        border: none !important;
-        border-radius: 1em;
-        box-shadow: 0 1em 3em #00000038;
-    }
-    ytmusic-player-page[video-mode]:not([is-video-truncation-fix-enabled])[player-fullscreened]:has(.lyrics-plus-integrated[style*="display: block"]) .lyrics-plus-integrated {
-        margin-top: 0;
-        padding-top: 0;
-    }
-    ytmusic-player-page[video-mode]:not([is-video-truncation-fix-enabled])[player-fullscreened]:has(.lyrics-plus-integrated[style*="display: block"]) #side-panel {
-        position: absolute;
-        bottom: 0rem;
-        left: 0;
-        z-index: 2;
-        width: 100vw !important;
-        min-width: 100vw;
-        height: 17em;
-        margin: 0;
-        box-sizing: border-box;
-        text-align: center !important;
-        pointer-events: none;
-        overflow: visible;
-        mask-image: none;
-    }
-    ytmusic-player-page[video-mode]:not([is-video-truncation-fix-enabled])[player-fullscreened]:has(.lyrics-plus-integrated[style*="display: block"]) ytmusic-tab-renderer {
-        overflow: visible;
-    }
-    ytmusic-player-page[video-mode]:not([is-video-truncation-fix-enabled])[player-fullscreened]:has(.lyrics-plus-integrated[style*="display: block"]) .lyrics-line {
-        display: none; /* Hide all lines by default */
-        position: absolute;
-        top: 0;
-        bottom: 0;
-        width: 100%;
-        opacity: 0;
-        text-align: center !important;
-        transform: none !important;
-    }
-    /* Only show the active and adjacent lines */
-    ytmusic-player-page[video-mode]:not([is-video-truncation-fix-enabled])[player-fullscreened]:has(.lyrics-plus-integrated[style*="display: block"]) .lyrics-line.lyrics-activest,
-    ytmusic-player-page[video-mode]:not([is-video-truncation-fix-enabled])[player-fullscreened]:has(.lyrics-plus-integrated[style*="display: block"]) .lyrics-line.next-active-line,
-    ytmusic-player-page[video-mode]:not([is-video-truncation-fix-enabled])[player-fullscreened]:has(.lyrics-plus-integrated[style*="display: block"]) .lyrics-line.pre-active-line {
-        display: block;
-    }
-    ytmusic-player-page[video-mode]:not([is-video-truncation-fix-enabled])[player-fullscreened]:has(.lyrics-plus-integrated[style*="display: block"]) .lyrics-line.fullscreen-focused.active {
-        opacity: 1;
-        filter: drop-shadow(0 0 0.1em rgba(0, 0, 0, 1));
-    }
-    /* Hide metadata in video mode */
-    ytmusic-player-page[video-mode]:not([is-video-truncation-fix-enabled])[player-fullscreened]:has(.lyrics-plus-integrated[style*="display: block"]) span.lyrics-song-writters,
-    ytmusic-player-page[video-mode]:not([is-video-truncation-fix-enabled])[player-fullscreened]:has(.lyrics-plus-integrated[style*="display: block"]) span.lyrics-source-provider {
-        display: none;
-    }
-    ytmusic-player-page[video-mode]:not([is-video-truncation-fix-enabled])[player-fullscreened]:has(.lyrics-plus-integrated[style*="display: block"]) .lyrics-line.lyrics-gap .main-vocal-container {
-        transform-origin: center !important;
-    }
- }
-
-@media (min-width: 615px) {
-  ytmusic-player-page[video-mode][player-fullscreened] .lyrics-translation-container {
-    background: none !important;
-    border-radius: 0 !important;
-    padding: none !important;
-    margin-top: 0.2em;
-    pointer-events: auto;
-    backdrop-filter: blur(28px) !important;
-    -webkit-backdrop-filter: blur(28px) !important;
-    border: none !important;
-    box-shadow: none !important;
-  }
-  /* Spacing between main lyric, romanization, and translation in video fullscreen */
-  ytmusic-player-page[video-mode][player-fullscreened] .lyrics-line .main-vocal-container {
-    margin-bottom: 0.25em;
-  }
-  ytmusic-player-page[video-mode][player-fullscreened] .lyrics-line .lyrics-romanization-container {
-    margin-top: 0.1em;
-    margin-bottom: 0.15em;
-  }
-  ytmusic-player-page[video-mode][player-fullscreened] .lyrics-line .lyrics-translation-container {
-    margin-top: 0.15em !important; /* override default for consistent spacing */
-  }
-  ytmusic-player-page[video-mode][player-fullscreened] .lyrics-line.active .lyrics-translation-container {
-    color: #ffffff !important; /* Bright when active */
-  }
-  ytmusic-player-page[video-mode][player-fullscreened] .lyrics-line:not(.active) .lyrics-translation-container {
-    color: #ffffff7a !important; /* Dim when inactive (for completeness) */
-  }
-  /* Match romanization brightness to translation in video fullscreen */
-  ytmusic-player-page[video-mode][player-fullscreened] .lyrics-line.active .lyrics-romanization-container {
-    color: #ffffff !important;
-  }
-  ytmusic-player-page[video-mode][player-fullscreened] .lyrics-line:not(.active) .lyrics-romanization-container {
-    color: #ffffff7a !important;
-  }
-  ytmusic-player-page[player-fullscreened]:not([video-mode]) .lyrics-translation-container {
-    background: none !important;
-    border-radius: 0 !important;
-    padding: 0 !important;
-    margin-top: 0.2em;
-    pointer-events: auto;
-    backdrop-filter: none !important;
-    -webkit-backdrop-filter: none !important;
-    border: none !important;
-    box-shadow: none !important;
-  }
-  ytmusic-player-page[player-fullscreened]:not([video-mode]) .lyrics-line.active .lyrics-translation-container {
-    color: #ffffff !important; /* Bright when active */
-  }
-  ytmusic-player-page[player-fullscreened]:not([video-mode]) .lyrics-line:not(.active) .lyrics-translation-container {
-    color: #ffffff7a !important; /* Dim when inactive */
-  }
-  /* Match romanization brightness to translation in non-video fullscreen */
-  ytmusic-player-page[player-fullscreened]:not([video-mode]) .lyrics-line.active .lyrics-romanization-container {
-    color: #ffffff !important;
-  }
-  ytmusic-player-page[player-fullscreened]:not([video-mode]) .lyrics-line:not(.active) .lyrics-romanization-container {
-    color: #ffffff7a !important;
-  }
-}
- 
- /* ==========================================================================
-    KEYFRAME ANIMATIONS
-    ========================================================================== */
-
 :root {
-    --max-scale: 1.05; /* Reduced from 1.12 - less dramatic scaling */
-    --min-scale: 1.01; /* Keep same minimum */
-    --shadow-intensity: 0.6; /* Restored bright glow - back to original value */
+    --max-scale: 1.12;
+    --min-scale: 1.01;
+    --shadow-intensity: 0.6;
 }
 
 @keyframes wipe {
@@ -1521,97 +931,233 @@ ytmusic-app #layout.dynamic-player[player-ui-state="FULLSCREEN"] .lyplus-blur-co
         background-size: 0.75em 100%, 0% 100%;
         background-position: -0.375em 0%, left;
     }
+
     to {
         background-size: 0.75em 100%, 100% 100%;
         background-position: calc(100% + 0.375em) 0%, left;
     }
 }
+
 @keyframes wipe-rtl {
     from {
         background-size: 0.75em 100%, 0% 100%;
-        background-position: calc(100% + 0.375em) 0%, right;
+        background-position: calc(100% + 0.375em) 0%, calc(100% + 0.36em);
     }
+
     to {
         background-size: 0.75em 100%, 100% 100%;
         background-position: -0.75em 0%, right;
     }
 }
+
 @keyframes pre-wipe-universal {
     from {
         background-size: 0.75em 100%, 0% 100%;
         background-position: -0.75em 0%, left;
     }
+
     to {
         background-size: 0.75em 100%, 0% 100%;
         background-position: -0.375em 0%, left;
     }
 }
+
 @keyframes pre-wipe-universal-rtl {
     from {
         background-size: 0.75em 100%, 0% 100%;
         background-position: calc(100% + 0.75em) 0%, right;
     }
+
     to {
         background-size: 0.75em 100%, 0% 100%;
         background-position: calc(100% + 0.375em) 0%, right;
     }
 }
+
 @keyframes gap-loop {
-    from { transform: scale(1.1); }
-    to { transform: scale(0.9); }
+    from {
+        transform: scale(1.1);
+    }
+
+    to {
+        transform: scale(0.9);
+    }
 }
+
 @keyframes gap-ended {
-    0% { transform: translateY(-25%) scale(1) translateZ(0); }
-    35% { transform: translateY(-25%) scale(1.2) translateZ(0); }
-    100% { transform: translateY(-25%) scale(0) translateZ(0); }
+    0% {
+        transform: translateY(-25%) scale(1) translateZ(0);
+    }
+
+    35% {
+        transform: translateY(-25%) scale(1.2) translateZ(0);
+    }
+
+    100% {
+        transform: translateY(-25%) scale(0) translateZ(0);
+    }
 }
+
 @keyframes pulse {
-    0%, 100% { opacity: 0.5; transform: scale(0.98); }
-    50% { opacity: 0.8; transform: scale(1); }
+
+    0%,
+    100% {
+        opacity: 0.5;
+        transform: scale(0.98);
+    }
+
+    50% {
+        opacity: 0.8;
+        transform: scale(1);
+    }
 }
+
 @keyframes fadeInUp {
-    from { opacity: 0; transform: translateY(20px); }
-    to { opacity: 0.7; transform: translateY(0); }
+    from {
+        opacity: 0;
+        transform: translateY(20px);
+    }
+
+    to {
+        opacity: 0.7;
+        transform: translateY(0);
+    }
 }
+
 @keyframes ellipsis {
-    0% { width: 0; opacity: 1; mask-position: 0% 0%; }
-    60% { width: 0.8em; opacity: 1; mask-position: 10% 0%; }
-    80%, 82% { width: 0.8em; opacity: 0; }
-    100% { width: 0; opacity: 0; }
+    0% {
+        width: 0;
+        opacity: 1;
+        mask-position: 0% 0%;
+    }
+
+    60% {
+        width: 0.9em;
+        opacity: 1;
+        mask-position: 0% 0%;
+    }
+
+    80%,
+    82% {
+        width: 0.9em;
+        opacity: 0;
+    }
+
+    100% {
+        width: 0;
+        opacity: 0;
+    }
 }
+
 @keyframes pre-wipe-char {
-    from { background-size: 0.75em 100%, 0% 100%; background-position: -0.75em 0%, left; }
-    to { background-size: 0.75em 100%, 0% 100%; background-position: -0.375em 0%, left; }
+    from {
+        background-size: 0.75em 100%, 0% 100%;
+        background-position: -0.75em 0%, left;
+    }
+
+    to {
+        background-size: 0.75em 100%, 0% 100%;
+        background-position: -0.375em 0%, left;
+    }
 }
+
 @keyframes grow-dynamic {
     0% {
         transform: matrix3d(var(--min-scale), 0, 0, 0, 0, var(--min-scale), 0, 0, 0, 0, 1, 0, 0, 0, 0, 1);
         filter: drop-shadow(0 0 0 rgba(255, 255, 255, 0));
     }
-    25%, 30% {
+
+    25%,
+    30% {
         transform: matrix3d(var(--max-scale), 0, 0, 0, 0, var(--max-scale), 0, 0, 0, 0, 1, 0, var(--char-offset-x, 0), var(--translate-y-peak, -2%), 0, 1);
-        filter: drop-shadow(0 0 0.1em rgba(255, 255, 255, var(--shadow-intensity))); /* Restored bright blur */
+        filter: drop-shadow(0 0 0.1em rgba(255, 255, 255, var(--shadow-intensity)));
     }
+
     100% {
         transform: matrix3d(var(--min-scale), 0, 0, 0, 0, var(--min-scale), 0, 0, 0, 0, 1, 0, 0, 0, 0, 1);
     }
 }
+
 @keyframes grow-static {
-    0%, 100% {
-        transform: scale3d(1.01, 1.01, 1.05) translateY(-0.05%); /* Reduced Z-scale and Y-translate */
+
+    0%,
+    100% {
+        transform: scale3d(1.01, 1.01, 1.1) translateY(-0.05%);
         text-shadow: 0 0 0 rgba(255, 255, 255, 0);
     }
-    30%, 40% {
-        transform: scale3d(1.04, 1.04, 1.05) translateY(-0.05%); /* Reduced from 1.10 to 1.04 - much smaller scaling */
-        text-shadow: 0 0 0.3em rgba(255, 255, 255, 0.5); /* Restored bright text shadow */
+
+    30%,
+    40% {
+        transform: scale3d(1.10, 1.10, 1.1) translateY(-0.05%);
+        text-shadow: 0 0 0.3em rgba(255, 255, 255, 0.5);
     }
 }
 
 @keyframes fade-gap {
-    from { background-color: rgba(255, 255, 255, 0.36); }
-    to { background-color: var(--lyplus-lyrics-pallete); }
+    from {
+        background-color: rgba(255, 255, 255, 0.36);
+    }
+
+    to {
+        background-color: var(--lyplus-lyrics-pallete);
+    }
 }
 
+/* ==========================================================================
+   SF PRO FONT DECLARATIONS - ONLINE CDN
+   ========================================================================== */
+   @import url('https://fonts.cdnfonts.com/css/sf-pro-display');
+
+   /* Fallback font declarations using CDN */
+   @font-face {
+       font-family: 'SF Pro Display';
+       src: url('https://fonts.cdnfonts.com/s/59278/SFPRODISPLAYREGULAR.woff') format('woff');
+       font-weight: 400;
+       font-style: normal;
+       font-display: swap;
+   }
+   
+   @font-face {
+       font-family: 'SF Pro Display';
+       src: url('https://fonts.cdnfonts.com/s/59278/SFPRODISPLAYREGULARITALIC.woff') format('woff');
+       font-weight: 400;
+       font-style: italic;
+       font-display: swap;
+   }
+   
+   @font-face {
+       font-family: 'SF Pro Display';
+       src: url('https://fonts.cdnfonts.com/s/59278/SFPRODISPLAYLIGHT.woff') format('woff');
+       font-weight: 300;
+       font-style: normal;
+       font-display: swap;
+   }
+   
+   @font-face {
+       font-family: 'SF Pro Display';
+       src: url('https://fonts.cdnfonts.com/s/59278/SFPRODISPLAYSEMIBOLD.woff') format('woff');
+       font-weight: 600;
+       font-style: normal;
+       font-display: swap;
+   }
+   
+   @font-face {
+       font-family: 'SF Pro Display';
+       src: url('https://fonts.cdnfonts.com/s/59278/SFPRODISPLAYBOLD.woff') format('woff');
+       font-weight: 700;
+       font-style: normal;
+       font-display: swap;
+   }
+   
+   /* Legacy SF Pro font for backward compatibility */
+   @font-face {
+       font-family: 'SF Pro Display';
+       src: url('https://fonts.cdnfonts.com/s/59278/SFPRODISPLAYREGULAR.woff') format('woff');
+       font-weight: 400;
+       font-style: normal;
+       font-display: swap;
+   }
+   
 /* ==========================================================================
    YOUTUBE MUSIC GLOBAL FONT APPLICATION
    ========================================================================== */
@@ -1746,4 +1292,81 @@ ytmusic-app ytmusic-app-layout ytmusic-player-page ytmusic-tab-renderer #lyrics-
 ytmusic-app ytmusic-app-layout ytmusic-player-page ytmusic-tab-renderer #lyrics-plus-container .lyrics-plus-integrated .lyrics-line .lyrics-syllable span,
 ytmusic-app ytmusic-app-layout ytmusic-player-page ytmusic-tab-renderer #lyrics-plus-container .lyrics-plus-integrated .lyrics-line .lyrics-syllable span.char {
     font-family: 'SF Pro Display', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif !important;
-}       
+}
+
+/* ==========================================================================
+   DESKTOP & FULLSCREEN STYLES (@media)
+   ========================================================================== */
+
+@media (min-width: 615px) {
+    ytmusic-player-page[player-fullscreened] #lyrics-plus-buttons-wrapper {
+        display: flex !important;
+        position: fixed !important;
+        bottom: 100px !important;
+        right: 35px !important;
+        z-index: 2 !important;
+        width: auto !important;
+        margin: 0 !important;
+        top: auto !important;
+        pointer-events: auto !important;
+        align-items: center !important;
+    }
+
+    ytmusic-player-page[video-mode][player-fullscreened] #lyrics-plus-buttons-wrapper {
+        top: 20px !important;
+        right: 20px !important;
+        bottom: auto !important;
+    }
+
+    ytmusic-player-page[player-fullscreened] #lyrics-plus-buttons-wrapper {
+        opacity: 0;
+        pointer-events: none;
+        transition: opacity 0.2s;
+    }
+
+    ytmusic-player-page[player-fullscreened]:hover #lyrics-plus-buttons-wrapper,
+    ytmusic-player-page[player-fullscreened] #lyrics-plus-buttons-wrapper:hover,
+    ytmusic-player-page[player-fullscreened] #lyrics-plus-buttons-wrapper:has(#lyrics-plus-translation-dropdown:not(.hidden)) {
+        opacity: 1;
+        pointer-events: auto;
+    }
+
+    ytmusic-player-page[player-fullscreened]:has(#lyrics-plus-container:has(.text-loading)) #lyrics-plus-buttons-wrapper,
+    ytmusic-player-page[player-fullscreened]:has(#lyrics-plus-container:has(.text-not-found)) #lyrics-plus-buttons-wrapper,
+    ytmusic-player-page[player-fullscreened]:has(#lyrics-plus-container.lyrics-plus-message:not(:has(.lyrics-line))) #lyrics-plus-buttons-wrapper {
+        display: none !important;
+        opacity: 0 !important;
+        pointer-events: none !important;
+    }
+
+    ytmusic-player-page[player-fullscreened] #lyrics-plus-translate-button,
+    ytmusic-player-page[player-fullscreened] #lyrics-plus-reload-button {
+        opacity: 0;
+        pointer-events: none;
+        transition: opacity 0.2s;
+    }
+
+    ytmusic-player-page[player-fullscreened] #lyrics-plus-buttons-wrapper:hover #lyrics-plus-translate-button,
+    ytmusic-player-page[player-fullscreened] #lyrics-plus-buttons-wrapper:hover #lyrics-plus-reload-button,
+    ytmusic-player-page[player-fullscreened] #lyrics-plus-buttons-wrapper:has(#lyrics-plus-translation-dropdown:not(.hidden)) #lyrics-plus-translate-button,
+    ytmusic-player-page[player-fullscreened] #lyrics-plus-buttons-wrapper:has(#lyrics-plus-translation-dropdown:not(.hidden)) #lyrics-plus-reload-button {
+        opacity: 1;
+        pointer-events: auto;
+    }
+
+    ytmusic-player-page[player-fullscreened] #lyrics-plus-translation-dropdown {
+        opacity: 0;
+        pointer-events: none;
+        transition: opacity 0.2s;
+    }
+
+    ytmusic-player-page[player-fullscreened] #lyrics-plus-buttons-wrapper:hover #lyrics-plus-translation-dropdown,
+    ytmusic-player-page[player-fullscreened] #lyrics-plus-translation-dropdown:not(.hidden) {
+        opacity: 1;
+        pointer-events: auto;
+    }
+
+    ytmusic-player-page[player-fullscreened]:has(#lyrics-plus-buttons-wrapper:hover) ytmusic-app-layout[show-fullscreen-controls] > [slot="player-bar"] {
+        display: none !important;
+    }
+}

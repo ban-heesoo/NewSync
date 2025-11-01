@@ -1,5 +1,4 @@
 (async function () {
-  // Helper: Wait for the DOM to be ready
   async function waitForDOMReady() {
     if (
       document.readyState === 'complete' ||
@@ -12,23 +11,20 @@
     );
   }
 
-  // Helper: Sleep for a given amount of milliseconds
-  function sleep(ms) {
-    return new Promise((resolve) => setTimeout(resolve, ms));
-  }
-
-  // Wait for the DOM to be ready before initializing
   await waitForDOMReady();
 
   let middleTabObserver = null;
   let updateScheduled = false;
   let isUpdating = false;
+  let tabsInitialized = false;
 
-  // Update the middle tab's attributes if they are not already set correctly.
+  let sidePanelObserver = null;
+  let tabContainerObserver = null;
+  let observedSidePanelEl = null;
+  let observedTabContainerEl = null;
+
   function forceActivateMiddleTab(tabElement) {
     if (!tabElement) return;
-
-    // If already active, then skip update.
     if (
       !tabElement.hasAttribute('disabled') &&
       tabElement.getAttribute('aria-disabled') === 'false' &&
@@ -38,17 +34,10 @@
     ) {
       return;
     }
-
-    // Prevent reentrant calls.
     if (isUpdating) return;
     isUpdating = true;
+    if (middleTabObserver) middleTabObserver.disconnect();
 
-    // Disconnect observer temporarily to avoid triggering it during update.
-    if (middleTabObserver) {
-      middleTabObserver.disconnect();
-    }
-
-    // Update attributes to force the tab active.
     tabElement.removeAttribute('disabled');
     tabElement.setAttribute('aria-disabled', 'false');
     tabElement.setAttribute('tabindex', '0');
@@ -56,12 +45,9 @@
     tabElement.style.pointerEvents = 'auto';
 
     isUpdating = false;
-
-    // Reattach the observer.
     observeMiddleTab(tabElement);
   }
 
-  // Create a MutationObserver to monitor attribute changes on the middle tab.
   function observeMiddleTab(tabElement) {
     if (!tabElement) return;
     if (middleTabObserver) middleTabObserver.disconnect();
@@ -88,35 +74,29 @@
     });
   }
 
-  // Enhance touch handling for both mobile and desktop
   function enhanceTouchHandling(tabs, middleIndex) {
     const MOVE_THRESHOLD_PX = 10;
     tabs.forEach((tab, index) => {
       let startX, startY;
-
       if (!tab.dataset.touchEnhanced) {
         tab.addEventListener('touchstart', (e) => {
-          const t = e.touches[0];
-          startX = t.clientX;
-          startY = t.clientY;
-        }, { passive: true });
-
+            const t = e.touches[0];
+            startX = t.clientX;
+            startY = t.clientY;
+          }, { passive: true });
         tab.addEventListener('touchend', (e) => {
-          const t = e.changedTouches[0];
-          const dx = Math.abs(t.clientX - startX);
-          const dy = Math.abs(t.clientY - startY);
-
-          // Only handle true taps
-          if (dx < MOVE_THRESHOLD_PX && dy < MOVE_THRESHOLD_PX) {
-            handleTabInteraction(index, middleIndex);
-          }
-        });
+            const t = e.changedTouches[0];
+            const dx = Math.abs(t.clientX - startX);
+            const dy = Math.abs(t.clientY - startY);
+            if (dx < MOVE_THRESHOLD_PX && dy < MOVE_THRESHOLD_PX) {
+              handleTabInteraction(index, middleIndex);
+            }
+          });
         tab.dataset.touchEnhanced = 'true';
       }
     });
   }
 
-  // Handle tab interaction (used for both click and touch)
   function handleTabInteraction(tabIndex, middleIndex) {
     const lyricsElement = document.querySelector('.lyrics-plus-integrated');
     if (!lyricsElement) return;
@@ -125,52 +105,169 @@
       lyricsElement.style.display = 'block';
       const videoElement = document.querySelector('video');
       if (videoElement && typeof scrollActiveLine === 'function') {
-        try {
-          scrollActiveLine(videoElement.currentTime, true);
-        } catch (e) {}
+          try { scrollActiveLine(videoElement.currentTime, true); } 
+          catch (e) {}
       }
     } else {
       lyricsElement.style.display = 'none';
     }
   }
 
-  // Async initializer: waits for the required tabs to be present, then attaches listeners.
-  async function init() {
-    let tabs;
-    // Poll for the tabs until we have at least 3.
-    while (true) {
-      tabs = document.querySelectorAll(
-        'tp-yt-paper-tab.tab-header.style-scope.ytmusic-player-page'
-      );
-      if (tabs.length >= 3) break;
-      await sleep(100);
+  function checkAndApplyTabLogic() {
+    const tabs = document.querySelectorAll(
+      'tp-yt-paper-tab.tab-header.style-scope.ytmusic-player-page'
+    );
+
+    if (tabs.length >= 3 && !tabsInitialized) {
+        const middleIndex = Math.floor(tabs.length / 2);
+        const middleTab = tabs[middleIndex];
+        forceActivateMiddleTab(middleTab);
+        observeMiddleTab(middleTab);
+        enhanceTouchHandling(tabs, middleIndex);
+
+        tabs.forEach((tab, index) => {
+            if (!tab.dataset.clickEnhanced) {
+                tab.addEventListener('click', () => handleTabInteraction(index, middleIndex));
+                tab.dataset.clickEnhanced = 'true';
+            }
+        });
+        tabsInitialized = true;
+
+    } else if (tabs.length < 3 && tabsInitialized) {
+        tabsInitialized = false;
+        if (middleTabObserver) {
+            middleTabObserver.disconnect();
+            middleTabObserver = null;
+        }
+    }
+  }
+
+  function ensureSidePanelActive() {
+      const sidePanel = document.querySelector('#side-panel');
+      if (sidePanel && sidePanel.hasAttribute('inert')) {
+          sidePanel.removeAttribute('inert');
+      }
+  }
+
+  function maintainObservers() {
+    const currentSidePanel = document.querySelector('#side-panel');
+    if (currentSidePanel && currentSidePanel !== observedSidePanelEl) {
+        if (sidePanelObserver) sidePanelObserver.disconnect();
+        
+        ensureSidePanelActive();
+
+        sidePanelObserver = new MutationObserver((mutations) => {
+             for(const m of mutations) {
+                 if (m.type === 'attributes' && m.attributeName === 'inert') {
+                     ensureSidePanelActive();
+                     break;
+                 }
+             }
+        });
+        sidePanelObserver.observe(currentSidePanel, { attributes: true, attributeFilter: ['inert'] });
+        observedSidePanelEl = currentSidePanel;
     }
 
-    const middleIndex = Math.floor(tabs.length / 2);
-    const middleTab = tabs[middleIndex];
+    const sampleTab = document.querySelector('tp-yt-paper-tab.tab-header.style-scope.ytmusic-player-page');
+    if (sampleTab && sampleTab.parentElement) {
+        const currentContainer = sampleTab.parentElement;
+        if (currentContainer !== observedTabContainerEl) {
+             if (tabContainerObserver) tabContainerObserver.disconnect();
 
-    // Force the middle tab active and set up its observer.
-    forceActivateMiddleTab(middleTab);
-    observeMiddleTab(middleTab);
+             checkAndApplyTabLogic();
 
-    // Add enhanced touch handling for all devices
-    enhanceTouchHandling(tabs, middleIndex);
+             tabContainerObserver = new MutationObserver(() => {
+                 checkAndApplyTabLogic();
+             });
+             tabContainerObserver.observe(currentContainer, { childList: true });
+             observedTabContainerEl = currentContainer;
+        }
+    }
+  }
 
-    // When the middle tab is clicked, show the ".lyrics-plus-integrated" element.
-    middleTab.addEventListener('click', () => {
-      handleTabInteraction(middleIndex, middleIndex);
+  maintainObservers();
+  setInterval(maintainObservers, 1000);
+
+  function autoRedirectToLyricsInFullscreen() {
+    const playerPage = document.querySelector('ytmusic-player-page');
+    if (!playerPage) {
+      return;
+    }
+    
+    const isFullscreen = playerPage.hasAttribute('player-fullscreened');
+    if (!isFullscreen) return;
+    
+    const tabs = document.querySelectorAll('tp-yt-paper-tab.tab-header.style-scope.ytmusic-player-page');
+    if (tabs.length < 2) {
+      return;
+    }
+    
+    const activeTab = document.querySelector('tp-yt-paper-tab.tab-header.style-scope.ytmusic-player-page.iron-selected');
+    if (!activeTab) {
+      return;
+    }
+    
+    const allTabs = Array.from(activeTab.parentElement.children);
+    const tabIndex = allTabs.indexOf(activeTab);
+    
+    let lyricsTabIndex = -1;
+    allTabs.forEach((tab, index) => {
+      const tabText = tab.textContent.trim().toLowerCase();
+      if (tabText.includes('lyrics') || tabText.includes('lirik')) {
+        lyricsTabIndex = index;
+      }
+    });
+    
+    if (tabIndex !== lyricsTabIndex && lyricsTabIndex !== -1) {
+      const lyricsTab = allTabs[lyricsTabIndex];
+      lyricsTab.click();
+      lyricsTab.dispatchEvent(new MouseEvent('click', {
+        bubbles: true,
+        cancelable: true,
+        view: window
+      }));
+    }
+  }
+
+  function setupFullscreenObserver() {
+    const playerPage = document.querySelector('ytmusic-player-page');
+    if (!playerPage) {
+      setTimeout(setupFullscreenObserver, 0);
+      return;
+    }
+
+    const fullscreenObserver = new MutationObserver((mutations) => {
+      mutations.forEach((mutation) => {
+        if (mutation.type === 'attributes' && mutation.attributeName === 'player-fullscreened') {
+          const isFullscreen = mutation.target.hasAttribute('player-fullscreened');
+          if (isFullscreen) {
+            setTimeout(() => {
+              autoRedirectToLyricsInFullscreen();
+            }, 0);
+          }
+        }
+      });
     });
 
-    // For all other tabs, hide the ".lyrics-plus-integrated" element on click.
-    tabs.forEach((tab, index) => {
-      if (index !== middleIndex) {
-        tab.addEventListener('click', () => {
-          handleTabInteraction(index, middleIndex);
-        });
-      }
+    fullscreenObserver.observe(playerPage, {
+      attributes: true,
+      attributeFilter: ['player-fullscreened']
     });
   }
 
-  // Start the initialization.
-  init();
+  setupFullscreenObserver();
+
+  setInterval(() => {
+    const playerPage = document.querySelector('ytmusic-player-page');
+    if (playerPage && playerPage.hasAttribute('player-fullscreened')) {
+      const activeTab = document.querySelector('tp-yt-paper-tab.tab-header.style-scope.ytmusic-player-page.iron-selected');
+      if (activeTab) {
+        const tabText = activeTab.textContent.trim().toLowerCase();
+        if (!tabText.includes('lyrics') && !tabText.includes('lirik')) {
+          autoRedirectToLyricsInFullscreen();
+        }
+      }
+    }
+  }, 0);
+
 })();

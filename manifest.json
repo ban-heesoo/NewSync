@@ -1,23 +1,17 @@
 {
   "manifest_version": 3,
   "name": "NewSync",
-  "version": "2.3.8",
+  "version": "2.3.9",
   "description": "Enhanced lyrics feature for YouTube Music with line-by-line and word-by-word sync",
-  "icons": {
-    "16": "icons/binky big/icon16.png",
-    "32": "icons/binky big/icon32.png",
-    "48": "icons/binky big/icon48.png",
-    "128": "icons/binky big/icon128.png"
-  },
   "permissions": ["activeTab", "storage", "scripting", "tabs", "management"],
   "host_permissions": ["*://*.music.youtube.com/*"],
   "action": {
     "default_popup": "src/popup/ui.html",
     "default_icon": {
-      "16": "icons/binky big/icon16.png",
-      "32": "icons/binky big/icon32.png",
-      "48": "icons/binky big/icon48.png",
-      "128": "icons/binky big/icon128.png"
+      "16": "icons/icon16.png",
+      "32": "icons/icon32.png",
+      "48": "icons/icon48.png",
+      "128": "icons/icon128.png"
     }
   },
   "browser_specific_settings": {
@@ -41,6 +35,19 @@
         "src/modules/ytmusic/index.js",
         "src/content.js"
       ]
+    },
+    {
+      "matches": ["*://*.tidal.com/*"],
+      "js": [
+        "src/lib/polyfill.js",
+        "src/localization.js",
+        "src/modules/lyrics/settings.js",
+        "src/modules/lyrics/lyricsManager.js",
+        "src/modules/lyrics/lyricsRenderer.js",
+        "src/modules/lyrics/dynamicBkg.js",
+        "src/modules/tidal/index.js",
+        "src/content.js"
+      ]
     }
   ],
   "web_accessible_resources": [
@@ -51,10 +58,18 @@
         "src/inject/ytmusic/songTracker.js"
       ],
       "matches": ["*://*.music.youtube.com/*"]
+    },
+    {
+      "resources": [
+        "src/modules/lyrics/lyrics.css",
+        "src/modules/tidal/style.css"
+      ],
+      "matches": ["*://*.tidal.com/*"]
     }
   ],
   "background": {
     "service_worker": "src/background/lyricsHandler.js",
+    "type": "module",
     "scripts": ["src/background/lyricsHandler.js"]
   }
 }
