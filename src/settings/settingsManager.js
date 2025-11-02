@@ -76,6 +76,26 @@ export function updateCacheSize() {
     }
 }
 
+// Clear cache silently (without alert) - used for auto-clear after settings change
+export function clearCacheSilently() {
+    if (pBrowser && pBrowser.runtime && typeof pBrowser.runtime.sendMessage === 'function') {
+        pBrowser.runtime.sendMessage({ type: 'RESET_CACHE' }, (response) => {
+            if (pBrowser.runtime.lastError) {
+                console.error("Error resetting cache:", pBrowser.runtime.lastError.message);
+                return;
+            }
+            if (response && response.success) {
+                updateCacheSize();
+                console.log('Cache cleared automatically after settings change.');
+            } else {
+                console.error("Error resetting cache from response:", response ? response.error : "No response");
+            }
+        });
+    } else {
+        console.warn("pBrowser.runtime.sendMessage is not available. Skipping cache clear.");
+    }
+}
+
 // Clear cache button logic
 export function clearCache() {
     if (pBrowser && pBrowser.runtime && typeof pBrowser.runtime.sendMessage === 'function') {

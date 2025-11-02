@@ -446,7 +446,6 @@ span.lyrics-source-provider {
 
 #lyrics-plus-container .text-not-found {
     opacity: 0.7;
-    animation: fadeInUp 0.6s ease-out;
 }
 
 #lyrics-plus-container .text-loading {

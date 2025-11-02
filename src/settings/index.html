@@ -28,16 +28,16 @@
                 Appearance
             </a>
             <a href="#" class="nav-item" data-section="translation">
-                <span class="material-symbols-outlined">translate</span>
+                <span class="material-symbols-outlined">g_translate</span>
                 Translation
+            </a>
+            <a href="#" class="nav-item" data-section="local-lyrics">
+                <span class="material-symbols-outlined">folder_copy</span>
+                Local Lyrics
             </a>
             <a href="#" class="nav-item" data-section="cache">
                 <span class="material-symbols-outlined">cached</span>
                 Cache
-            </a>
-            <a href="#" class="nav-item" data-section="local-lyrics">
-                <span class="material-symbols-outlined">folder_open</span>
-                Local Lyrics
             </a>
             <a href="#" class="nav-item" data-section="about">
                 <span class="material-symbols-outlined">info</span>
@@ -157,7 +157,6 @@
                             <span class="material-symbols-outlined select-arrow">arrow_drop_down</span>
                         </div>
                     </div>
-                    <p class="setting-description">Select the service for translating lyrics.</p>
                 </div>
                 <div class="setting-item form-group" id="gemini-api-key-group" style="display: none;">
                     <label for="gemini-api-key">Gemini AI API Key</label>
@@ -189,7 +188,6 @@
                         </select>
                         <span class="material-symbols-outlined select-arrow">arrow_drop_down</span>
                     </div>
-                    <p class="setting-description">Choose the Gemini AI model for translations.</p>
                 </div>
             </div>
 
@@ -206,7 +204,6 @@
                             <span class="material-symbols-outlined select-arrow">arrow_drop_down</span>
                         </div>
                     </div>
-                    <p class="setting-description">Automatically fetches romanization from the Lyrics+ API when available. If not provided by Lyrics+, it falls back to generating romanization using the selected service.</p>
                 </div>
                 <div class="setting-item form-group" id="gemini-romanization-model-group" style="display: none;">
                     <label for="gemini-romanization-model">Gemini AI Romanization Model</label>
@@ -223,7 +220,6 @@
                         </select>
                         <span class="material-symbols-outlined select-arrow">arrow_drop_down</span>
                     </div>
-                    <p class="setting-description">Choose the Gemini AI model for romanization.</p>
                 </div>
             </div>
 
@@ -235,9 +231,6 @@
                         <span class="slider"></span>
                         <span class="switch-label">Override Translation Target Language</span>
                     </label>
-                    <p class="setting-description">Manually specify the target language for translation (e.g., 'en',
-                        'ko',
-                        'ja').</p>
                 </div>
                 <div class="setting-item form-group" id="custom-translate-target-group" style="display: none;">
                     <label for="custom-translate-target">Custom Target Language Code</label>
@@ -255,16 +248,10 @@
                         <span class="slider"></span>
                         <span class="switch-label">Override Gemini AI Translation Prompt</span>
                     </label>
-                    <p class="setting-description">Use a custom prompt for Gemini AI translations. Use
-                        <code>{targetLang}</code> and <code>{lyrics}</code> placeholders.
-                    </p>
                 </div>
                 <div class="setting-item form-group" id="custom-gemini-prompt-group" style="display: none;">
-                    <label for="custom-gemini-prompt">Custom Gemini AI Translation Prompt</label>
                     <textarea id="custom-gemini-prompt"
-                        placeholder="You are an expert AI Lyrical Translator..."></textarea>
-                    <p class="helper-text">Customize the prompt sent to Gemini AI for translations. Use <code>{targetLang}</code> for the
-                        target language</p>
+                        placeholder="Write your custom prompt to Gemini AI for translations."></textarea>
                 </div>
                 <div class="setting-item" id="override-gemini-romanize-prompt-group" style="display: none;">
                     <label class="switch">
@@ -272,14 +259,10 @@
                         <span class="slider"></span>
                         <span class="switch-label">Override Gemini AI Romanization Prompt</span>
                     </label>
-                    <p class="setting-description">Use a custom prompt for Gemini AI romanization.
-                    </p>
                 </div>
                 <div class="setting-item form-group" id="custom-gemini-romanize-prompt-group" style="display: none;">
-                    <label for="custom-gemini-romanize-prompt">Custom Gemini AI Romanization Prompt</label>
                     <textarea id="custom-gemini-romanize-prompt"
-                        placeholder="You are an expert AI Romanizer..."></textarea>
-                    <p class="helper-text">Customize the prompt sent to Gemini AI for romanization.</p>
+                        placeholder="Write your custom prompt to Gemini AI for romanization."></textarea>
                 </div>
             </div>
 

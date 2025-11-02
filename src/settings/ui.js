@@ -1,4 +1,4 @@
-import { loadSettings, saveSettings, updateSettings, getSettings, updateCacheSize, clearCache, setupSettingsMessageListener, uploadLocalLyrics, getLocalLyricsList, deleteLocalLyrics, updateLocalLyrics, fetchLocalLyrics } from './settingsManager.js';
+import { loadSettings, saveSettings, updateSettings, getSettings, updateCacheSize, clearCache, clearCacheSilently, setupSettingsMessageListener, uploadLocalLyrics, getLocalLyricsList, deleteLocalLyrics, updateLocalLyrics, fetchLocalLyrics } from './settingsManager.js';
 import { parseSyncedLyrics, parseAppleMusicLRC, parseAppleTTML, convertToStandardJson, v1Tov2 } from './parser.js';
 
 let currentSettings = getSettings();
@@ -139,7 +139,9 @@ document.getElementById('save-translation').addEventListener('click', () => {
         customGeminiRomanizePrompt: document.getElementById('custom-gemini-romanize-prompt').value
     });
     saveSettings();
-    showStatusMessage('translation-save-status', 'Translation input fields saved!', false);
+    // Auto-clear cache after saving translation prompts to ensure new prompts are used
+    clearCacheSilently();
+    showStatusMessage('translation-save-status', 'Translation input fields saved! Cache cleared automatically.', false);
 });
 
 document.getElementById('clear-cache').addEventListener('click', clearCache);
@@ -363,12 +365,69 @@ document.getElementById('override-translate-target').addEventListener('change', 
 document.getElementById('override-gemini-prompt').addEventListener('change', (e) => {
     currentSettings.overrideGeminiPrompt = e.target.checked;
     toggleGeminiPromptVisibility();
+    // Clear cache when prompt override is toggled
+    if (e.target.checked) {
+        clearCacheSilently();
+    }
 });
 
 document.getElementById('override-gemini-romanize-prompt').addEventListener('change', (e) => {
     currentSettings.overrideGeminiRomanizePrompt = e.target.checked;
     toggleGeminiRomanizePromptVisibility();
+    // Clear cache when prompt override is toggled
+    if (e.target.checked) {
+        clearCacheSilently();
+    }
 });
+
+// Auto-clear cache when prompt fields are modified
+let promptClearTimeout = null;
+function schedulePromptCacheClear() {
+    if (promptClearTimeout) {
+        clearTimeout(promptClearTimeout);
+    }
+    // Debounce: clear cache 1 second after user stops typing
+    promptClearTimeout = setTimeout(() => {
+        clearCacheSilently();
+        console.log('Cache cleared automatically after prompt input change.');
+    }, 1000);
+}
+
+const customGeminiPrompt = document.getElementById('custom-gemini-prompt');
+if (customGeminiPrompt) {
+    customGeminiPrompt.addEventListener('input', schedulePromptCacheClear);
+    customGeminiPrompt.addEventListener('blur', () => {
+        if (promptClearTimeout) {
+            clearTimeout(promptClearTimeout);
+        }
+        clearCacheSilently();
+        console.log('Cache cleared automatically after prompt input blur.');
+    });
+}
+
+const customGeminiRomanizePrompt = document.getElementById('custom-gemini-romanize-prompt');
+if (customGeminiRomanizePrompt) {
+    customGeminiRomanizePrompt.addEventListener('input', schedulePromptCacheClear);
+    customGeminiRomanizePrompt.addEventListener('blur', () => {
+        if (promptClearTimeout) {
+            clearTimeout(promptClearTimeout);
+        }
+        clearCacheSilently();
+        console.log('Cache cleared automatically after romanization prompt input blur.');
+    });
+}
+
+const customTranslateTarget = document.getElementById('custom-translate-target');
+if (customTranslateTarget) {
+    customTranslateTarget.addEventListener('input', schedulePromptCacheClear);
+    customTranslateTarget.addEventListener('blur', () => {
+        if (promptClearTimeout) {
+            clearTimeout(promptClearTimeout);
+        }
+        clearCacheSilently();
+        console.log('Cache cleared automatically after translate target input blur.');
+    });
+}
 
 document.getElementById('romanization-provider').addEventListener('change', () => {
     toggleRomanizationModelVisibility();

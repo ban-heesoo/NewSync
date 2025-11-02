@@ -361,11 +361,55 @@ textarea {
 }
 
 input[type="text"]:focus,
+input[type="password"]:focus,
 input[type="number"]:focus,
 textarea:focus {
     outline: none;
     border-color: var(--md-sys-color-primary);
     box-shadow: 0 0 0 1px var(--md-sys-color-primary);
+}
+
+/* Input with button container */
+.input-with-button {
+    position: relative;
+    width: 100%;
+}
+
+.input-with-button input[type="password"],
+.input-with-button input[type="text"] {
+    padding-right: 48px;
+}
+
+.input-with-button .btn-icon {
+    position: absolute;
+    right: 8px;
+    top: 50%;
+    transform: translateY(-50%);
+    background: transparent;
+    border: none;
+    padding: 8px;
+    cursor: pointer;
+    color: var(--md-sys-color-on-surface-variant);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: var(--border-radius-small);
+    transition: background-color var(--animation-duration) var(--animation-timing-function),
+                color var(--animation-duration) var(--animation-timing-function);
+}
+
+.input-with-button .btn-icon:hover {
+    background-color: var(--md-sys-color-surface-container-high);
+    color: var(--md-sys-color-on-surface);
+}
+
+.input-with-button .btn-icon:active {
+    background-color: var(--md-sys-color-surface-container-highest);
+}
+
+.input-with-button .btn-icon .material-symbols-outlined {
+    font-size: 20px;
+    line-height: 1;
 }
 
 textarea {
@@ -1129,4 +1173,3 @@ select:focus {
     display: flex !important;
 }
 
-}

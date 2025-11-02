@@ -13,7 +13,32 @@ const uiConfig = {
     ],
     disableNativeTick: true,
     seekTo: (time) => {
-        window.dispatchEvent(new CustomEvent('LYPLUS_SEEK_TO', { detail: { time } }));
+        try {
+            console.log('YTMusic uiConfig: Dispatching seek with time', time);
+            
+            // Primary method: postMessage (works better in Firefox)
+            try {
+                window.postMessage({ type: 'LYPLUS_SEEK_TO', time }, '*');
+                console.log('YTMusic uiConfig: postMessage sent successfully');
+            } catch (pmError) {
+                console.warn('YTMusic uiConfig: postMessage failed, trying CustomEvent', pmError);
+            }
+            
+            // Fallback method: CustomEvent
+            try {
+                const event = new CustomEvent('LYPLUS_SEEK_TO', { 
+                    detail: { time },
+                    bubbles: true,
+                    cancelable: true
+                });
+                window.dispatchEvent(event);
+                console.log('YTMusic uiConfig: CustomEvent dispatched successfully');
+            } catch (ceError) {
+                console.error('YTMusic uiConfig: CustomEvent also failed', ceError);
+            }
+        } catch (error) {
+            console.error('YTMusic uiConfig: Error dispatching seek event', error);
+        }
     }
 };
 

@@ -1,6 +1,5 @@
 // Universal Browser API handle
 const pBrowser = chrome || browser;
-import { createRomanizationPrompt, createTranslationPrompt } from "./geminiHandler.js"
 
 /* =================================================================
    CONSTANTS
@@ -11,7 +10,7 @@ const CACHE_DB_VERSION = 1;
 const LYRICS_OBJECT_STORE = "lyrics";
 
 const TRANSLATIONS_DB_NAME = "TranslationsDB";
-const TRANSLATIONS_DB_VERSION = 1;
+const TRANSLATIONS_DB_VERSION = 2;
 const TRANSLATIONS_OBJECT_STORE = "translations";
 
 const LOCAL_LYRICS_DB_NAME = "LocalLyricsDB";
@@ -550,28 +549,57 @@ async function saveLyricsToDB(key, lyrics, version) {
 }
 
 async function getTranslationFromDB(key) {
-    const db = await openTranslationsDB();
-    return new Promise((resolve, reject) => {
-        const transaction = db.transaction([TRANSLATIONS_OBJECT_STORE], "readonly");
-        const store = transaction.objectStore(TRANSLATIONS_OBJECT_STORE);
-        const request = store.get(key);
-        request.onsuccess = event => resolve(event.target.result);
-        request.onerror = event => reject(event.target.error);
-    });
+    try {
+        const db = await openTranslationsDB();
+        if (!db.objectStoreNames.contains(TRANSLATIONS_OBJECT_STORE)) {
+            // Object store doesn't exist, return null
+            return null;
+        }
+        return new Promise((resolve, reject) => {
+            const transaction = db.transaction([TRANSLATIONS_OBJECT_STORE], "readonly");
+            const store = transaction.objectStore(TRANSLATIONS_OBJECT_STORE);
+            const request = store.get(key);
+            request.onsuccess = event => resolve(event.target.result);
+            request.onerror = event => reject(event.target.error);
+        });
+    } catch (error) {
+        // If database doesn't exist or can't be opened, return null
+        console.warn("Could not get translation from DB:", error);
+        return null;
+    }
 }
 
 async function saveTranslationToDB(key, translatedLyrics, originalVersion) {
-    const db = await openTranslationsDB();
-    const transaction = db.transaction([TRANSLATIONS_OBJECT_STORE], "readwrite");
-    const store = transaction.objectStore(TRANSLATIONS_OBJECT_STORE);
-    store.put({ key, translatedLyrics, originalVersion });
+    try {
+        const db = await openTranslationsDB();
+        if (!db.objectStoreNames.contains(TRANSLATIONS_OBJECT_STORE)) {
+            // Object store doesn't exist, nothing to save
+            console.warn("Translations object store doesn't exist, cannot save translation");
+            return;
+        }
+        const transaction = db.transaction([TRANSLATIONS_OBJECT_STORE], "readwrite");
+        const store = transaction.objectStore(TRANSLATIONS_OBJECT_STORE);
+        store.put({ key, translatedLyrics, originalVersion });
+    } catch (error) {
+        // If database doesn't exist or can't be opened, that's fine - just log a warning
+        console.warn("Could not save translation to DB:", error);
+    }
 }
 
 async function deleteTranslationFromDB(key) {
-    const db = await openTranslationsDB();
-    const transaction = db.transaction([TRANSLATIONS_OBJECT_STORE], "readwrite");
-    const store = transaction.objectStore(TRANSLATIONS_OBJECT_STORE);
-    store.delete(key);
+    try {
+        const db = await openTranslationsDB();
+        if (!db.objectStoreNames.contains(TRANSLATIONS_OBJECT_STORE)) {
+            // Object store doesn't exist, nothing to delete
+            return;
+        }
+        const transaction = db.transaction([TRANSLATIONS_OBJECT_STORE], "readwrite");
+        const store = transaction.objectStore(TRANSLATIONS_OBJECT_STORE);
+        store.delete(key);
+    } catch (error) {
+        // If database doesn't exist or can't be opened, that's fine - nothing to delete
+        console.warn("Could not delete translation from DB:", error);
+    }
 }
 
 async function clearCacheDB() {
@@ -696,7 +724,13 @@ async function fetchFromKPoeAPI(baseUrl, songInfo, sourceOrder, forceReload, fet
     const url = `${baseUrl.endsWith('/') ? baseUrl : `${baseUrl}/`}v2/lyrics/get?${params.toString()}`;
 
     try {
-        const response = await fetch(url, forceReload ? { cache: 'no-store' } : fetchOptions);
+        // Service worker fetch should not be affected by CORS policy
+        // Don't set mode explicitly to allow service worker to bypass CORS
+        const fetchConfig = forceReload 
+            ? { cache: 'no-store' } 
+            : fetchOptions || {};
+        
+        const response = await fetch(url, fetchConfig);
         if (response.ok) {
             const data = await response.json();
             return parseKPoeFormat(data);
@@ -707,7 +741,12 @@ async function fetchFromKPoeAPI(baseUrl, songInfo, sourceOrder, forceReload, fet
         console.warn(`Failed to fetch from ${baseUrl} (${response.status}): ${response.statusText}`);
         return null;
     } catch (error) {
-        console.error(`Network error fetching from ${baseUrl}:`, error);
+        // Handle CORS and other network errors gracefully
+        if (error.name === 'TypeError' && error.message.includes('CORS')) {
+            console.error(`CORS error fetching from ${baseUrl}. This may indicate the server is blocking requests.`, error);
+        } else {
+            console.error(`Network error fetching from ${baseUrl}:`, error);
+        }
         return null;
     }
 }
@@ -822,22 +861,37 @@ async function romanizeWithGemini(originalLyrics, settings) {
 }
 
 async function fetchGeminiTranslate(texts, targetLang, settings) {
-    const { geminiApiKey, geminiModel } = settings;
+    const { geminiApiKey, geminiModel, overrideGeminiPrompt, customGeminiPrompt } = settings;
     const url = `https://generativelanguage.googleapis.com/v1beta/models/${geminiModel}:generateContent?key=${geminiApiKey}`;
 
-    const prompt = createTranslationPrompt(settings, texts, targetLang);
+    const translationRules = (overrideGeminiPrompt && customGeminiPrompt)
+        ? customGeminiPrompt
+        : `You are an expert AI Lyrical Translator. Your task is to translate song lyrics into {targetLang}, preserving the original meaning, emotion, and natural flow.
+        RULES:
+        1.  Internally identify the language of each line.
+        2.  Translate ALL non-{targetLang} words/phrases into {targetLang}. Do not just romanize them.
+        3.  If a line is already entirely in {targetLang}, copy it to the output exactly as is.
+        4.  For mixed-language lines, translate the non-{targetLang} parts and integrate them naturally.
+        5.  The final output for each line must sound natural in {targetLang}.`;
+
+    const prompt = `
+        ${translationRules.replace(/{targetLang}/g, targetLang)}
+        
+        Now, process the following lyrics based on these rules.
+        Lyrics to translate:
+        ${JSON.stringify(texts)}
+    `;
 
     const requestBody = {
         contents: [{ parts: [{ text: prompt }] }],
         generation_config: {
-            temperature: 0.0,
             response_mime_type: "application/json",
             responseSchema: {
                 type: "OBJECT",
                 properties: {
                     translated_lyrics: {
                         type: "ARRAY",
-                        description: "An array of translated lyric lines, maintaining the original order and count.",
+                        description: "An array of translated lyric lines, maintaining the original order.",
                         items: { type: "STRING" }
                     },
                     target_language: {
@@ -869,16 +923,11 @@ async function fetchGeminiTranslate(texts, targetLang, settings) {
 
     try {
         const parsedJson = JSON.parse(data.candidates[0].content.parts[0].text);
-        
-        if (!Array.isArray(parsedJson.translated_lyrics)) {
-            throw new Error('Invalid JSON structure: translated_lyrics is not an array.');
+        if (Array.isArray(parsedJson.translated_lyrics)) {
+            return parsedJson.translated_lyrics;
+        } else {
+            throw new Error('Invalid JSON structure in Gemini response.');
         }
-        
-        if (parsedJson.translated_lyrics.length !== texts.length) {
-            throw new Error(`Length mismatch: expected ${texts.length} lines, got ${parsedJson.translated_lyrics.length}`);
-        }
-        
-        return parsedJson.translated_lyrics;
     } catch (e) {
         console.error("Gemini response parsing failed:", e, "\nRaw response:", data.candidates[0].content.parts[0].text);
         throw new Error(`Gemini translation failed: Could not parse valid JSON. ${e.message}`);
@@ -976,12 +1025,7 @@ function prepareLyricsForGemini(structuredInput) {
             reconstructionPlan.push({ type: 'api', apiIndex: contentToApiIndexMap.get(contentKey), originalIndex });
         } else {
             const newApiIndex = lyricsForApi.length;
-            // Only include chunk if it exists and has content
-            const apiLine = { text: line.text, original_line_index: newApiIndex };
-            if (line.chunk && line.chunk.length > 0) {
-                apiLine.chunk = line.chunk;
-            }
-            lyricsForApi.push(apiLine);
+            lyricsForApi.push({ ...line, original_line_index: newApiIndex });
             contentToApiIndexMap.set(contentKey, newApiIndex);
             reconstructionPlan.push({ type: 'api', apiIndex: newApiIndex, originalIndex });
         }
@@ -990,7 +1034,14 @@ function prepareLyricsForGemini(structuredInput) {
     return { lyricsForApi, reconstructionPlan };
 }
 
-function reconstructRomanizedLyrics(romanizedApiLyrics, reconstructionPlan, hasAnyChunks = false) {
+/**
+ * Reconstructs the full-length romanized lyric array from the API's compacted response
+ * and the pre-computed reconstruction plan.
+ * @param {Object[]} romanizedApiLyrics - The romanized data from the API (for unique non-Latin lines).
+ * @param {Object[]} reconstructionPlan - The plan to rebuild the original list structure.
+ * @returns {Object[]} The full-length array of romanized lyrics.
+ */
+function reconstructRomanizedLyrics(romanizedApiLyrics, reconstructionPlan) {
     const fullList = [];
     reconstructionPlan.forEach(planItem => {
         let reconstructedLine;
@@ -998,14 +1049,14 @@ function reconstructRomanizedLyrics(romanizedApiLyrics, reconstructionPlan, hasA
             reconstructedLine = {
                 ...planItem.data,
                 text: planItem.data.text,
-                chunk: hasAnyChunks && planItem.data.chunk ? planItem.data.chunk.map(c => ({ ...c, text: c.text })) : undefined,
+                chunk: planItem.data.chunk ? planItem.data.chunk.map(c => ({ ...c, text: c.text })) : undefined,
                 original_line_index: planItem.originalIndex,
             };
         } else {
             const apiResult = romanizedApiLyrics[planItem.apiIndex];
             reconstructedLine = {
                 ...apiResult,
-                original_line_index: planItem.originalIndex,
+                original_line_index: planItem.originalIndex, // Restore original index
             };
         }
         fullList[planItem.originalIndex] = reconstructedLine;
@@ -1019,35 +1070,159 @@ async function fetchGeminiRomanize(structuredInput, settings) {
 
     const { lyricsForApi, reconstructionPlan } = prepareLyricsForGemini(structuredInput);
 
-    // Check if any lines have chunks to determine schema type
-    const hasAnyChunks = lyricsForApi.some(line => line.chunk && line.chunk.length > 0);
-
     if (lyricsForApi.length === 0) {
-        return reconstructRomanizedLyrics([], reconstructionPlan, hasAnyChunks);
+        return reconstructRomanizedLyrics([], reconstructionPlan);
     }
 
-    const initialUserPrompt = (overrideGeminiRomanizePrompt && customGeminiRomanizePrompt) ?
-        customGeminiRomanizePrompt :
-        createRomanizationPrompt(lyricsForApi, hasAnyChunks);
+    const initialUserPrompt = (overrideGeminiRomanizePrompt && customGeminiRomanizePrompt)
+    ? customGeminiRomanizePrompt : `You are a linguistic expert AI specializing ONLY in precise **natural phonetic romanization** (NOT translation).
+    You MUST follow these rules like a strict compiler. Any violation is an error.
+    
+    # GLOBAL PRINCIPLES
+    1. **Romanization only** – never translate or explain meaning.
+    2. **Natural phonetic style for ALL languages**:
+       - Arabic → assimilate natural sounds: e.g. "fi al-fasl" → "fil fasl", "al-shams" → "ash shams".
+       - Japanese → Hepburn phonetic: "こんにちは" → "konnichiwa".
+       - Korean → spoken style Revised Romanization: "안녕하세요" → "annyeong haseyo".
+       - Chinese → Pinyin without tone marks, natural spacing: "你好" → "ni hao".
+       - Other languages → their most widely recognized **natural phonetic pronunciation**, not academic strict forms.
+    3. **Preserve original segmentation** – do not merge or drop words.
+    4. **No extra text** – never add explanations, notes, or translation.
+    5. **Case & style** – all output in lowercase Latin letters, unless capitalization is required in the source (e.g. names).
+    
+    # GOLDEN RULE
+    - Romanize the **entire line** naturally first.  
+    - THEN split the romanized line into chunks matching the input.  
+    - Chunks are subdivisions of the final romanized line, NOT independent romanizations.  
+    - Always preserve final vowel sounds from the original script if they exist.
+    - Add space if it was a different word, do not trim them.
+    
+    # CHUNK RULES
+    1. Chunk count must **exactly** match input.  
+    2. Every chunk must contain some text (never empty).  
+    3. Distribute text proportionally. Do not merge all into one chunk.  
+    4. Preserve \`chunkIndex\` values strictly.  
+    5. Preserve line order with \`original_line_index\`.  
+    
+    # VALIDATION CHECKLIST
+    Before finalizing, you MUST ensure for every line:
+    - The number of chunks matches input.  
+    - No chunk has empty text.  
+    - Romanization is natural, flowing, and phonetically correct.  
+    - Distribution across chunks is proportional.  
+    
+    # EXAMPLES
+    
+    ### Arabic (natural phonetic)
+    Input: ["أَنْتَ ", "فِي ", "الْفَصْلِ"]  
+    ❌ Wrong: ["anta", "fi", "al-fasli"]  
+    ✅ Correct: ["anta", "fil", "fasli"]
+    
+    Input: ["السلام", "عليكم"]  
+    ❌ Wrong: ["as", "salamualaikum"]  
+    ✅ Correct: ["assalam", "alaikum"]
+    
+    ---
+    
+    ### Japanese (natural phonetic)
+    Input: ["こん", "にち", "は"]  
+    ❌ Wrong: ["konnichiwa", "", ""]  
+    ✅ Correct: ["kon", "nichi", "wa"]
+    
+    ---
+    
+    ### Korean (natural phonetic)
+    Input: ["안녕", "하세요"]  
+    ❌ Wrong: ["annyeong haseyo", ""]  
+    ✅ Correct: ["annyeong", "haseyo"]
+    
+    ---
+    
+    ### Chinese (natural phonetic)
+    Input: ["你", "好"]  
+    ❌ Wrong: ["nihao", ""]  
+    ✅ Correct: ["ni", "hao"]
+    
+    ---
+    
+    # TASK
+    Now, romanize the following lyrics **strictly following all rules above**:
+${JSON.stringify(lyricsForApi, null, 2)}`;
 
-    const schema = createRomanizationSchema(hasAnyChunks);
-    const selectiveSchema = createSelectiveRomanizationSchema(hasAnyChunks);
+    const schema = {
+        type: "OBJECT",
+        properties: {
+            romanized_lyrics: {
+                type: "ARRAY",
+                description: "An array of romanized lyric line objects, matching the input array's order and length.",
+                items: {
+                    type: "OBJECT",
+                    properties: {
+                        text: { type: "STRING", description: "The fully romanized text of the entire line." },
+                        original_line_index: { type: "INTEGER", description: "The original index of the line from the input, which must be preserved." },
+                        chunk: {
+                            type: "ARRAY",
+                            nullable: true,
+                            items: {
+                                type: "OBJECT",
+                                properties: {
+                                    text: { type: "STRING", description: "The text of a single romanized chunk. MUST NOT be empty." },
+                                    chunkIndex: { type: "INTEGER", description: "The original index of the chunk, which must be preserved." }
+                                },
+                                required: ["text", "chunkIndex"]
+                            }
+                        }
+                    },
+                    required: ["text", "original_line_index"]
+                }
+            }
+        },
+        required: ["romanized_lyrics"]
+    };
+
+    const selectiveSchema = {
+        type: "OBJECT",
+        properties: {
+            fixed_lines: {
+                type: "ARRAY",
+                description: "An array of corrected romanized lyric line objects for only the problematic lines.",
+                items: {
+                    type: "OBJECT",
+                    properties: {
+                        text: { type: "STRING", description: "The fully romanized text of the entire line." },
+                        original_line_index: { type: "INTEGER", description: "The original index of the line from the input, which must be preserved." },
+                        chunk: {
+                            type: "ARRAY",
+                            nullable: true,
+                            items: {
+                                type: "OBJECT",
+                                properties: {
+                                    text: { type: "STRING", description: "The text of a single romanized chunk. MUST NOT be empty." },
+                                    chunkIndex: { type: "INTEGER", description: "The original index of the chunk, which must be preserved." }
+                                },
+                                required: ["text", "chunkIndex"]
+                            }
+                        }
+                    },
+                    required: ["text", "original_line_index"]
+                }
+            }
+        },
+        required: ["fixed_lines"]
+    };
 
     let currentContents = [{ role: 'user', parts: [{ text: initialUserPrompt }] }];
     let lastValidResponse = null;
     const MAX_RETRIES = 5;
-    let sameErrorCount = 0;
-    let lastError = null;
 
     for (let attempt = 1; attempt <= MAX_RETRIES; attempt++) {
         let responseText;
-        const isSelectiveFix = attempt > 1 && lastValidResponse !== null && sameErrorCount < 3;
+        const isSelectiveFix = attempt > 1 && lastValidResponse !== null;
 
         try {
             const requestBody = {
                 contents: currentContents,
                 generation_config: {
-                    temperature: 0.0,
                     response_mime_type: "application/json",
                     responseSchema: isSelectiveFix ? selectiveSchema : schema
                 }
@@ -1108,30 +1283,11 @@ async function fetchGeminiRomanize(structuredInput, settings) {
 
         if (validationResult.isValid) {
             console.log(`Gemini romanization succeeded on attempt ${attempt}.`);
-            return reconstructRomanizedLyrics(finalResponse.romanized_lyrics, reconstructionPlan, hasAnyChunks);
+            return reconstructRomanizedLyrics(finalResponse.romanized_lyrics, reconstructionPlan);
         } else {
             console.warn(`Attempt ${attempt} failed validation. Errors: ${validationResult.errors.join(', ')}`);
-
-            // Check if same error is repeating
-            const currentError = validationResult.errors[0];
-            if (currentError === lastError) {
-                sameErrorCount++;
-            } else {
-                sameErrorCount = 1;
-                lastError = currentError;
-            }
-
             if (attempt === MAX_RETRIES) {
                 throw new Error(`Gemini romanization failed after ${MAX_RETRIES} attempts. Final validation errors: ${validationResult.errors.join(', ')}`);
-            }
-
-            // If same error repeating, start fresh conversation
-            if (sameErrorCount >= 3) {
-                console.log("Same error repeating, starting fresh conversation");
-                currentContents = [{ role: 'user', parts: [{ text: initialUserPrompt }] }];
-                sameErrorCount = 0;
-                lastValidResponse = null;
-                continue;
             }
 
             const problematicLines = getProblematicLines(lyricsForApi, finalResponse, validationResult.detailedErrors);
@@ -1139,10 +1295,55 @@ async function fetchGeminiRomanize(structuredInput, settings) {
             currentContents.push({ role: 'model', parts: [{ text: responseText }] });
 
             if (problematicLines.length > 0 && problematicLines.length < lyricsForApi.length * 0.8) {
-                const selectivePrompt = createSelectiveFixPrompt(problematicLines, validationResult, hasAnyChunks);
+                // IMPROVED: More specific selective fix prompt
+                const selectivePrompt = `CRITICAL ERROR CORRECTION NEEDED: Your previous response had structural errors in ${problematicLines.length} specific lines.
+
+**MOST COMMON ERRORS TO FIX:**
+1. Empty chunks - chunks with "" or no text
+2. Uneven distribution - one chunk gets all text, others empty  
+3. Chunk count mismatch
+
+**SPECIFIC LINES THAT NEED FIXING:**
+${JSON.stringify(problematicLines.map(line => ({
+                    original_line_index: line.original_line_index,
+                    original_text: line.text,
+                    required_chunk_count: line.chunk ? line.chunk.length : 0,
+                    original_chunks: line.chunk ? line.chunk.map(c => c.text) : null,
+                    errors: validationResult.detailedErrors.find(e => e.lineIndex === line.original_line_index)?.errors || []
+                })), null, 2)}
+
+**CORRECTION RULES:**
+1. Every chunk MUST have non-empty text
+2. Distribute text proportionally across chunks
+3. Never leave chunks empty while others have all the text
+4. Match the exact chunk count specified
+
+PROVIDE ONLY THE CORRECTED LINES in this format:
+{
+  "fixed_lines": [
+    // Only the corrected lines with proper chunk distribution
+  ]
+}`;
+
                 currentContents.push({ role: 'user', parts: [{ text: selectivePrompt }] });
             } else {
-                const fullPrompt = createFullRetryPrompt(validationResult, lyricsForApi, hasAnyChunks);
+                // Full re-generation prompt with better guidance
+                const fullPrompt = `CRITICAL STRUCTURAL ERRORS DETECTED: Your previous response had major issues with chunk distribution and text partitioning.
+
+**MOST SERIOUS ERRORS:**
+${validationResult.errors.slice(0, 10).join('\n- ')}${validationResult.errors.length > 10 ? '\n- ... and more' : ''}
+
+**REMEMBER THE GOLDEN RULE:** 
+1. Romanize the FULL LINE text first
+2. Then intelligently split that romanized text into chunks
+3. NEVER leave any chunk empty
+4. Distribute text proportionally
+
+**Original lyrics for reference:**
+${JSON.stringify(lyricsForApi, null, 2)}
+
+PROVIDE A COMPLETE CORRECTED RESPONSE with proper chunk distribution.`;
+
                 currentContents.push({ role: 'user', parts: [{ text: fullPrompt }] });
             }
         }
@@ -1152,116 +1353,6 @@ async function fetchGeminiRomanize(structuredInput, settings) {
 }
 
 
-function createRomanizationSchema(hasAnyChunks) {
-    const baseSchema = {
-        type: "OBJECT",
-        properties: {
-            romanized_lyrics: {
-                type: "ARRAY",
-                description: "An array of romanized lyric line objects, matching the input array's order and length.",
-                items: {
-                    type: "OBJECT",
-                    properties: {
-                        text: { type: "STRING", description: "The fully romanized text of the entire line." },
-                        original_line_index: { type: "INTEGER", description: "The original index of the line from the input, which must be preserved." }
-                    },
-                    required: ["text", "original_line_index"]
-                }
-            }
-        },
-        required: ["romanized_lyrics"]
-    };
-
-    if (hasAnyChunks) {
-        baseSchema.properties.romanized_lyrics.items.properties.chunk = {
-            type: "ARRAY",
-            nullable: true,
-            description: "ONLY include if the original line had chunks. Otherwise omit entirely.",
-            items: {
-                type: "OBJECT",
-                properties: {
-                    text: { type: "STRING", description: "The text of a single romanized chunk. MUST NOT be empty." },
-                    chunkIndex: { type: "INTEGER", description: "The original index of the chunk, which must be preserved." }
-                },
-                required: ["text", "chunkIndex"]
-            }
-        };
-    }
-
-    return baseSchema;
-}
-
-function createSelectiveRomanizationSchema(hasAnyChunks) {
-    const baseSchema = {
-        type: "OBJECT",
-        properties: {
-            fixed_lines: {
-                type: "ARRAY",
-                description: "An array of corrected romanized lyric line objects for only the problematic lines.",
-                items: {
-                    type: "OBJECT",
-                    properties: {
-                        text: { type: "STRING", description: "The fully romanized text of the entire line." },
-                        original_line_index: { type: "INTEGER", description: "The original index of the line from the input, which must be preserved." }
-                    },
-                    required: ["text", "original_line_index"]
-                }
-            }
-        },
-        required: ["fixed_lines"]
-    };
-
-    if (hasAnyChunks) {
-        baseSchema.properties.fixed_lines.items.properties.chunk = {
-            type: "ARRAY",
-            nullable: true,
-            description: "ONLY include if the original line had chunks. Otherwise omit entirely.",
-            items: {
-                type: "OBJECT",
-                properties: {
-                    text: { type: "STRING", description: "The text of a single romanized chunk. MUST NOT be empty." },
-                    chunkIndex: { type: "INTEGER", description: "The original index of the chunk, which must be preserved." }
-                },
-                required: ["text", "chunkIndex"]
-            }
-        };
-    }
-
-    return baseSchema;
-}
-
-function createSelectiveFixPrompt(problematicLines, validationResult, hasAnyChunks) {
-    return `CRITICAL ERROR CORRECTION NEEDED: Your previous response had structural errors.
-
-**MOST CRITICAL RULE**: ${hasAnyChunks ?
-            'Only add chunk arrays to lines that originally had them. Do not add chunks to line-only lyrics.' :
-            'These are LINE-SYNCED lyrics only. DO NOT add any chunk arrays to any lines.'
-        }
-
-**SPECIFIC LINES THAT NEED FIXING:**
-${JSON.stringify(problematicLines.map(line => ({
-            original_line_index: line.original_line_index,
-            original_text: line.text,
-            had_chunks: !!(line.chunk && line.chunk.length > 0),
-            errors: validationResult.detailedErrors.find(e => e.lineIndex === line.original_line_index)?.errors || []
-        })), null, 2)}
-
-PROVIDE ONLY THE CORRECTED LINES in the proper format.`;
-}
-
-function createFullRetryPrompt(validationResult, lyricsForApi, hasAnyChunks) {
-    return `CRITICAL STRUCTURAL ERRORS DETECTED: Your previous response had major structural issues.
-
-**MOST SERIOUS ERROR**: ${hasAnyChunks ?
-            'You are adding chunk arrays to lines that should not have them. Only lines that originally had chunks should have chunk arrays in the output.' :
-            'You are adding chunk arrays when these lyrics are LINE-SYNCED only. DO NOT add any chunk arrays.'
-        }
-
-**Original lyrics structure for reference:**
-${JSON.stringify(lyricsForApi, null, 2)}
-
-PROVIDE A COMPLETE CORRECTED RESPONSE respecting the original structure.`;
-}
 
 function getProblematicLines(originalLyricsForApi, response, detailedErrors = []) {
     const problematicLines = [];
@@ -1283,10 +1374,8 @@ function getProblematicLines(originalLyricsForApi, response, detailedErrors = []
             let hasIssue = false;
             const issues = [];
 
-            // Check for unwanted chunk arrays
-            const originalHasChunks = Array.isArray(originalLine.chunk) && originalLine.chunk.length > 0;
-
-            if (originalHasChunks && Array.isArray(line.chunk) && line.chunk.length > 0) {
+            // Check for empty chunks (high priority issue)
+            if (Array.isArray(line.chunk) && line.chunk.length > 0) {
                 const emptyChunks = line.chunk.filter(chunk => !chunk.text || chunk.text.trim() === '');
                 if (emptyChunks.length > 0) {
                     hasIssue = true;
@@ -1397,12 +1486,7 @@ function validateRomanizationResponse(originalLyricsForApi, geminiResponse) {
         const originalHasChunks = Array.isArray(originalLine.chunk) && originalLine.chunk.length > 0;
         const romanizedHasChunks = Array.isArray(romanizedLine.chunk);
 
-        // Key fix: Check for unwanted chunk arrays
-        if (!originalHasChunks && romanizedHasChunks) {
-            const error = `Line ${index}: A 'chunk' array was provided, but the original did not have one.`;
-            errors.push(error);
-            lineErrors.push(error);
-        } else if (originalHasChunks) {
+        if (originalHasChunks) {
             if (!romanizedHasChunks) {
                 const error = `Line ${index}: A 'chunk' array was expected but is missing.`;
                 errors.push(error);
@@ -1418,6 +1502,10 @@ function validateRomanizationResponse(originalLyricsForApi, geminiResponse) {
                     lineErrors.push(...chunkValidationResult.errors);
                 }
             }
+        } else if (romanizedHasChunks) {
+            const error = `Line ${index}: A 'chunk' array was provided, but the original did not have one.`;
+            errors.push(error);
+            lineErrors.push(error);
         }
 
         if (lineErrors.length > 0) {

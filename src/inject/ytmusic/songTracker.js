@@ -28,12 +28,76 @@ function LYPLUS_setupMutationObserver() {
 }
 
 function LYPLUS_setupSeekListener() {
-    window.addEventListener('LYPLUS_SEEK_TO', (event) => {
-        const player = LYPLUS_getPlayer();
-        if (player && event.detail && typeof event.detail.time === 'number') {
-            player.seekTo(event.detail.time, true);
+    // Remove existing listeners if any to avoid duplicates
+    window.removeEventListener('LYPLUS_SEEK_TO', LYPLUS_handleSeekEvent);
+    window.removeEventListener('message', LYPLUS_handlePostMessage);
+    
+    // Add both CustomEvent and postMessage listeners
+    window.addEventListener('LYPLUS_SEEK_TO', LYPLUS_handleSeekEvent, true);
+    window.addEventListener('message', LYPLUS_handlePostMessage, true);
+}
+
+function LYPLUS_handlePostMessage(event) {
+    // Only handle our own messages
+    if (!event.data || event.data.type !== 'LYPLUS_SEEK_TO') {
+        return;
+    }
+    
+    // Verify origin for security (optional but recommended)
+    // For same-origin, we can be more lenient
+    const time = event.data.time;
+    if (typeof time !== 'number') {
+        console.warn('LYPLUS: Invalid time in postMessage', event.data);
+        return;
+    }
+    
+    console.log('LYPLUS: Received LYPLUS_SEEK_TO via postMessage', time);
+    LYPLUS_performSeek(time);
+}
+
+function LYPLUS_handleSeekEvent(event) {
+    try {
+        // Safe access to event detail for Firefox compatibility
+        let seekTime;
+        try {
+            if (event.detail && typeof event.detail.time === 'number') {
+                seekTime = event.detail.time;
+            } else {
+                console.warn('LYPLUS: event.detail.time is not accessible or invalid');
+                return;
+            }
+        } catch (e) {
+            // Firefox security context issue - event.detail access blocked
+            console.warn('LYPLUS: Cannot access event.detail (Firefox security restriction)', e);
+            return;
         }
-    });
+        
+        console.log('LYPLUS: Received LYPLUS_SEEK_TO event', seekTime);
+        LYPLUS_performSeek(seekTime);
+    } catch (error) {
+        console.error('LYPLUS: Error handling seek event', error);
+    }
+}
+
+function LYPLUS_performSeek(seekTime) {
+    try {
+        const player = LYPLUS_getPlayer();
+        if (!player) {
+            console.warn('LYPLUS: Player not found for seek operation');
+            return;
+        }
+        
+        if (typeof player.seekTo !== 'function') {
+            console.warn('LYPLUS: player.seekTo is not a function', player);
+            return;
+        }
+        
+        console.log('LYPLUS: Seeking player to', seekTime);
+        player.seekTo(seekTime, true);
+        console.log('LYPLUS: Seek command sent successfully');
+    } catch (error) {
+        console.error('LYPLUS: Error performing seek', error);
+    }
 }
 
 function stopTimeUpdater() {

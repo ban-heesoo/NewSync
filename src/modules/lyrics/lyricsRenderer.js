@@ -44,8 +44,6 @@ class LyricsPlusRenderer {
     this.isUserControllingScroll = false;
     this.userScrollRevertTimer = null;
 
-    this._notFoundCenterTimer = null;
-
     this._getContainer();
   }
 
@@ -582,8 +580,19 @@ class LyricsPlusRenderer {
    * @param {Event} e - The click event.
    */
   _onLyricClick(e) {
+    e.preventDefault();
+    e.stopPropagation();
+    e.stopImmediatePropagation();
+    
     const time = parseFloat(e.currentTarget.dataset.startTime);
-    this._seekPlayerTo(time - 0.05);
+    if (isNaN(time)) {
+      console.warn('LyricsPlus: Invalid startTime in lyric click', e.currentTarget.dataset);
+      return;
+    }
+    
+    const seekTime = time - 0.05;
+    console.log('LyricsPlus: Seeking to', seekTime, 'from lyric click');
+    this._seekPlayerTo(seekTime);
     this._scrollToActiveLine(e.currentTarget, true);
   }
 
@@ -1506,11 +1515,6 @@ class LyricsPlusRenderer {
       largerTextMode != "lyrics"
     );
 
-    if (this._notFoundCenterTimer) {
-      clearTimeout(this._notFoundCenterTimer);
-      this._notFoundCenterTimer = null;
-    }
-    container.classList.remove('animate-not-found-center');
 
     const buttonsWrapper = document.getElementById("lyrics-plus-buttons-wrapper");
     if (buttonsWrapper) {
@@ -1540,15 +1544,10 @@ class LyricsPlusRenderer {
   displaySongNotFound() {
     const container = this._getContainer();
     if (container) {
-      if (this._notFoundCenterTimer) {
-        clearTimeout(this._notFoundCenterTimer);
-        this._notFoundCenterTimer = null;
-      }
       container.innerHTML = `<span class="text-not-found">${t(
         "notFound"
       )}</span>`;
       container.classList.add("lyrics-plus-message");
-      container.classList.remove('animate-not-found-center');
 
       const buttonsWrapper = document.getElementById("lyrics-plus-buttons-wrapper");
       if (buttonsWrapper) {
@@ -1556,14 +1555,6 @@ class LyricsPlusRenderer {
         buttonsWrapper.style.opacity = "0";
         buttonsWrapper.style.pointerEvents = "none";
       }
-      
-      this._notFoundCenterTimer = setTimeout(() => {
-        const latestContainer = this._getContainer();
-        if (latestContainer && latestContainer.classList.contains('lyrics-plus-message')) {
-          latestContainer.classList.add('animate-not-found-center');
-        }
-        this._notFoundCenterTimer = null;
-      }, 2000);
       
       // Song info in fullscreen - NewSync specific feature
       // Removed to prevent lag during fullscreen transitions
@@ -1576,15 +1567,10 @@ class LyricsPlusRenderer {
   displaySongError() {
     const container = this._getContainer();
     if (container) {
-      if (this._notFoundCenterTimer) {
-        clearTimeout(this._notFoundCenterTimer);
-        this._notFoundCenterTimer = null;
-      }
       container.innerHTML = `<span class="text-not-found">${t(
         "notFoundError"
       )}</span>`;
       container.classList.add("lyrics-plus-message");
-      container.classList.remove('animate-not-found-center');
 
       const buttonsWrapper = document.getElementById("lyrics-plus-buttons-wrapper");
       if (buttonsWrapper) {
@@ -1592,14 +1578,6 @@ class LyricsPlusRenderer {
         buttonsWrapper.style.opacity = "0";
         buttonsWrapper.style.pointerEvents = "none";
       }
-      
-      this._notFoundCenterTimer = setTimeout(() => {
-        const latestContainer = this._getContainer();
-        if (latestContainer && latestContainer.classList.contains('lyrics-plus-message')) {
-          latestContainer.classList.add('animate-not-found-center');
-        }
-        this._notFoundCenterTimer = null;
-      }, 2000);
       
       // Song info in fullscreen - NewSync specific feature
       // Removed to prevent lag during fullscreen transitions
@@ -1639,12 +1617,24 @@ class LyricsPlusRenderer {
    */
   _seekPlayerTo(time) {
     if (typeof this.uiConfig.seekTo === "function") {
-      this.uiConfig.seekTo(time);
+      console.log('LyricsPlus: Using uiConfig.seekTo to seek to', time);
+      try {
+        this.uiConfig.seekTo(time);
+      } catch (error) {
+        console.error('LyricsPlus: Error in uiConfig.seekTo', error);
+      }
       return;
     }
     const player = this._getPlayerElement();
     if (player) {
-      player.currentTime = time;
+      console.log('LyricsPlus: Using player.currentTime to seek to', time);
+      try {
+        player.currentTime = time;
+      } catch (error) {
+        console.error('LyricsPlus: Error setting player.currentTime', error);
+      }
+    } else {
+      console.warn('LyricsPlus: No player element found for seek');
     }
   }
 
@@ -2768,11 +2758,6 @@ class LyricsPlusRenderer {
 
     this._playerElement = undefined;
     this._customCssStyleTag = null;
-
-    if (this._notFoundCenterTimer) {
-      clearTimeout(this._notFoundCenterTimer);
-      this._notFoundCenterTimer = null;
-    }
   }
 
   /**
@@ -3190,20 +3175,6 @@ class LyricsPlusRenderer {
     }
 
     const container = this._getContainer();
-    if (container) {
-      if (this._notFoundObserver) this._notFoundObserver.disconnect();
-      this._notFoundObserver = new MutationObserver(() => {
-        if (container.classList.contains('animate-not-found-center')) {
-          setTimeout(() => {
-            reposition();
-          }, 650);
-        }
-      });
-      this._notFoundObserver.observe(container, {
-        attributes: true,
-        attributeFilter: ['class']
-      });
-    }
 
     this._cleanupArtworkObservers = () => {
       window.removeEventListener('resize', reposition);
@@ -3215,10 +3186,6 @@ class LyricsPlusRenderer {
       if (this._artworkMutationObserver) {
         this._artworkMutationObserver.disconnect();
         this._artworkMutationObserver = null;
-      }
-      if (this._notFoundObserver) {
-        this._notFoundObserver.disconnect();
-        this._notFoundObserver = null;
       }
     };
   }
