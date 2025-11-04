@@ -341,7 +341,7 @@ export function parseAppleTTML(ttml, offset = 0, separate = false) {
   const timingMode = getAttr(root, NS.itunes, 'timing', 'itunes:timing') || 'Word';
 
   const metadata = {
-    source: 'Local Files', songWriters: [], title: '',
+    source: 'Apple Music', songWriters: [], title: '',
     language: getAttr(root, NS.xml, 'lang', 'xml:lang') || '',
     agents: {},
     totalDuration: getAttr(doc.getElementsByTagName('body')[0], null, 'dur', 'dur') || '',

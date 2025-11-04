@@ -233,6 +233,29 @@ async function handleFetchLocalLyrics(songId, sendResponse) {
 async function getOrFetchLyrics(songInfo, forceReload = false) {
     const cacheKey = `${songInfo.title} - ${songInfo.artist} - ${songInfo.album}`;
 
+    // Prefer LOCAL lyrics: if a matching local lyrics entry exists, always return it
+    try {
+        const localLyricsList = await getLocalLyricsListFromDB();
+        const matchedLocalSong = localLyricsList.find(item =>
+            item.songInfo.title === songInfo.title && item.songInfo.artist === songInfo.artist
+        );
+        if (matchedLocalSong) {
+            const fetchedLocalLyrics = await getLocalLyricsFromDB(matchedLocalSong.songId);
+            if (fetchedLocalLyrics) {
+                console.log(`Using local lyrics for "${songInfo.title}" (preferred over cache/online).`);
+                const lyrics = parseKPoeFormat(fetchedLocalLyrics.lyrics);
+                const version = fetchedLocalLyrics.timestamp || matchedLocalSong.songId;
+                const result = { lyrics, version };
+                // Update memory and DB cache so subsequent calls are consistent
+                lyricsCache.set(cacheKey, result);
+                try { await saveLyricsToDB(cacheKey, lyrics, version); } catch (_) {}
+                return result;
+            }
+        }
+    } catch (e) {
+        console.warn('Local lyrics preference check failed:', e);
+    }
+
     if (!forceReload) {
         if (lyricsCache.has(cacheKey)) return lyricsCache.get(cacheKey);
 
@@ -242,22 +265,7 @@ async function getOrFetchLyrics(songInfo, forceReload = false) {
             lyricsCache.set(cacheKey, result);
             return result;
         }
-
-        const localLyricsList = await getLocalLyricsListFromDB();
-        const matchedLocalSong = localLyricsList.find(item =>
-            item.songInfo.title === songInfo.title && item.songInfo.artist === songInfo.artist
-        );
-        if (matchedLocalSong) {
-            const fetchedLocalLyrics = await getLocalLyricsFromDB(matchedLocalSong.songId);
-            if (fetchedLocalLyrics) {
-                console.log(`Found and returning local lyrics for "${songInfo.title}"`);
-                const lyrics = parseKPoeFormat(fetchedLocalLyrics.lyrics);
-                const version = fetchedLocalLyrics.timestamp || matchedLocalSong.songId;
-                const result = { lyrics, version };
-                lyricsCache.set(cacheKey, result);
-                return result;
-            }
-        }
+        // Note: Local lyrics are already checked at the top and returned immediately if found.
     }
 
     if (ongoingFetches.has(cacheKey)) {
@@ -774,9 +782,21 @@ async function fetchYouTubeSubtitles(songInfo) {
         if (!subtitleInfo?.captionTracks?.length) return null;
 
         const validTracks = subtitleInfo.captionTracks.filter(t => t.kind !== 'asr' && !t.vssId?.startsWith('a.'));
-        const selectedTrack = validTracks.find(t => t.isDefault) || validTracks[0];
+        if (!validTracks.length) return null;
 
-        if (!selectedTrack) return null;
+        // Determine preferred language: settings override > browser UI language (fallback 'en')
+        const { overrideTranslateTarget = false, customTranslateTarget = '' } = await storageLocalGet({ 'overrideTranslateTarget': false, 'customTranslateTarget': '' });
+        const browserLang = (typeof chrome !== 'undefined' && chrome.i18n && typeof chrome.i18n.getUILanguage === 'function') ? chrome.i18n.getUILanguage() : 'en';
+        const preferredLang = (overrideTranslateTarget && customTranslateTarget ? customTranslateTarget : browserLang).split('-')[0];
+
+        // Selection order: 1) default/original caption, 2) preferred language, 3) any remaining valid track
+        const defaultTrack = validTracks.find(t => t.isDefault);
+        let selectedTrack = defaultTrack
+            || validTracks.find(t => (t.languageCode || t.lang || '').split('-')[0] === preferredLang)
+            || validTracks.find(t => t.vssId && t.vssId.includes(`.${preferredLang}`))
+            || validTracks[0];
+
+        if (!selectedTrack) return null; // No suitable captions
 
         const url = new URL(selectedTrack.baseUrl || selectedTrack.url);
         url.searchParams.set('fmt', 'json3');
@@ -785,7 +805,8 @@ async function fetchYouTubeSubtitles(songInfo) {
         if (!response.ok) return null;
 
         const data = await response.json();
-        return parseYouTubeSubtitles(data, songInfo);
+        const langCode = (selectedTrack.languageCode || selectedTrack.lang || (selectedTrack.vssId ? selectedTrack.vssId.split('.').pop() : '') || '').split('-')[0];
+        return parseYouTubeSubtitles(data, { ...songInfo, language: langCode });
     } catch (error) {
         console.error("Error fetching YouTube subtitles:", error);
         return null;
@@ -1617,7 +1638,7 @@ function parseKPoeFormat(data) {
                 romanizedText: lineRomanizedText
             };
         }),
-        metadata: { ...data.metadata, source: `${data.metadata.source} (KPoe)` },
+        metadata: { ...data.metadata, source: `${data.metadata.source}` },
         ignoreSponsorblock: data.ignoreSponsorblock || data.metadata.ignoreSponsorblock
     };
 }
