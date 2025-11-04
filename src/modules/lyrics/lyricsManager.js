@@ -174,7 +174,7 @@ async function fetchAndDisplayLyrics(currentSong, isNewSong = false, forceReload
     const hasRomanization = romanizationResponse?.success && romanizationResponse.translatedLyrics;
 
     // --- 5. Combine Data & Determine Final Display Mode ---
-    const lyricsObjectToDisplay = combineLyricsData(
+    let lyricsObjectToDisplay = combineLyricsData(
       baseLyrics,
       hasTranslation ? translationResponse.translatedLyrics : null,
       hasRomanization ? romanizationResponse.translatedLyrics : null
@@ -260,6 +260,18 @@ function setCurrentDisplayModeAndRender(mode, songInfoForRefetch) {
 
 function convertWordLyricsToLine(lyrics) {
   if (lyrics.type !== "Word") return lyrics;
+
+  // Validate that lyrics.data exists and is an array
+  if (!lyrics.data || !Array.isArray(lyrics.data) || lyrics.data.length === 0) {
+    console.warn('convertWordLyricsToLine: lyrics.data is invalid or empty', lyrics);
+    // Return a valid Line-type lyrics object with empty data array
+    return {
+      type: "Line",
+      data: [],
+      metadata: lyrics.metadata || {},
+      ignoreSponsorblock: lyrics.ignoreSponsorblock
+    };
+  }
 
   const lines = lyrics.data.map(line => ({ ...line, syllables: [] }));
 

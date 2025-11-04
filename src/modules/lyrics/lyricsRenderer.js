@@ -1266,6 +1266,12 @@ class LyricsPlusRenderer {
 
     const fragment = document.createDocumentFragment();
 
+    // Validate lyrics data before rendering
+    if (!lyrics || !lyrics.data || !Array.isArray(lyrics.data) || lyrics.data.length === 0) {
+      console.warn('updateDisplayMode: Invalid lyrics data', lyrics);
+      return;
+    }
+
     if (isWordByWordMode) {
       this._renderWordByWordLyrics(
         lyrics,
@@ -1521,6 +1527,13 @@ class LyricsPlusRenderer {
       buttonsWrapper.style.removeProperty("display");
       buttonsWrapper.style.removeProperty("opacity");
       buttonsWrapper.style.removeProperty("pointer-events");
+    }
+
+    // Validate lyrics data before attempting to render
+    if (!lyrics || !lyrics.data || !Array.isArray(lyrics.data) || lyrics.data.length === 0) {
+      console.warn('displayLyrics: Invalid or empty lyrics data', lyrics);
+      // Don't render if data is invalid
+      return;
     }
 
     this.updateDisplayMode(lyrics, displayMode, currentSettings);
