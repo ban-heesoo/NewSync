@@ -186,7 +186,7 @@
   }
 
   maintainObservers();
-  setInterval(maintainObservers, 1000);
+  setInterval(maintainObservers, 500);
 
   let tabChangeObserver = null;
 

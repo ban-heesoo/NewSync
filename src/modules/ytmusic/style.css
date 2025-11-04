@@ -419,7 +419,7 @@ ytmusic-player-bar yt-icon-button[aria-label="Pause"] yt-icon svg path,
 ytmusic-player-bar button[aria-label="Pause"] yt-icon svg path,
 ytmusic-player-bar yt-icon[aria-label="Pause"] svg path,
 ytmusic-player-bar[aria-label="Pause"] svg path {
-    d: path("M14.4263 20.9154V3.34026L14.7572 3H19.169L19.4999 3.34026V20.5754L19.169 20.9154H14.4263ZM4.5 20.9154V3.34026L4.8309 3H9.24301L9.57392 3.34026V20.5754L9.24301 20.9154H4.5Z") !important;
+    d: path("M9.83699 21C10.7782 21 11.2523 20.5059 11.2523 19.5248V4.46593C11.2523 3.45919 10.7782 3 9.83699 3H7.4154C6.47515 3 6.0001 3.4859 6.0001 4.46593V19.5259C5.99221 20.5059 6.46628 21 7.4154 21H9.83699ZM17.5936 21C18.5338 21 19 20.5059 19 19.5248V4.46593C19 3.45919 18.5338 3 17.5926 3H15.1631C14.2219 3 13.7557 3.4859 13.7557 4.46593V19.5259C13.7557 20.5059 14.2219 21 15.1631 21H17.5936Z") !important;
 }
 ytmusic-play-button-renderer[state="playing"][icon="PAUSE"] yt-icon svg path,
 ytmusic-play-button-renderer[state="playing"][icon="PAUSE"] svg path,
@@ -427,7 +427,7 @@ ytmusic-play-button-renderer yt-icon-button[state="playing"][icon="PAUSE"] yt-ic
 ytmusic-play-button-renderer button[state="playing"][icon="PAUSE"] yt-icon svg path,
 ytmusic-play-button-renderer yt-icon[state="playing"][icon="PAUSE"] svg path,
 ytmusic-play-button-renderer[state="playing"][icon="PAUSE"] svg path {
-    d: path("M14.4263 20.9154V3.34026L14.7572 3H19.169L19.4999 3.34026V20.5754L19.169 20.9154H14.4263ZM4.5 20.9154V3.34026L4.8309 3H9.24301L9.57392 3.34026V20.5754L9.24301 20.9154H4.5Z") !important;
+    d: path("M9.83699 21C10.7782 21 11.2523 20.5059 11.2523 19.5248V4.46593C11.2523 3.45919 10.7782 3 9.83699 3H7.4154C6.47515 3 6.0001 3.4859 6.0001 4.46593V19.5259C5.99221 20.5059 6.46628 21 7.4154 21H9.83699ZM17.5936 21C18.5338 21 19 20.5059 19 19.5248V4.46593C19 3.45919 18.5338 3 17.5926 3H15.1631C14.2219 3 13.7557 3.4859 13.7557 4.46593V19.5259C13.7557 20.5059 14.2219 21 15.1631 21H17.5936Z") !important;
 }
 
 /* Play button icon */
@@ -437,7 +437,7 @@ ytmusic-player-bar yt-icon-button[aria-label="Play"] yt-icon svg path,
 ytmusic-player-bar button[aria-label="Play"] yt-icon svg path,
 ytmusic-player-bar yt-icon[aria-label="Play"] svg path,
 ytmusic-player-bar [aria-label="Play"] svg path {
-    d: path("M5 22.4604V1L22 11.7302L5 22.4604Z") !important;
+    d: path("M5.38702 22C5.81498 22 6.17385 21.8462 6.64513 21.5828L19.7852 13.9935C20.6494 13.5004 21 13.1171 21 12.4969C21 11.8829 20.6494 11.5006 19.7852 10.9983L6.64513 3.41719C6.17385 3.14555 5.81498 3 5.38702 3C4.57337 3 4 3.62117 4 4.6093V20.3835C4 21.3788 4.57337 22 5.38702 22Z") !important;
 }
 ytmusic-play-button-renderer[state="paused"][icon="PLAY_ARROW"] yt-icon svg path,
 ytmusic-play-button-renderer[state="paused"][icon="PLAY_ARROW"] svg path,
@@ -445,7 +445,7 @@ ytmusic-play-button-renderer yt-icon-button[state="paused"][icon="PLAY_ARROW"] y
 ytmusic-play-button-renderer button[state="paused"][icon="PLAY_ARROW"] yt-icon svg path,
 ytmusic-play-button-renderer yt-icon[state="paused"][icon="PLAY_ARROW"] svg path,
 ytmusic-play-button-renderer[state="paused"][icon="PLAY_ARROW"] svg path {
-    d: path("M5 22.4604V1L22 11.7302L5 22.4604Z") !important;
+    d: path("M5.38702 22C5.81498 22 6.17385 21.8462 6.64513 21.5828L19.7852 13.9935C20.6494 13.5004 21 13.1171 21 12.4969C21 11.8829 20.6494 11.5006 19.7852 10.9983L6.64513 3.41719C6.17385 3.14555 5.81498 3 5.38702 3C4.57337 3 4 3.62117 4 4.6093V20.3835C4 21.3788 4.57337 22 5.38702 22Z") !important;
 }
 ytmusic-play-button-renderer[state="default"][icon="PLAY_ARROW"] yt-icon svg path,
 ytmusic-play-button-renderer[state="default"][icon="PLAY_ARROW"] svg path,
@@ -453,7 +453,7 @@ ytmusic-play-button-renderer yt-icon-button[state="default"][icon="PLAY_ARROW"] 
 ytmusic-play-button-renderer button[state="default"][icon="PLAY_ARROW"] yt-icon svg path,
 ytmusic-play-button-renderer yt-icon[state="default"][icon="PLAY_ARROW"] svg path,
 ytmusic-play-button-renderer[state="default"][icon="PLAY_ARROW"] svg path {
-    d: path("M5 22.4604V1L22 11.7302L5 22.4604Z") !important;
+    d: path("M5.38702 22C5.81498 22 6.17385 21.8462 6.64513 21.5828L19.7852 13.9935C20.6494 13.5004 21 13.1171 21 12.4969C21 11.8829 20.6494 11.5006 19.7852 10.9983L6.64513 3.41719C6.17385 3.14555 5.81498 3 5.38702 3C4.57337 3 4 3.62117 4 4.6093V20.3835C4 21.3788 4.57337 22 5.38702 22Z") !important;
 }
 
 /* Next button icon */
