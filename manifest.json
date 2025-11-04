@@ -11,15 +11,7 @@
     "128": "icons/icon128.png"
   },
   "host_permissions": [
-    "*://*.music.youtube.com/*",
-    "https://lyricsplus.prjktla.workers.dev/*",
-    "https://lyrics-plus-backend.vercel.app/*",
-    "https://lyricsplus.onrender.com/*",
-    "https://lyricsplus.prjktla.online/*",
-    "https://lrclib.net/*",
-    "https://translate.googleapis.com/*",
-    "https://generativelanguage.googleapis.com/*",
-    "https://sponsor.ajay.app/*"
+    "*://*.music.youtube.com/*"
   ],
   "action": {
     "default_popup": "src/popup/ui.html",
