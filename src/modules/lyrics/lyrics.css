@@ -36,7 +36,6 @@
     --lyplus-text-inactive: #ffffff31;
     --lyplus-text-button: rgba(255, 255, 255, 0.87);
     --lyplus-text-translation-active: #ffffffa4;
-    --lyplus-text-translation-inactive: #ffffffa4;
 
     --lyplus-blur-amount: 0.07em;
     --lyplus-blur-amount-near: 0.035em;
@@ -203,7 +202,7 @@
 
 .lyrics-line.active .background-vocal-container {
     max-height: 10em;
-    opacity: 1;
+    opacity: 0.6;
     transition: max-height .6s, opacity .6s, padding .6s;
     will-change: max-height, opacity, padding;
 }
@@ -839,7 +838,8 @@ ytmusic-player-page[player-fullscreened] body .lyrics-song-info {
 }
 
 .lyrics-line.active .lyrics-translation-container {
-    color: var(--lyplus-lyrics-pallete, var(--lyplus-text-primary));
+    color: var(--lyplus-text-secondary);
+
 }
 
 .lyrics-line.active .lyrics-romanization-container {
