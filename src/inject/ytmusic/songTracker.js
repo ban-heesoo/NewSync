@@ -9,6 +9,10 @@ let LYPLUS_timeUpdateInterval = null;
     console.log('LYPLUS: DOM script injected successfully');
     LYPLUS_setupMutationObserver();
     LYPLUS_setupSeekListener();
+    // Check for initial song immediately (in case a song is already playing)
+    setTimeout(() => {
+        LYPLUS_checkForSongChange();
+    }, 500);
 })();
 
 // Initialize the observer to watch for changes in the player state
@@ -165,10 +169,14 @@ function LYPLUS_checkForSongChange() {
         return;
     }
 
-    const hasChanged = (newSongInfo.title !== LYPLUS_currentSong.title || 
-                       newSongInfo.artist !== LYPLUS_currentSong.artist || 
-                       Math.round(newSongInfo.duration) !== Math.round(LYPLUS_currentSong.duration)) && 
-                       newSongInfo.videoId !== LYPLUS_currentSong.videoId;
+    // Check if this is the first song (LYPLUS_currentSong is empty)
+    const isFirstSong = !LYPLUS_currentSong || !LYPLUS_currentSong.title;
+    
+    const hasChanged = isFirstSong || 
+                       ((newSongInfo.title !== LYPLUS_currentSong.title || 
+                         newSongInfo.artist !== LYPLUS_currentSong.artist || 
+                         Math.round(newSongInfo.duration) !== Math.round(LYPLUS_currentSong.duration)) && 
+                        newSongInfo.videoId !== LYPLUS_currentSong.videoId);
 
     if (hasChanged) {
         LYPLUS_currentSong = newSongInfo;

@@ -285,7 +285,7 @@
   // Initial setup
   maintainObservers();
 
-  const intervalId = setInterval(maintainObservers, 3000);
+  const intervalId = setInterval(maintainObservers, 500);
 
   document.addEventListener('visibilitychange', () => {
     if (!document.hidden) {

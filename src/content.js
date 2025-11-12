@@ -1,6 +1,12 @@
+// Initialize immediately to ensure songTracker.js is injected right away
+// This fixes the issue where lyrics don't work on first install or after reinstall
+initializeLyricsPlus();
+
+// Load settings and enable/disable based on isEnabled setting
 loadSettings(() => {
-    if (currentSettings.isEnabled) {
-        initializeLyricsPlus();
+    if (!currentSettings.isEnabled) {
+        // If disabled, we can still keep the injection but won't process song changes
+        console.log('LyricsPlus is disabled in settings');
     }
 });
 
@@ -33,6 +39,11 @@ function initializeLyricsPlus() {
         if (event.data.type && event.data.type.startsWith('LYPLUS_')) {
             // Handle song info updates
             if (event.data.type === 'LYPLUS_SONG_CHANGED') {
+                // Check if extension is enabled (defaults to true if settings not loaded yet)
+                if (currentSettings && !currentSettings.isEnabled) {
+                    return;
+                }
+
                 const songInfo = event.data.songInfo;
                 const isNewSong = event.data.isNewSong; // Get the new song flag
                 console.log('Song changed (received in extension):', songInfo);
