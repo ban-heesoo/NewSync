@@ -2,15 +2,13 @@
 let gl = null;
 let glProgram = null;
 let blurProgram = null;
-let backgroundProgram = null;
 let webglCanvas = null;
 let needsAnimation = false;
 
 // Uniform locations
 let u_artworkTextureLocation, u_rotationLocation, u_scaleLocation, u_positionLocation, u_transitionProgressLocation;
 let u_blur_imageLocation, u_blur_resolutionLocation, u_blur_directionLocation, u_blur_radiusLocation;
-let u_bg_colorLocation;
-let a_positionLocation, a_texCoordLocation, a_blur_positionLocation, a_bg_positionLocation;
+let a_positionLocation, a_texCoordLocation, a_blur_positionLocation;
 
 // WebGL objects
 let positionBuffer;
@@ -36,7 +34,6 @@ function handleContextLost(event) {
     gl = null;
     glProgram = null;
     blurProgram = null;
-    backgroundProgram = null;
     currentArtworkTexture = null;
     previousArtworkTexture = null;
     renderFramebuffer = null;
@@ -55,8 +52,7 @@ function handleContextRestored() {
 let blurDimensions = { width: 0, height: 0 };
 let canvasDimensions = { width: 0, height: 0 };
 
-
-const BLUR_DOWNSAMPLE = 2; // The factor by which to reduce the canvas resolution for the blur pass.
+const BLUR_DOWNSAMPLE = 1; // The factor by which to reduce the canvas resolution for the blur pass.
 const BLUR_RADIUS = 13; // Controls the radius/intensity of the blur.
 
 // Palette Constants
@@ -72,7 +68,6 @@ const STRETCHED_GRID_WIDTH = 256;
 const STRETCHED_GRID_HEIGHT = 256;
 
 let currentTargetMasterArtworkPalette = [];
-let currentBackgroundColor = [0.12, 0.12, 0.16];
 
 // Animation & rotation
 const ROTATION_SPEEDS = [0.10, 0.18, 0.32]; // radians per second for each layer
@@ -142,18 +137,31 @@ const fragmentShaderSource = `
     
     void main() {
         vec2 centered = v_uv - 0.5;
-        centered.y = -centered.y; // betulin flip
+        centered.y = -centered.y;
         centered -= u_position;
-        centered = rotate(centered, -u_rotation); // betulin arah rotasi
+        centered = rotate(centered, -u_rotation);
         centered /= u_scale;
         centered += 0.5;
 
-        if (centered.x < 0.0 || centered.x > 1.0 || centered.y < 0.0 || centered.y > 1.0) {
-            discard;
-        } else {
-            vec4 color = texture2D(u_artworkTexture, centered);
-            gl_FragColor = vec4(color.rgb, color.a * u_transitionProgress);
+        vec4 color = texture2D(u_artworkTexture, centered);
+        
+        float edgeFade = 1.0;
+        float edgeMargin = 0.08;
+        
+        float distX = min(centered.x, 1.0 - centered.x);
+        float distY = min(centered.y, 1.0 - centered.y);
+        float minDist = min(distX, distY);
+        
+        if (minDist < edgeMargin) {
+            edgeFade = smoothstep(0.0, edgeMargin, minDist);
         }
+        
+        if (centered.x < -edgeMargin || centered.x > 1.0 + edgeMargin || 
+            centered.y < -edgeMargin || centered.y > 1.0 + edgeMargin) {
+            edgeFade = 0.0;
+        }
+        
+        gl_FragColor = vec4(color.rgb, color.a * u_transitionProgress * edgeFade);
 }
 `;
 
@@ -196,19 +204,6 @@ const blurFragmentShaderSource = `
         result /= wsum;
 
         gl_FragColor = vec4(result, 1.0);
-    }
-`;
-
-const backgroundFragmentShaderSource = `
-    #ifdef GL_ES
-    precision mediump float;
-    #endif
-    varying vec2 v_uv;
-    uniform vec3 u_color;
-    void main() {
-        float vignette = smoothstep(0.0, 0.8, 1.0 - distance(v_uv, vec2(0.5)));
-        vec3 color = u_color * (0.7 + 0.3 * vignette);
-        gl_FragColor = vec4(color, 1.0);
     }
 `;
 
@@ -272,13 +267,11 @@ function LYPLUS_setupBlurEffect() {
     const vertexShader = createShader(gl, gl.VERTEX_SHADER, vertexShaderSource);
     const displayFragmentShader = createShader(gl, gl.FRAGMENT_SHADER, fragmentShaderSource);
     const blurFragmentShader = createShader(gl, gl.FRAGMENT_SHADER, blurFragmentShaderSource);
-    const backgroundFragmentShader = createShader(gl, gl.FRAGMENT_SHADER, backgroundFragmentShaderSource);
-    if (!vertexShader || !displayFragmentShader || !blurFragmentShader || !backgroundFragmentShader) return null;
+    if (!vertexShader || !displayFragmentShader || !blurFragmentShader) return null;
 
     glProgram = createProgram(gl, vertexShader, displayFragmentShader);
     blurProgram = createProgram(gl, vertexShader, blurFragmentShader);
-    backgroundProgram = createProgram(gl, vertexShader, backgroundFragmentShader);
-    if (!glProgram || !blurProgram || !backgroundProgram) return null;
+    if (!glProgram || !blurProgram) return null;
 
     a_positionLocation = gl.getAttribLocation(glProgram, 'a_position');
     a_texCoordLocation = gl.getAttribLocation(glProgram, 'a_texCoord');
@@ -293,9 +286,6 @@ function LYPLUS_setupBlurEffect() {
     u_blur_resolutionLocation = gl.getUniformLocation(blurProgram, 'u_resolution');
     u_blur_directionLocation = gl.getUniformLocation(blurProgram, 'u_direction');
     u_blur_radiusLocation = gl.getUniformLocation(blurProgram, 'u_blurRadius');
-
-    a_bg_positionLocation = gl.getAttribLocation(backgroundProgram, 'a_position');
-    u_bg_colorLocation = gl.getUniformLocation(backgroundProgram, 'u_color');
 
     positionBuffer = gl.createBuffer();
     gl.bindBuffer(gl.ARRAY_BUFFER, positionBuffer);
@@ -329,7 +319,6 @@ function LYPLUS_setupBlurEffect() {
 
     const initialPalette = getDefaultMasterPalette();
     currentTargetMasterArtworkPalette = initialPalette.map(c => ({ ...c }));
-    updateBackgroundColorFromPalette();
 
     handleResize();
     window.addEventListener('resize', handleResize, { passive: true });
@@ -375,8 +364,8 @@ function handleResize() {
     webglCanvas.width = canvasDimensions.width;
     webglCanvas.height = canvasDimensions.height;
 
-    blurDimensions.width = Math.round(canvasDimensions.width);
-    blurDimensions.height = Math.round(canvasDimensions.height);
+    blurDimensions.width = Math.round(canvasDimensions.width / BLUR_DOWNSAMPLE);
+    blurDimensions.height = Math.round(canvasDimensions.height / BLUR_DOWNSAMPLE);
 
     gl.bindTexture(gl.TEXTURE_2D, renderTexture);
     gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, canvasDimensions.width, canvasDimensions.height, 0, gl.RGBA, gl.UNSIGNED_BYTE, null);
@@ -478,7 +467,6 @@ function processNextArtworkFromQueue() {
         previousArtworkTexture = currentArtworkTexture;
         currentArtworkTexture = newTexture;
         currentTargetMasterArtworkPalette = newPalette;
-        updateBackgroundColorFromPalette();
 
         previousRotations = [...rotations];
 
@@ -663,7 +651,7 @@ function updateLayerPerimeterPositions(deltaTime) {
 
 
 function animateWebGLBackground() {
-    if (!gl || !glProgram || !blurProgram || !backgroundProgram) {
+    if (!gl || !glProgram || !blurProgram) {
         globalAnimationId = null;
         return;
     }
@@ -697,15 +685,6 @@ function animateWebGLBackground() {
     gl.viewport(0, 0, canvasDimensions.width, canvasDimensions.height);
     gl.clearColor(0.0, 0.0, 0.0, 1.0);
     gl.clear(gl.COLOR_BUFFER_BIT);
-
-    if (backgroundProgram) {
-        gl.useProgram(backgroundProgram);
-        gl.bindBuffer(gl.ARRAY_BUFFER, positionBuffer);
-        gl.enableVertexAttribArray(a_bg_positionLocation);
-        gl.vertexAttribPointer(a_bg_positionLocation, 2, gl.FLOAT, false, 0, 0);
-        gl.uniform3fv(u_bg_colorLocation, currentBackgroundColor);
-        gl.drawArrays(gl.TRIANGLES, 0, 6);
-    }
 
     gl.useProgram(glProgram);
 
@@ -953,19 +932,6 @@ function LYPLUS_getSongPalette() {
     const [r, g, b] = hslToRgb(h, increasedSaturation, l);
 
     return { r, g, b, a: selectedColor.a };
-}
-
-function updateBackgroundColorFromPalette() {
-    const paletteColor = LYPLUS_getSongPalette();
-    if (paletteColor) {
-        currentBackgroundColor = [
-            Math.min(1, Math.max(0, paletteColor.r / 255)),
-            Math.min(1, Math.max(0, paletteColor.g / 255)),
-            Math.min(1, Math.max(0, paletteColor.b / 255))
-        ];
-    } else {
-        currentBackgroundColor = [0.12, 0.12, 0.16];
-    }
 }
 
 window.addEventListener('message', (event) => {
