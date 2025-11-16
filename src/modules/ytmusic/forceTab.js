@@ -152,6 +152,7 @@
     lyricsElement.style.display = shouldShow ? 'block' : 'none';
 
     if (shouldShow) {
+      document.querySelector("#tab-renderer").scrollTop = 0;
       const videoElement = document.querySelector('video');
       if (videoElement && typeof scrollActiveLine === 'function') {
         try {
@@ -281,7 +282,7 @@
   // Initial setup
   maintainObservers();
 
-  const intervalId = setInterval(maintainObservers, 500);
+  const intervalId = setInterval(maintainObservers, 3000);
 
   document.addEventListener('visibilitychange', () => {
     if (!document.hidden) {
