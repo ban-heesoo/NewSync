@@ -25,33 +25,27 @@
 
     const hasDisabledAttr = tabElement.hasAttribute('disabled');
     const ariaDisabled = tabElement.getAttribute('aria-disabled');
-    const tabindex = tabElement.getAttribute('tabindex');
-    const ariaSelected = tabElement.getAttribute('aria-selected');
     const pointerEvents = tabElement.style.pointerEvents;
-    const hasIronSelected = tabElement.classList.contains('iron-selected');
 
-    const isActive =
+    // Check if tab is already properly enabled (not disabled, pointer-events auto)
+    const isEnabled =
       !hasDisabledAttr &&
       ariaDisabled === 'false' &&
-      tabindex === '0' &&
-      ariaSelected === 'true' &&
-      pointerEvents === 'auto' &&
-      hasIronSelected;
+      pointerEvents === 'auto';
 
-    if (isActive) return;
+    if (isEnabled) return;
 
     isUpdating = true;
 
     requestAnimationFrame(() => {
+      // Only ensure tab is enabled/clickable, but don't force it to be selected
+      // Let YouTube Music handle the active/selected state naturally
       tabElement.removeAttribute('disabled');
-
       tabElement.setAttribute('aria-disabled', 'false');
-      tabElement.setAttribute('tabindex', '0');
-      tabElement.setAttribute('aria-selected', 'true');
-
-      tabElement.classList.add('iron-selected');
-
       tabElement.style.pointerEvents = 'auto';
+
+      // Don't force iron-selected or aria-selected - let user interaction decide
+      // This prevents the LYRICS tab from appearing active when not clicked
 
       isUpdating = false;
     });
@@ -87,12 +81,13 @@
       const needsUpdate = mutations.some(m => {
         if (m.type === 'attributes') {
           const attrName = m.attributeName;
+          // Only monitor if tab becomes disabled or non-clickable
+          // Don't force active/selected state - let YouTube Music handle it
           if (attrName === 'disabled') return tabElement.hasAttribute('disabled');
           if (attrName === 'aria-disabled') return tabElement.getAttribute('aria-disabled') !== 'false';
-          if (attrName === 'tabindex') return tabElement.getAttribute('tabindex') !== '0';
-          if (attrName === 'aria-selected') return tabElement.getAttribute('aria-selected') !== 'true';
           if (attrName === 'style') return tabElement.style.pointerEvents !== 'auto';
-          if (attrName === 'class') return !tabElement.classList.contains('iron-selected');
+          // Removed checks for tabindex, aria-selected, and iron-selected
+          // These should be handled by YouTube Music's natural tab selection
         }
         return false;
       });
@@ -108,7 +103,8 @@
 
     middleTabObserver.observe(tabElement, {
       attributes: true,
-      attributeFilter: ['disabled', 'aria-disabled', 'tabindex', 'aria-selected', 'style', 'class']
+      attributeFilter: ['disabled', 'aria-disabled', 'style']
+      // Removed 'tabindex', 'aria-selected', 'class' - let YouTube Music handle selection state
     });
 
     lastMiddleTab = tabElement;

@@ -2,13 +2,15 @@
 let gl = null;
 let glProgram = null;
 let blurProgram = null;
+let backgroundProgram = null;
 let webglCanvas = null;
 let needsAnimation = false;
 
 // Uniform locations
 let u_artworkTextureLocation, u_rotationLocation, u_scaleLocation, u_positionLocation, u_transitionProgressLocation;
 let u_blur_imageLocation, u_blur_resolutionLocation, u_blur_directionLocation, u_blur_radiusLocation;
-let a_positionLocation, a_texCoordLocation, a_blur_positionLocation;
+let u_bg_colorLocation;
+let a_positionLocation, a_texCoordLocation, a_blur_positionLocation, a_bg_positionLocation;
 
 // WebGL objects
 let positionBuffer;
@@ -34,6 +36,7 @@ function handleContextLost(event) {
     gl = null;
     glProgram = null;
     blurProgram = null;
+    backgroundProgram = null;
     currentArtworkTexture = null;
     previousArtworkTexture = null;
     renderFramebuffer = null;
@@ -69,22 +72,23 @@ const STRETCHED_GRID_WIDTH = 256;
 const STRETCHED_GRID_HEIGHT = 256;
 
 let currentTargetMasterArtworkPalette = [];
+let currentBackgroundColor = [0.12, 0.12, 0.16];
 
 // Animation & rotation
-const ROTATION_SPEEDS = [0.05, 0.06, 0.07]; // radians per second for each layer
+const ROTATION_SPEEDS = [0.10, 0.18, 0.32]; // radians per second for each layer
 const ROTATION_POWER = 0.8
 let rotations = [0.3, -2.1, 2.4];
 let previousRotations = [0, 0, 0];
-const LAYER_SCALES = [1.4, 1.2, 1.2];
+const LAYER_SCALES = [1.4, 1.26, 1.26];
 const LAYER_POSITIONS = [
     { x: 0, y: 0 },
-    { x: 0.35, y: -0.5 },
-    { x: -0.35, y: 0.5 },
+    { x: 0.75, y: -0.75 },
+    { x: -0.75, y: 0.75 },
 ];
 const BASE_LAYER_POSITIONS = LAYER_POSITIONS.map(p => ({ x: p.x, y: p.y }));
 let currentLayerPositions = BASE_LAYER_POSITIONS.map(p => ({ x: p.x, y: p.y }));
 let perimeterOffsets = null;
-const PERIMETER_SPEEDS = [0.001, 0.003, 0.005];
+const PERIMETER_SPEEDS = [0.09, 0.012, 0.02];
 const PERIMETER_DIRECTION = [1, 1, 1];
 
 // Transition
@@ -163,7 +167,7 @@ const blurFragmentShaderSource = `
     uniform vec2 u_direction;
     uniform float u_blurRadius;
 
-    const int SAMPLES = 40;
+    const int SAMPLES = 44;
     const int HALF = (SAMPLES - 1) / 2;
 
     // gaussian function
@@ -192,6 +196,19 @@ const blurFragmentShaderSource = `
         result /= wsum;
 
         gl_FragColor = vec4(result, 1.0);
+    }
+`;
+
+const backgroundFragmentShaderSource = `
+    #ifdef GL_ES
+    precision mediump float;
+    #endif
+    varying vec2 v_uv;
+    uniform vec3 u_color;
+    void main() {
+        float vignette = smoothstep(0.0, 0.8, 1.0 - distance(v_uv, vec2(0.5)));
+        vec3 color = u_color * (0.7 + 0.3 * vignette);
+        gl_FragColor = vec4(color, 1.0);
     }
 `;
 
@@ -255,11 +272,13 @@ function LYPLUS_setupBlurEffect() {
     const vertexShader = createShader(gl, gl.VERTEX_SHADER, vertexShaderSource);
     const displayFragmentShader = createShader(gl, gl.FRAGMENT_SHADER, fragmentShaderSource);
     const blurFragmentShader = createShader(gl, gl.FRAGMENT_SHADER, blurFragmentShaderSource);
-    if (!vertexShader || !displayFragmentShader || !blurFragmentShader) return null;
+    const backgroundFragmentShader = createShader(gl, gl.FRAGMENT_SHADER, backgroundFragmentShaderSource);
+    if (!vertexShader || !displayFragmentShader || !blurFragmentShader || !backgroundFragmentShader) return null;
 
     glProgram = createProgram(gl, vertexShader, displayFragmentShader);
     blurProgram = createProgram(gl, vertexShader, blurFragmentShader);
-    if (!glProgram || !blurProgram) return null;
+    backgroundProgram = createProgram(gl, vertexShader, backgroundFragmentShader);
+    if (!glProgram || !blurProgram || !backgroundProgram) return null;
 
     a_positionLocation = gl.getAttribLocation(glProgram, 'a_position');
     a_texCoordLocation = gl.getAttribLocation(glProgram, 'a_texCoord');
@@ -274,6 +293,9 @@ function LYPLUS_setupBlurEffect() {
     u_blur_resolutionLocation = gl.getUniformLocation(blurProgram, 'u_resolution');
     u_blur_directionLocation = gl.getUniformLocation(blurProgram, 'u_direction');
     u_blur_radiusLocation = gl.getUniformLocation(blurProgram, 'u_blurRadius');
+
+    a_bg_positionLocation = gl.getAttribLocation(backgroundProgram, 'a_position');
+    u_bg_colorLocation = gl.getUniformLocation(backgroundProgram, 'u_color');
 
     positionBuffer = gl.createBuffer();
     gl.bindBuffer(gl.ARRAY_BUFFER, positionBuffer);
@@ -307,6 +329,7 @@ function LYPLUS_setupBlurEffect() {
 
     const initialPalette = getDefaultMasterPalette();
     currentTargetMasterArtworkPalette = initialPalette.map(c => ({ ...c }));
+    updateBackgroundColorFromPalette();
 
     handleResize();
     window.addEventListener('resize', handleResize, { passive: true });
@@ -333,8 +356,6 @@ function LYPLUS_setupBlurEffect() {
     }, { threshold: 0.01 });
 
     observer.observe(webglCanvas);
-
-    console.log("LYPLUS: WebGL setup complete with Apple Music style rotation.");
     return blurContainer;
 }
 
@@ -449,7 +470,6 @@ function processNextArtworkFromQueue() {
     isProcessingArtwork = true;
     currentProcessingArtworkIdentifier = pendingArtworkUrl;
     pendingArtworkUrl = null;
-    console.log("LYPLUS: Processing artwork:", currentProcessingArtworkIdentifier);
 
     const finishProcessing = (newTexture, newPalette) => {
         if (previousArtworkTexture && previousArtworkTexture !== currentArtworkTexture) {
@@ -458,6 +478,7 @@ function processNextArtworkFromQueue() {
         previousArtworkTexture = currentArtworkTexture;
         currentArtworkTexture = newTexture;
         currentTargetMasterArtworkPalette = newPalette;
+        updateBackgroundColorFromPalette();
 
         previousRotations = [...rotations];
 
@@ -465,7 +486,6 @@ function processNextArtworkFromQueue() {
         needsAnimation = true;
 
         if (!globalAnimationId) {
-            console.log("LYPLUS: Starting animation for artwork transition.");
             lastFrameTime = performance.now();
             globalAnimationId = requestAnimationFrame(animateWebGLBackground);
         }
@@ -614,7 +634,7 @@ function updateLayerPerimeterPositions(deltaTime) {
         for (let i = 0; i < BASE_LAYER_POSITIONS.length; i++) {
             const base = BASE_LAYER_POSITIONS[i] || { x: 0, y: 0 };
             const margin = Math.max(Math.abs(base.x || 0), Math.abs(base.y || 0), 0.0001);
-            perimeterOffsets[i] = basePosToPerimeterOffset(base.x || 0, base.y || 0, margin);
+            perimeterOffsets[i] = Math.random(); 
             if (!currentLayerPositions[i]) currentLayerPositions[i] = { x: base.x, y: base.y };
             else { currentLayerPositions[i].x = base.x; currentLayerPositions[i].y = base.y; }
         }
@@ -622,18 +642,19 @@ function updateLayerPerimeterPositions(deltaTime) {
 
     for (let i = 0; i < BASE_LAYER_POSITIONS.length; i++) {
         const base = BASE_LAYER_POSITIONS[i];
-        const baseAbsX = Math.abs(base.x);
-        const baseAbsY = Math.abs(base.y);
+        const radiusX = Math.abs(base.x);
+        const radiusY = Math.abs(base.y);
 
         const speed = PERIMETER_SPEEDS[i] !== undefined ? PERIMETER_SPEEDS[i] : 0.05;
         const dir = PERIMETER_DIRECTION[i] !== undefined ? PERIMETER_DIRECTION[i] : 1;
 
-        perimeterOffsets[i] = (perimeterOffsets[i] + dir * speed * deltaTime) % 1.0;
+        perimeterOffsets[i] = (perimeterOffsets[i] + dir * speed * deltaTime);
+        if (perimeterOffsets[i] > 1.0) perimeterOffsets[i] -= 1.0; 
 
-        const unit = perimeterTtoUnitXY(perimeterOffsets[i]);
+        const angle = perimeterOffsets[i] * 2.0 * Math.PI;
 
-        const newX = unit.x * baseAbsX;
-        const newY = unit.y * baseAbsY;
+        const newX = radiusX * Math.cos(angle);
+        const newY = radiusY * Math.sin(angle);
 
         currentLayerPositions[i].x = newX;
         currentLayerPositions[i].y = newY;
@@ -642,7 +663,7 @@ function updateLayerPerimeterPositions(deltaTime) {
 
 
 function animateWebGLBackground() {
-    if (!gl || !glProgram || !blurProgram) {
+    if (!gl || !glProgram || !blurProgram || !backgroundProgram) {
         globalAnimationId = null;
         return;
     }
@@ -654,7 +675,6 @@ function animateWebGLBackground() {
     if (artworkTransitionProgress < 1.0) {
         artworkTransitionProgress = Math.min(1.0, artworkTransitionProgress + ARTWORK_TRANSITION_SPEED);
         if (artworkTransitionProgress >= 1.0) {
-            console.log("LYPLUS: Artwork transition completed.");
             needsAnimation = false;
         }
     }
@@ -677,6 +697,15 @@ function animateWebGLBackground() {
     gl.viewport(0, 0, canvasDimensions.width, canvasDimensions.height);
     gl.clearColor(0.0, 0.0, 0.0, 1.0);
     gl.clear(gl.COLOR_BUFFER_BIT);
+
+    if (backgroundProgram) {
+        gl.useProgram(backgroundProgram);
+        gl.bindBuffer(gl.ARRAY_BUFFER, positionBuffer);
+        gl.enableVertexAttribArray(a_bg_positionLocation);
+        gl.vertexAttribPointer(a_bg_positionLocation, 2, gl.FLOAT, false, 0, 0);
+        gl.uniform3fv(u_bg_colorLocation, currentBackgroundColor);
+        gl.drawArrays(gl.TRIANGLES, 0, 6);
+    }
 
     gl.useProgram(glProgram);
 
@@ -745,7 +774,6 @@ function animateWebGLBackground() {
     if (shouldContinueAnimation) {
         globalAnimationId = requestAnimationFrame(animateWebGLBackground);
     } else {
-        console.log("LYPLUS: Animation stopped - no changes needed.");
         globalAnimationId = null;
     }
 }
@@ -917,7 +945,6 @@ function LYPLUS_getSongPalette() {
     if (filteredPalette.length > 0) {
         selectedColor = filteredPalette.sort((a, b) => b.vibrancy - a.vibrancy)[0];
     } else {
-        console.warn("LYPLUS: All colors in palette are too dark. Using original most vibrant color.");
         selectedColor = currentTargetMasterArtworkPalette.sort((a, b) => b.vibrancy - a.vibrancy)[0];
     }
 
@@ -926,6 +953,19 @@ function LYPLUS_getSongPalette() {
     const [r, g, b] = hslToRgb(h, increasedSaturation, l);
 
     return { r, g, b, a: selectedColor.a };
+}
+
+function updateBackgroundColorFromPalette() {
+    const paletteColor = LYPLUS_getSongPalette();
+    if (paletteColor) {
+        currentBackgroundColor = [
+            Math.min(1, Math.max(0, paletteColor.r / 255)),
+            Math.min(1, Math.max(0, paletteColor.g / 255)),
+            Math.min(1, Math.max(0, paletteColor.b / 255))
+        ];
+    } else {
+        currentBackgroundColor = [0.12, 0.12, 0.16];
+    }
 }
 
 window.addEventListener('message', (event) => {
