@@ -227,6 +227,8 @@
     background-clip: text;
     -webkit-background-clip: text;
     transition: color 0.7s, background-color 0.7s;
+    will-change: transform, color, background-color;
+    transform: translateY(0.00001%) translateZ(2px);
 }
 
 /* --- Syllable States (Finished, Highlight, etc.) --- */
@@ -248,7 +250,6 @@
     will-change: transform, background;
 }
 
-#lyrics-plus-container.compability-wipe .lyrics-line.active:not(.lyrics-gap) .lyrics-syllable,
 .lyrics-line.active:not(.lyrics-gap) .lyrics-syllable.highlight,
 .lyrics-line.active:not(.lyrics-gap) .lyrics-syllable.pre-highlight {
     background-repeat: no-repeat;
@@ -266,7 +267,7 @@
 
 #lyrics-plus-container:not(.lightweight-mode) .lyrics-line.active:not(.lyrics-gap) .lyrics-syllable.highlight,
 #lyrics-plus-container:not(.lightweight-mode) .lyrics-word.growable:has(.lyrics-syllable.highlight) .lyrics-syllable {
-    transform: translateY(-3.5%) translateZ(1px);
+    transform: translateY(-3.5%) translateZ(2px);
 }
 
 .lyrics-line.active:not(.lyrics-gap) .lyrics-syllable.highlight.finished {
@@ -285,12 +286,29 @@
     animation-name: pre-wipe-universal-rtl;
 }
 
+.lyrics-syllable-wrap {
+    display: inline-flex;
+    flex-direction: column;
+    align-items: start;
+  }
+  
+  .lyrics-syllable.transliteration  {
+      font-size: var(--lyplus-font-size-subtext);
+      white-space: pre-wrap;
+  }
+  .lyrics-word:has(.transliteration) .lyrics-syllable:not(.transliteration) {
+      line-height: 1.5em;
+  }
+  
+
 /* ===== CHARACTER-LEVEL ANIMATION ===== */
 .lyrics-line .lyrics-syllable span.char {
     display: inline-block;
     color: var(--lyplus-text-secondary);
     white-space: break-spaces;
     font-kerning: none;
+    font-variant-ligatures: none;
+    font-feature-settings: "liga" 0;
     background-clip: text;
     -webkit-background-clip: text;
     transition: color 0.18s, background-color 0.18s;
@@ -854,6 +872,10 @@ ytmusic-player-page[player-fullscreened] body .lyrics-song-info {
     direction: rtl !important;
 }
 
+.lyrics-romanization-container .lyrics-syllable{
+    white-space: pre-wrap;
+}
+
 /* ==========================================================================
    ENHANCED BACKGROUND & DYNAMIC PLAYER LAYOUT
    ========================================================================== */
@@ -937,6 +959,23 @@ canvas#lyplus-webgl-canvas {
     }
 }
 
+@keyframes start-wipe {
+    0% {
+        background-size: 0em 100%, 0% 100%;
+        background-position: -0em 0%, left;
+    }
+
+    15% {
+        background-size: 0.75em 100%, 0% 100%;
+        background-position: -0.375em 0%, left;
+    }
+
+    100% {
+        background-size: 0.75em 100%, 100% 100%;
+        background-position: calc(100% + 0.375em) 0%, left;
+    }
+}
+
 @keyframes wipe-rtl {
     from {
         background-size: 0.75em 100%, 0% 100%;
@@ -944,6 +983,23 @@ canvas#lyplus-webgl-canvas {
     }
 
     to {
+        background-size: 0.75em 100%, 100% 100%;
+        background-position: -0.75em 0%, right;
+    }
+}
+
+@keyframes start-wipe-rtl {
+    0% {
+        background-size: 0em 100%, 0% 100%;
+        background-position: calc(100% + 0em) 0%, calc(100% + 0.36em);
+    }
+
+    15% {
+        background-size: 0.75em 100%, 0% 100%;
+        background-position: calc(100% + 0.375em) 0%, calc(100% + 0.36em);
+    }
+
+    100% {
         background-size: 0.75em 100%, 100% 100%;
         background-position: -0.75em 0%, right;
     }
