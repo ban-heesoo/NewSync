@@ -1,3 +1,7 @@
+const pBrowser = typeof browser !== 'undefined'
+    ? browser
+    : (typeof chrome !== 'undefined' ? chrome : null);
+
 // Initialize immediately to ensure songTracker.js is injected right away
 // This fixes the issue where lyrics don't work on first install or after reinstall
 initializeLyricsPlus();
@@ -16,7 +20,10 @@ window.LyricsPlusAPI = {
     t: t,
     sendMessageToBackground: (message) => {
         return new Promise((resolve) => {
-            const pBrowser = chrome || browser;
+            if (!pBrowser?.runtime?.sendMessage) {
+                resolve({ success: false, error: 'Runtime messaging not available' });
+                return;
+            }
             pBrowser.runtime.sendMessage(message, (response) => {
                 resolve(response);
             });
@@ -63,11 +70,14 @@ function initializeLyricsPlus() {
 
 
 function injectCssFile() {
-    const pBrowser = chrome || browser;
     if (document.querySelector('link[data-lyrics-plus-style]')) return;
     const lyricsElement = document.createElement('link');
     lyricsElement.rel = 'stylesheet';
     lyricsElement.type = 'text/css';
+    if (!pBrowser?.runtime?.getURL) {
+        console.warn('LyricsPlus: runtime.getURL unavailable, skipping CSS inject');
+        return;
+    }
     lyricsElement.href = pBrowser.runtime.getURL('src/modules/lyrics/lyrics.css');
     lyricsElement.setAttribute('data-lyrics-plus-style', 'true');
     document.head.appendChild(lyricsElement);
