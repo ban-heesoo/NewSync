@@ -1101,16 +1101,35 @@ class LyricsPlusRenderer {
               tr._isFirstInContainer = true; //force fix bleeding?
             }
           }
-        } else if (lineData.romanizedText && lineData.text.trim() !== lineData.romanizedText.trim()) {
-          const cont = document.createElement("div");
-          cont.classList.add("lyrics-romanization-container");
-          cont.textContent = this._getDataText(lineData, false);
-
-          if (this._isRTL(cont.textContent)) {
-            cont.classList.add("rtl-text");
+        } else {
+          // For line-by-line lyrics, check if we have romanized text from syllables or line level
+          let romanizedText = null;
+          
+          // First, try to construct from syllables if available
+          if (hasSyl && lineData.syllabus.some(s => (this._getDataText(s, false) || "").trim())) {
+            romanizedText = lineData.syllabus
+              .map(s => this._getDataText(s, false))
+              .filter(txt => txt)
+              .join("");
           }
+          
+          // Fall back to line-level romanizedText if available
+          if (!romanizedText && lineData.romanizedText) {
+            romanizedText = lineData.romanizedText;
+          }
+          
+          // Only create container if we have romanized text and it's different from original
+          if (romanizedText && romanizedText.trim() && lineData.text.trim() !== romanizedText.trim()) {
+            const cont = document.createElement("div");
+            cont.classList.add("lyrics-romanization-container");
+            cont.textContent = romanizedText;
 
-          lineElement.appendChild(cont);
+            if (this._isRTL(cont.textContent)) {
+              cont.classList.add("rtl-text");
+            }
+
+            lineElement.appendChild(cont);
+          }
         }
       }
     }
