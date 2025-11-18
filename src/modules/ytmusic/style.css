@@ -137,8 +137,8 @@ ytmusic-app #layout[player-ui-state="FULLSCREEN"] .lyplus-blur-container {
     }
 
     ytmusic-player-page:is(:not([video-mode]), [video-mode]:has(ytmusic-player[playback-mode="ATV_PREFERRED"])):not([is-video-truncation-fix-enabled])[player-fullscreened]:has(#lyrics-plus-container[style*="display: block"]) #player.ytmusic-player-page {
-        top: calc(50% - var(--ytmusic-nav-bar-height));
-        left: 30%;
+        top: calc(48% - var(--ytmusic-nav-bar-height));
+        left: 28%;
         width: 45rem;
         height: 45rem;
         border: none;
