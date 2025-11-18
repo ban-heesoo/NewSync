@@ -130,9 +130,41 @@ export class TranslationService {
 
     const useGemini = settings.romanizationProvider === PROVIDERS.GEMINI && settings.geminiApiKey;
     
-    return useGemini
-      ? GeminiService.romanize(originalLyrics, settings)
-      : GoogleService.romanize(originalLyrics);
+    if (useGemini) {
+      return GeminiService.romanize(originalLyrics, settings);
+    }
+    
+    // Try Google first, fallback to Gemini if available and Google appears to have failed
+    const googleResult = await GoogleService.romanize(originalLyrics);
+    
+    // Check if Google actually succeeded (results should differ from input for non-Latin scripts)
+    const allResultsSameAsInput = originalLyrics.data.every((line, index) => {
+      const resultLine = googleResult[index];
+      if (!resultLine) return true;
+      
+      // For line-by-line: check if romanizedText is same as text
+      if (resultLine.romanizedText && resultLine.romanizedText.trim() === line.text.trim()) {
+        return true;
+      }
+      
+      // For word-by-word: check if all syllables have same romanizedText as text
+      if (resultLine.syllabus && line.syllabus) {
+        return resultLine.syllabus.every((syl, sylIndex) => {
+          const originalSyl = line.syllabus[sylIndex];
+          return !originalSyl || !syl.romanizedText || syl.romanizedText.trim() === originalSyl.text.trim();
+        });
+      }
+      
+      return false;
+    });
+    
+    // If all results are same as input and we have Gemini API key, try Gemini as fallback
+    if (allResultsSameAsInput && settings.geminiApiKey) {
+      console.warn("Google romanization appears to have failed (all results same as input), attempting Gemini fallback");
+      return GeminiService.romanize(originalLyrics, settings);
+    }
+    
+    return googleResult;
   }
 }
 
