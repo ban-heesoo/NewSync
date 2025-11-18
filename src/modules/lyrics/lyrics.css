@@ -961,11 +961,6 @@ canvas#lyplus-webgl-canvas {
 
 @keyframes start-wipe {
     0% {
-        background-size: 0em 100%, 0% 100%;
-        background-position: -0em 0%, left;
-    }
-
-    15% {
         background-size: 0.75em 100%, 0% 100%;
         background-position: -0.375em 0%, left;
     }
@@ -990,13 +985,8 @@ canvas#lyplus-webgl-canvas {
 
 @keyframes start-wipe-rtl {
     0% {
-        background-size: 0em 100%, 0% 100%;
-        background-position: calc(100% + 0em) 0%, calc(100% + 0.36em);
-    }
-
-    15% {
         background-size: 0.75em 100%, 0% 100%;
-        background-position: calc(100% + 0.375em) 0%, calc(100% + 0.36em);
+        background-position: calc(100% + 0.75em) 0%, calc(100% + 0.5em);
     }
 
     100% {
@@ -1013,7 +1003,7 @@ canvas#lyplus-webgl-canvas {
 
     to {
         background-size: 0.75em 100%, 0% 100%;
-        background-position: -0.375em 0%, left;
+        background-position: -0.75em 0%, -0.375em 0%;
     }
 }
 
