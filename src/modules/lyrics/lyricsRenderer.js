@@ -1056,7 +1056,33 @@ class LyricsPlusRenderer {
     const hasSyl = Array.isArray(lineData.syllabus) && lineData.syllabus.length > 0;
     const isWordSynced = lineElement.querySelector(".lyrics-syllable-wrap") !== null;
     
-    if (displayMode === "romanize" || displayMode === "both") {
+    // Skip romanization if the line is purely Latin script (no need for romanization)
+    const originalText = this._getDataText(lineData, true);
+    const isPurelyLatin = this._isPurelyLatinScript(originalText);
+    
+    // Check if background vocal exists and is purely Latin (only if not already purely Latin)
+    let hasBackgroundVocal = false;
+    let isBackgroundVocalPurelyLatin = false;
+    if (hasSyl && !isPurelyLatin) {
+      // Only check if we need to (i.e., main line is not purely Latin)
+      // Build background text in single pass instead of filter+map
+      let backgroundText = "";
+      for (let i = 0; i < lineData.syllabus.length; i++) {
+        const s = lineData.syllabus[i];
+        if (s.isBackground) {
+          hasBackgroundVocal = true;
+          backgroundText += this._getDataText(s, true);
+        }
+      }
+      if (hasBackgroundVocal) {
+        isBackgroundVocalPurelyLatin = this._isPurelyLatinScript(backgroundText);
+      }
+    }
+    
+    // Skip romanization if main line is purely Latin (including both main and background vocal if both exist)
+    const shouldSkipRomanization = isPurelyLatin;
+    
+    if ((displayMode === "romanize" || displayMode === "both") && !shouldSkipRomanization) {
       // Check if we have romanization in syllables (could be prebuilt Apple or from Google/Gemini for word-by-word)
       const hasSyllableRomanization = hasSyl && 
         lineData.syllabus.some(s => {
@@ -1084,6 +1110,11 @@ class LyricsPlusRenderer {
           const s = lineData.syllabus[i];
           const wrap = wraps[i];
 
+          // Skip romanization for background vocal if it's purely Latin
+          if (s.isBackground && hasBackgroundVocal && isBackgroundVocalPurelyLatin) {
+            continue;
+          }
+
           const transTxt = (this._getDataText(s, false) || "");
           if (!transTxt.trim()) continue;
 
@@ -1108,6 +1139,11 @@ class LyricsPlusRenderer {
         cont.classList.add("lyrics-romanization-container");
 
         lineData.syllabus.forEach(s => {
+          // Skip romanization for background vocal if it's purely Latin
+          if (s.isBackground && hasBackgroundVocal && isBackgroundVocalPurelyLatin) {
+            return;
+          }
+          
           const txt = this._getDataText(s, false);
           if (!txt) return;
 
