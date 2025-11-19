@@ -868,7 +868,7 @@ class LyricsPlusRenderer {
             if (isShortDuration) decayStrength += Math.max(0, 1.0 - (totalDuration - 1000) / 500) * 0.4;
             if (hasUnbalancedSyllables) decayStrength += Math.pow(1.0 - penaltyFactor, 0.7) * 1.2;
 
-            maxDecayRate = Math.min(decayStrength, 0.85);
+            maxDecayRate = Math.min(decayStrength, 0.7);
           }
           wordSpan._cachedChars.forEach((span, index) => {
             const positionInWord = numChars > 1 ? index / (numChars - 1) : 0;

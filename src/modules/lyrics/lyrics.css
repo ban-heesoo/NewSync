@@ -35,7 +35,7 @@
     --lyplus-text-tertiary: #ffffff7a;
     --lyplus-text-inactive: #ffffff31;
     --lyplus-text-button: rgba(255, 255, 255, 0.87);
-    --lyplus-text-translation-active: #ffffffa4;
+    --lyplus-text-translation-active: #cccccccc;
 
     --lyplus-blur-amount: 0.07em;
     --lyplus-blur-amount-near: 0.035em;
@@ -840,7 +840,6 @@ ytmusic-player-page[player-fullscreened] body .lyrics-song-info {
 }
 
 /* --- Translated/Romanized Text --- */
-.lyrics-translation-container,
 .lyrics-romanization-container {
     padding-top: 0.2em;
     opacity: 0.9;
@@ -855,9 +854,23 @@ ytmusic-player-page[player-fullscreened] body .lyrics-song-info {
     transition: opacity 0.3s ease, color 0.5s;
 }
 
-.lyrics-line.active .lyrics-translation-container {
-    color: var(--lyplus-text-secondary);
+.lyrics-translation-container {
+    padding-top: 0.2em;
+    opacity: 0.5;
+    font-size: var(--lyplus-font-size-subtext);
+    overflow-wrap: break-word;
+    color: var(--lyplus-text-tertiary);
+    pointer-events: none;
+    user-select: none;
+    -webkit-user-select: none;
+    -moz-user-select: none;
+    -ms-user-select: none;
+    transition: opacity 0.3s ease, color 0.5s;
+}
 
+.lyrics-line.active .lyrics-translation-container {
+    opacity: 0.7;
+    color: var(--lyplus-text-secondary);
 }
 
 .lyrics-line.active .lyrics-romanization-container {
@@ -875,6 +888,9 @@ ytmusic-player-page[player-fullscreened] body .lyrics-song-info {
 .lyrics-romanization-container .lyrics-syllable{
     white-space: pre-wrap;
 }
+
+ytmusic-player-page[video-mode][player-fullscreened] .lyrics-line.active .lyrics-translation-container { 
+    color: var(--lyplus-lyrics-pallete, var(--lyplus-text-primary)); }
 
 /* ==========================================================================
    ENHANCED BACKGROUND & DYNAMIC PLAYER LAYOUT
@@ -1003,7 +1019,7 @@ canvas#lyplus-webgl-canvas {
 
     to {
         background-size: 0.75em 100%, 0% 100%;
-        background-position: -0.75em 0%, -0.375em 0%;
+        background-position: -0.375em 0%, left;
     }
 }
 
