@@ -840,7 +840,20 @@ ytmusic-player-page[player-fullscreened] body .lyrics-song-info {
 }
 
 /* --- Translated/Romanized Text --- */
-.lyrics-romanization-container,
+.lyrics-romanization-container{
+    padding-top: 0.2em;
+    opacity: 0.9;
+    font-size: var(--lyplus-font-size-subtext);
+    overflow-wrap: break-word;
+    color: var(--lyplus-text-tertiary);
+    pointer-events: none;
+    user-select: none;
+    -webkit-user-select: none;
+    -moz-user-select: none;
+    -ms-user-select: none;
+    transition: opacity 0.3s ease, color 0.5s;
+}
+
 .lyrics-translation-container {
     padding-top: 0.2em;
     opacity: 0.7;
