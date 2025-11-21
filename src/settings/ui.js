@@ -358,24 +358,22 @@ document.getElementById('refresh-local-lyrics-list').addEventListener('click', p
 document.getElementById('override-translate-target').addEventListener('change', (e) => {
     currentSettings.overrideTranslateTarget = e.target.checked;
     toggleTranslateTargetVisibility();
+    clearCacheSilently();
+    console.log('Cache cleared automatically after translate target toggle change.');
 });
 
 document.getElementById('override-gemini-prompt').addEventListener('change', (e) => {
     currentSettings.overrideGeminiPrompt = e.target.checked;
     toggleGeminiPromptVisibility();
-    // Clear cache when prompt override is toggled
-    if (e.target.checked) {
-        clearCacheSilently();
-    }
+    clearCacheSilently();
+    console.log('Cache cleared automatically after Gemini prompt toggle change.');
 });
 
 document.getElementById('override-gemini-romanize-prompt').addEventListener('change', (e) => {
     currentSettings.overrideGeminiRomanizePrompt = e.target.checked;
     toggleGeminiRomanizePromptVisibility();
-    // Clear cache when prompt override is toggled
-    if (e.target.checked) {
-        clearCacheSilently();
-    }
+    clearCacheSilently();
+    console.log('Cache cleared automatically after Gemini romanization prompt toggle change.');
 });
 
 // Auto-clear cache when prompt fields are modified
