@@ -2,6 +2,13 @@
    STATE VARIABLES
    ================================================================= */
 
+let audioCtx = null;
+try {
+  audioCtx = new AudioContext();
+} catch (e) {
+  console.warn('Failed to create AudioContext:', e);
+}
+
 let currentFetchMediaId = null;
 let currentDisplayMode = 'none'; // User's intended display mode ('none', 'translate', 'romanize', 'both')
 let lastProcessedDisplayMode = 'none'; // The mode that was actually rendered
@@ -64,6 +71,9 @@ function combineLyricsData(baseLyrics, translation, romanization) {
           });
         }
       }
+      else if (romanizedLine.romanizedText) {
+         updatedLine.romanizedText = romanizedLine.romanizedText;
+      }
       else if (romanizedLine.text) {
          updatedLine.romanizedText = romanizedLine.text;
       }
@@ -124,11 +134,7 @@ async function fetchAndDisplayLyrics(currentSong, isNewSong = false, forceReload
     // --- 2. Determine Effective Mode (User's Intent) ---
     let effectiveMode = currentDisplayMode;
     if (isNewSong) {
-      const { translationEnabled, romanizationEnabled } = currentSettings;
-      if (translationEnabled && romanizationEnabled) effectiveMode = 'both';
-      else if (translationEnabled) effectiveMode = 'translate';
-      else if (romanizationEnabled) effectiveMode = 'romanize';
-      else effectiveMode = 'none';
+      effectiveMode = 'none';
       currentDisplayMode = effectiveMode;
     }
 
@@ -225,7 +231,8 @@ async function fetchAndDisplayLyrics(currentSong, isNewSong = false, forceReload
         currentSettings,
         fetchAndDisplayLyrics,
         setCurrentDisplayModeAndRender,
-        currentSettings.largerTextMode
+        currentSettings.largerTextMode,
+         (audioCtx && audioCtx.outputLatency) || 0
       );
     } else {
       console.error("displayLyrics is not available.");

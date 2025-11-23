@@ -31,11 +31,17 @@ export class GoogleService {
       if (!line.syllabus?.length) return line;
       
       const syllableTexts = line.syllabus.map(s => s.text);
-      const romanizedTexts = await this.romanizeTexts(syllableTexts);
+      let romanizedTexts;
+      try {
+        romanizedTexts = await this.romanizeTexts(syllableTexts);
+      } catch (error) {
+        console.error("GoogleService: Failed to romanize syllables for line:", error);
+        throw error;
+      }
       
       const newSyllabus = line.syllabus.map((s, index) => ({
         ...s,
-        romanizedText: `${romanizedTexts[index]} ` || s.text
+        romanizedText: romanizedTexts[index] ? `${romanizedTexts[index]} ` : s.text
       }));
       
       return { ...line, syllabus: newSyllabus };
@@ -44,7 +50,13 @@ export class GoogleService {
 
   static async romanizeLineSynced(originalLyrics) {
     const linesToRomanize = originalLyrics.data.map(line => line.text);
-    const romanizedLines = await this.romanizeTexts(linesToRomanize);
+    let romanizedLines;
+    try {
+      romanizedLines = await this.romanizeTexts(linesToRomanize);
+    } catch (error) {
+      console.error("GoogleService: Failed to romanize lines:", error);
+      throw error;
+    }
     
     return originalLyrics.data.map((line, index) => ({
       ...line,
@@ -87,12 +99,40 @@ export class GoogleService {
         try {
           const romanizeUrl = `https://translate.googleapis.com/translate_a/single?client=gtx&sl=${sourceLang}&tl=en&hl=en&dt=rm&q=${encodeURIComponent(text)}`;
           const response = await fetch(romanizeUrl);
+          
+          if (!response.ok) {
+            throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+          }
+          
           const data = await response.json();
-          romanizedTexts.push(data?.[0]?.[0]?.[3] || text);
-          success = true;
+          const romanized = data?.[0]?.[0]?.[3];
+          
+          // Check if we got a valid romanization (not empty and different from input for non-Latin)
+          if (romanized && romanized.trim()) {
+            // For non-Latin scripts, check if result is actually different from input
+            if (Utilities.isPurelyLatinScript(text)) {
+              romanizedTexts.push(romanized);
+              success = true;
+            } else if (romanized.trim() !== text.trim()) {
+              // Valid romanization for non-Latin script
+              romanizedTexts.push(romanized);
+              success = true;
+            } else {
+              // Result same as input for non-Latin script - consider it failed
+              throw new Error("Google returned same text as input (romanization failed)");
+            }
+          } else {
+            // Empty result - consider it failed for non-Latin scripts
+            if (Utilities.isPurelyLatinScript(text)) {
+              romanizedTexts.push(text);
+              success = true;
+            } else {
+              throw new Error("Google returned empty romanization");
+            }
+          }
         } catch (error) {
           lastError = error;
-          console.warn(`GoogleService: Error romanizing text "${text}" (attempt ${attempt + 1}/${CONFIG.GOOGLE.MAX_RETRIES}):`, error);
+          console.warn(`GoogleService: Error romanizing text "${text.substring(0, 50)}${text.length > 50 ? '...' : ''}" (attempt ${attempt + 1}/${CONFIG.GOOGLE.MAX_RETRIES}):`, error);
           attempt++;
           if (attempt < CONFIG.GOOGLE.MAX_RETRIES) {
             await Utilities.delay(CONFIG.GOOGLE.RETRY_DELAY_MS * Math.pow(2, attempt - 1));
@@ -101,8 +141,9 @@ export class GoogleService {
       }
 
       if (!success) {
-        console.error(`GoogleService: Failed to romanize text "${text}" after ${CONFIG.GOOGLE.MAX_RETRIES} attempts. Last error:`, lastError);
-        romanizedTexts.push(text);
+        console.error(`GoogleService: Failed to romanize text "${text.substring(0, 50)}${text.length > 50 ? '...' : ''}" after ${CONFIG.GOOGLE.MAX_RETRIES} attempts. Last error:`, lastError);
+        // Throw error to trigger fallback to Gemini
+        throw new Error(`Google romanization failed after ${CONFIG.GOOGLE.MAX_RETRIES} attempts: ${lastError?.message || lastError}`);
       }
     }
     

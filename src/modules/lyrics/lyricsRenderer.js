@@ -30,10 +30,19 @@ class LyricsPlusRenderer {
     this.translationButton = null;
     this.reloadButton = null;
     this.dropdownMenu = null;
+    this.buttonsWrapper = null;
+    this._boundLyricClickHandler = this._onLyricClick.bind(this);
+    this._boundDocumentClickHandler = null;
 
     this.isProgrammaticScrolling = false;
     this.endProgrammaticScrollTimer = null;
     this.scrollEventHandlerAttached = false;
+    this._boundParentScrollHandler = null;
+    this._boundWheelHandler = null;
+    this._boundTouchStartHandler = null;
+    this._boundTouchMoveHandler = null;
+    this._boundTouchEndHandler = null;
+    this._boundTouchCancelHandler = null;
     this.currentScrollOffset = 0;
     this.touchStartY = 0;
     this.isTouching = false;
@@ -244,162 +253,141 @@ class LyricsPlusRenderer {
       maxSamples: 5,
     };
 
+    this._boundParentScrollHandler = () => {
+      if (this.isProgrammaticScrolling) {
+        clearTimeout(this.endProgrammaticScrollTimer);
+        this.endProgrammaticScrollTimer = setTimeout(() => {
+          this.isProgrammaticScrolling = false;
+          this.endProgrammaticScrollTimer = null;
+        }, 250);
+        return;
+      }
+      if (this.lyricsContainer) {
+        this.lyricsContainer.classList.add("not-focused");
+      }
+    };
+
+    this._boundWheelHandler = (event) => {
+      event.preventDefault();
+      this.isProgrammaticScrolling = false;
+      if (this.lyricsContainer) {
+        this.lyricsContainer.classList.add("not-focused", "user-scrolling", "wheel-scrolling");
+        this.lyricsContainer.classList.remove("touch-scrolling");
+      }
+      this._handleUserScroll(event.deltaY);
+      clearTimeout(this.userScrollIdleTimer);
+      this.userScrollIdleTimer = setTimeout(() => {
+        if (this.lyricsContainer) {
+          this.lyricsContainer.classList.remove("user-scrolling", "wheel-scrolling");
+        }
+      }, 200);
+    };
+
+    this._boundTouchStartHandler = (event) => {
+      const touch = event.touches[0];
+      const now = performance.now();
+      if (this.touchState.momentum) {
+        cancelAnimationFrame(this.touchState.momentum);
+        this.touchState.momentum = null;
+      }
+      this.touchState.isActive = true;
+      this.touchState.startY = touch.clientY;
+      this.touchState.lastY = touch.clientY;
+      this.touchState.lastTime = now;
+      this.touchState.velocity = 0;
+      this.touchState.samples = [{ y: touch.clientY, time: now }];
+
+      this.isProgrammaticScrolling = false;
+      if (this.lyricsContainer) {
+        this.lyricsContainer.classList.add("not-focused", "user-scrolling", "touch-scrolling");
+        this.lyricsContainer.classList.remove("wheel-scrolling");
+      }
+      clearTimeout(this.userScrollIdleTimer);
+    };
+
+    this._boundTouchMoveHandler = (event) => {
+      if (!this.touchState.isActive) return;
+      event.preventDefault();
+      const touch = event.touches[0];
+      const now = performance.now();
+      const currentY = touch.clientY;
+      const deltaY = this.touchState.lastY - currentY;
+      this.touchState.lastY = currentY;
+      this.touchState.samples.push({ y: currentY, time: now });
+      if (this.touchState.samples.length > this.touchState.maxSamples) {
+        this.touchState.samples.shift();
+      }
+      this._handleUserScroll(deltaY * 0.8);
+    };
+
+    this._boundTouchEndHandler = () => {
+      if (!this.touchState.isActive) return;
+      this.touchState.isActive = false;
+      const now = performance.now();
+      const samples = this.touchState.samples;
+      if (samples.length >= 2) {
+        const recentSamples = samples.filter((sample) => now - sample.time <= 100);
+        if (recentSamples.length >= 2) {
+          const newest = recentSamples[recentSamples.length - 1];
+          const oldest = recentSamples[0];
+          const timeDelta = newest.time - oldest.time;
+          const yDelta = oldest.y - newest.y;
+          if (timeDelta > 0) {
+            this.touchState.velocity = yDelta / timeDelta;
+          }
+        }
+      }
+      if (Math.abs(this.touchState.velocity) > 0.1) {
+        this._startMomentumScroll();
+      } else {
+        this._endTouchScrolling();
+      }
+    };
+
+    this._boundTouchCancelHandler = () => {
+      this.touchState.isActive = false;
+      if (this.touchState.momentum) {
+        cancelAnimationFrame(this.touchState.momentum);
+        this.touchState.momentum = null;
+      }
+      this._endTouchScrolling();
+    };
+
     if (parentScrollElement) {
-      parentScrollElement.addEventListener(
-        "scroll",
-        () => {
-          if (this.isProgrammaticScrolling) {
-            clearTimeout(this.endProgrammaticScrollTimer);
-            this.endProgrammaticScrollTimer = setTimeout(() => {
-              this.isProgrammaticScrolling = false;
-              this.endProgrammaticScrollTimer = null;
-            }, 250);
-            return;
-          }
-          if (this.lyricsContainer) {
-            this.lyricsContainer.classList.add("not-focused");
-          }
-        },
-        { passive: true }
-      );
+      parentScrollElement.addEventListener("scroll", this._boundParentScrollHandler, { passive: true });
     }
 
-    scrollListeningElement.addEventListener(
-      "wheel",
-      (event) => {
-        event.preventDefault();
-        this.isProgrammaticScrolling = false;
-        if (this.lyricsContainer) {
-          this.lyricsContainer.classList.add(
-            "not-focused",
-            "user-scrolling",
-            "wheel-scrolling"
-          );
-          this.lyricsContainer.classList.remove("touch-scrolling");
-        }
-        const scrollAmount = event.deltaY;
-        this._handleUserScroll(scrollAmount);
-        clearTimeout(this.userScrollIdleTimer);
-        this.userScrollIdleTimer = setTimeout(() => {
-          if (this.lyricsContainer) {
-            this.lyricsContainer.classList.remove(
-              "user-scrolling",
-              "wheel-scrolling"
-            );
-          }
-        }, 200);
-      },
-      { passive: false }
-    );
-
-    scrollListeningElement.addEventListener(
-      "touchstart",
-      (event) => {
-        const touch = event.touches[0];
-        const now = performance.now();
-
-        if (this.touchState.momentum) {
-          cancelAnimationFrame(this.touchState.momentum);
-          this.touchState.momentum = null;
-        }
-
-        this.touchState.isActive = true;
-        this.touchState.startY = touch.clientY;
-        this.touchState.lastY = touch.clientY;
-        this.touchState.lastTime = now;
-        this.touchState.velocity = 0;
-        this.touchState.samples = [{ y: touch.clientY, time: now }];
-
-        this.isProgrammaticScrolling = false;
-        if (this.lyricsContainer) {
-          this.lyricsContainer.classList.add(
-            "not-focused",
-            "user-scrolling",
-            "touch-scrolling"
-          );
-          this.lyricsContainer.classList.remove("wheel-scrolling");
-        }
-        clearTimeout(this.userScrollIdleTimer);
-      },
-      { passive: true }
-    );
-
-    scrollListeningElement.addEventListener(
-      "touchmove",
-      (event) => {
-        if (!this.touchState.isActive) return;
-
-        event.preventDefault();
-        const touch = event.touches[0];
-        const now = performance.now();
-        const currentY = touch.clientY;
-        const deltaY = this.touchState.lastY - currentY;
-
-        this.touchState.lastY = currentY;
-
-        this.touchState.samples.push({ y: currentY, time: now });
-        if (this.touchState.samples.length > this.touchState.maxSamples) {
-          this.touchState.samples.shift();
-        }
-
-        // Apply immediate scroll with reduced sensitivity for smoother feel
-        this._handleUserScroll(deltaY * 0.8);
-      },
-      { passive: false }
-    );
-
-    scrollListeningElement.addEventListener(
-      "touchend",
-      (event) => {
-        if (!this.touchState.isActive) return;
-
-        this.touchState.isActive = false;
-
-        const now = performance.now();
-        const samples = this.touchState.samples;
-
-        if (samples.length >= 2) {
-          // Use samples from last 100ms for velocity calculation
-          const recentSamples = samples.filter(
-            (sample) => now - sample.time <= 100
-          );
-
-          if (recentSamples.length >= 2) {
-            const newest = recentSamples[recentSamples.length - 1];
-            const oldest = recentSamples[0];
-            const timeDelta = newest.time - oldest.time;
-            const yDelta = oldest.y - newest.y;
-
-            if (timeDelta > 0) {
-              this.touchState.velocity = yDelta / timeDelta;
-            }
-          }
-        }
-
-        const minVelocity = 0.1;
-        if (Math.abs(this.touchState.velocity) > minVelocity) {
-          this._startMomentumScroll();
-        } else {
-          this._endTouchScrolling();
-        }
-      },
-      { passive: true }
-    );
-
-    scrollListeningElement.addEventListener(
-      "touchcancel",
-      () => {
-        this.touchState.isActive = false;
-        if (this.touchState.momentum) {
-          cancelAnimationFrame(this.touchState.momentum);
-          this.touchState.momentum = null;
-        }
-        this._endTouchScrolling();
-      },
-      { passive: true }
-    );
+    scrollListeningElement.addEventListener("wheel", this._boundWheelHandler, { passive: false });
+    scrollListeningElement.addEventListener("touchstart", this._boundTouchStartHandler, { passive: true });
+    scrollListeningElement.addEventListener("touchmove", this._boundTouchMoveHandler, { passive: false });
+    scrollListeningElement.addEventListener("touchend", this._boundTouchEndHandler, { passive: true });
+    scrollListeningElement.addEventListener("touchcancel", this._boundTouchCancelHandler, { passive: true });
 
     this.scrollEventHandlerAttached = true;
+  }
+
+  _removeUserScrollListener() {
+    const container = this.lyricsContainer;
+
+    if (container && container.parentElement && this._boundParentScrollHandler) {
+      container.parentElement.removeEventListener("scroll", this._boundParentScrollHandler);
+    }
+
+    if (container) {
+      if (this._boundWheelHandler) container.removeEventListener("wheel", this._boundWheelHandler);
+      if (this._boundTouchStartHandler) container.removeEventListener("touchstart", this._boundTouchStartHandler);
+      if (this._boundTouchMoveHandler) container.removeEventListener("touchmove", this._boundTouchMoveHandler);
+      if (this._boundTouchEndHandler) container.removeEventListener("touchend", this._boundTouchEndHandler);
+      if (this._boundTouchCancelHandler) container.removeEventListener("touchcancel", this._boundTouchCancelHandler);
+    }
+
+    this.scrollEventHandlerAttached = false;
+    this._boundParentScrollHandler = null;
+    this._boundWheelHandler = null;
+    this._boundTouchStartHandler = null;
+    this._boundTouchMoveHandler = null;
+    this._boundTouchEndHandler = null;
+    this._boundTouchCancelHandler = null;
   }
 
   /**
@@ -604,6 +592,8 @@ class LyricsPlusRenderer {
     elementPool,
     fragment
   ) {
+    // --- Helper Functions ---
+
     const getComputedFont = (element) => {
       if (!element) return "400 16px sans-serif";
       const cacheKey = element.tagName + (element.className || "");
@@ -614,60 +604,44 @@ class LyricsPlusRenderer {
       return font;
     };
 
-    /**
-     * Calculate pre-highlight delay based on exact wipe effect positioning.
-     * @param {HTMLElement} syllable - The current syllable element.
-     * @param {string} font - The computed font string.
-     * @param {number} currentDuration - Duration of current syllable in ms.
-     * @returns {number} Delay in milliseconds (negative for early start).
-     */
-    const calculatePreHighlightDelay = (syllable, font, currentDuration) => {
-      const syllableWidthPx = this._getTextWidth(syllable.textContent, font);
-      const emWidthPx = this._getTextWidth("—", font);
-      const syllableWidthEm = syllableWidthPx / emWidthPx;
-
-      const gradientWidth = 0.75;
-      const gradientHalfWidth = gradientWidth / 2;
-      const initialGradientPosition = -gradientHalfWidth;
-      const finalGradientPosition = syllableWidthEm + gradientHalfWidth;
-      const totalAnimationDistance =
-        finalGradientPosition - initialGradientPosition;
-
-      const triggerPointFromTextEnd = gradientHalfWidth;
-
-      let triggerPosition;
-      if (syllableWidthEm <= gradientWidth) {
-        triggerPosition = -gradientHalfWidth * 0.5;
-      } else {
-        triggerPosition = syllableWidthEm - triggerPointFromTextEnd;
-      }
-
-      const distanceToTrigger = triggerPosition - initialGradientPosition;
-
-      let triggerTimingFraction = 0;
-      if (totalAnimationDistance > 0) {
-        triggerTimingFraction = distanceToTrigger / totalAnimationDistance;
-      }
-
-      const rawDelayMs = triggerTimingFraction * currentDuration;
-
-      return Math.round(rawDelayMs);
+    const getFontSizePx = (font) => {
+      const match = font.match(/(\d+(?:\.\d+)?)px/);
+      return match ? parseFloat(match[1]) : 16;
     };
 
+    const calculatePhysicsPreHighlightDelay = (syllable, font, currentDuration) => {
+      const textWidthPx = this._getTextWidth(syllable.textContent, font);
+      if (textWidthPx <= 0.1 || currentDuration <= 0) return { delay: 0, duration: 0 };
+
+      const fontSizePx = getFontSizePx(font);
+      const velocityPxPerMs = textWidthPx / currentDuration;
+      const gradientDistancePx = 0.375 * fontSizePx;
+      const gradientDurationMs = gradientDistancePx / velocityPxPerMs;
+
+      return {
+        delay: currentDuration - gradientDurationMs,
+        duration: gradientDurationMs
+      };
+    };
+
+    // --- Main Line Loop ---
+
     lyrics.data.forEach((line) => {
-      let currentLine =
-        elementPool.lines.pop() || document.createElement("div");
+      // 1. Line & Container Setup
+      let currentLine = elementPool.lines.pop() || document.createElement("div");
       currentLine.innerHTML = "";
       currentLine.className = "lyrics-line";
       currentLine.dataset.startTime = line.startTime;
       currentLine.dataset.endTime = line.endTime;
+
       const singerClass = line.element?.singer
         ? singerClassMap[line.element.singer] || "singer-left"
         : "singer-left";
       currentLine.classList.add(singerClass);
-      if (!currentLine.hasClickListener) {
-        currentLine.addEventListener("click", this._onLyricClick.bind(this));
-        currentLine.hasClickListener = true;
+
+      if (!currentLine._hasSharedListener) {
+        currentLine.addEventListener("click", this._boundLyricClickHandler);
+        currentLine._hasSharedListener = true;
       }
 
       const mainContainer = document.createElement("div");
@@ -675,249 +649,270 @@ class LyricsPlusRenderer {
       currentLine.appendChild(mainContainer);
 
       let backgroundContainer = null;
-      let isFirstSyllableInMainContainer = true;
-      let isFirstSyllableInBackgroundContainer = true;
-
-      // Variables to hold the last syllable of the previous word to link across words
+      let isFirstSyllableInMain = true;
+      let isFirstSyllableInBg = true;
       let pendingSyllable = null;
       let pendingSyllableFont = null;
 
-      const renderWordSpan = (wordBuffer, shouldEmphasize) => {
-        if (!wordBuffer.length) return;
-        const currentWordStartTime = wordBuffer[0].time;
-        const lastSyllable = wordBuffer[wordBuffer.length - 1];
-        const currentWordEndTime = lastSyllable.time + lastSyllable.duration;
+      // --- Inner Logic Helpers ---
 
-        const wordSpan =
-          elementPool.syllables.pop() || document.createElement("span");
-        wordSpan.innerHTML = "";
-        wordSpan.className = "lyrics-word";
-        let referenceFont = mainContainer.firstChild
-          ? getComputedFont(mainContainer.firstChild)
-          : "400 16px sans-serif";
-        const combinedText = wordBuffer.map((s) => this._getDataText(s)).join("");
-        const totalDuration = currentWordEndTime - currentWordStartTime;
+      const linkSyllables = (prevSyllable, nextSyllable, font) => {
+        const physicsData = calculatePhysicsPreHighlightDelay(
+          prevSyllable,
+          font,
+          prevSyllable._durationMs
+        );
+        prevSyllable._nextSyllableInWord = nextSyllable;
+        prevSyllable._preHighlightDurationMs = physicsData.duration;
+        prevSyllable._preHighlightDelayMs = physicsData.delay;
+      };
 
-        let easedProgress = 0;
+      const calculateEmphasisMetrics = (totalDuration, wordBufferLength, firstDuration) => {
+        const minDuration = 1000;
+        const maxDuration = 2000;
+        const easingPower = 2.5;
+
+        const progress = Math.min(1, Math.max(0, (totalDuration - minDuration) / (maxDuration - minDuration)));
+        const easedProgress = Math.pow(progress, easingPower);
+
         let penaltyFactor = 1.0;
-        if (shouldEmphasize) {
-          const minDuration = 1000;
-          const maxDuration = 2000;
-          const easingPower = 2.5;
+        if (wordBufferLength > 1) {
+          const imbalanceRatio = firstDuration / totalDuration;
+          const penaltyThreshold = 0.25;
+          if (imbalanceRatio < penaltyThreshold) {
+            const minPenaltyFactor = 0.5;
+            const penaltyProgress = imbalanceRatio / penaltyThreshold;
+            penaltyFactor = minPenaltyFactor + (1.0 - minPenaltyFactor) * penaltyProgress;
+          }
+        }
+        return { easedProgress, penaltyFactor };
+      };
 
-          const progress = Math.min(
-            1,
-            Math.max(
-              0,
-              (totalDuration - minDuration) / (maxDuration - minDuration)
-            )
-          );
-          easedProgress = Math.pow(progress, easingPower);
+      const createSyllableElement = (s, totalDuration, idx, isBg) => {
+        const sylSpan = elementPool.syllables.pop() || document.createElement("span");
+        sylSpan.innerHTML = "";
+        sylSpan.className = "lyrics-syllable";
 
-          if (wordBuffer.length > 1) {
-            const firstSyllableDuration = wordBuffer[0].duration;
-            const imbalanceRatio = firstSyllableDuration / totalDuration;
+        // Dataset & Props
+        sylSpan.dataset.startTime = s.time;
+        sylSpan.dataset.duration = s.duration;
+        sylSpan.dataset.endTime = s.time + s.duration;
+        sylSpan.dataset.wordDuration = totalDuration;
+        sylSpan.dataset.syllableIndex = idx;
+        sylSpan._startTimeMs = s.time;
+        sylSpan._durationMs = s.duration;
+        sylSpan._endTimeMs = s.time + s.duration;
+        sylSpan._wordDurationMs = totalDuration;
+        sylSpan._isBackground = isBg;
 
-            const penaltyThreshold = 0.25;
-
-            if (imbalanceRatio < penaltyThreshold) {
-              const minPenaltyFactor = 0.5;
-
-              const penaltyProgress = imbalanceRatio / penaltyThreshold;
-              penaltyFactor =
-                minPenaltyFactor + (1.0 - minPenaltyFactor) * penaltyProgress;
-            }
+        // First-in-container Logic
+        if (isBg) {
+          if (isFirstSyllableInBg) {
+            sylSpan._isFirstInContainer = true;
+            isFirstSyllableInBg = false;
+          }
+        } else {
+          if (isFirstSyllableInMain) {
+            sylSpan._isFirstInContainer = true;
+            isFirstSyllableInMain = false;
           }
         }
 
+        if (this._isRTL(this._getDataText(s, true))) {
+          sylSpan.classList.add("rtl-text");
+        }
+
+        return sylSpan;
+      };
+
+      const renderCharWipes = (s, sylSpan, referenceFont, characterData) => {
+        const syllableText = this._getDataText(s);
+        const fontSizePx = getFontSizePx(referenceFont);
+        const chars = syllableText.split("");
+        const charWidths = chars.map(c => this._getTextWidth(c, referenceFont));
+        const totalSyllableWidth = charWidths.reduce((a, b) => a + b, 0);
+
+        const velocityPxPerMs = totalSyllableWidth / s.duration;
+        const gradientDurationMs = (0.375 * fontSizePx) / velocityPxPerMs;
+
+        let cumulativeCharWidth = 0;
+        const charSpans = [];
+
+        chars.forEach((char, i) => {
+          const charWidth = charWidths[i];
+          if (char === " ") {
+            sylSpan.appendChild(document.createTextNode(" "));
+          } else {
+            const charSpan = elementPool.chars.pop() || document.createElement("span");
+            charSpan.textContent = char;
+            charSpan.className = "char";
+
+            if (totalSyllableWidth > 0) {
+              const startPercent = cumulativeCharWidth / totalSyllableWidth;
+              const durationPercent = charWidth / totalSyllableWidth;
+
+              charSpan.dataset.wipeStart = startPercent.toFixed(4);
+              charSpan.dataset.wipeDuration = durationPercent.toFixed(4);
+              charSpan.dataset.preWipeArrival = (s.duration * startPercent).toFixed(2);
+              charSpan.dataset.preWipeDuration = gradientDurationMs.toFixed(2);
+            }
+
+            charSpan.dataset.syllableCharIndex = characterData.length;
+            characterData.push({ charSpan, syllableSpan: sylSpan, isBackground: s.isBackground });
+            charSpans.push(charSpan);
+            sylSpan.appendChild(charSpan);
+          }
+          cumulativeCharWidth += charWidth;
+        });
+
+        if (charSpans.length > 0) sylSpan._cachedCharSpans = charSpans;
+      };
+
+      const applyGrowthStyles = (wordSpan, referenceFont, combinedText, totalDuration, emphasisMetrics) => {
+        if (!wordSpan._cachedChars || wordSpan._cachedChars.length === 0) return;
+
+        const { easedProgress, penaltyFactor } = emphasisMetrics;
+        const wordWidth = this._getTextWidth(wordSpan.textContent.trim(), referenceFont);
+        const numChars = wordSpan._cachedChars.length;
+        const wordLength = combinedText.trim().length;
+
+        let maxDecayRate = 0;
+        const isLongWord = wordLength > 5;
+        const isShortDuration = totalDuration < 1500;
+        const hasUnbalancedSyllables = penaltyFactor < 0.95;
+
+        if (isLongWord || isShortDuration || hasUnbalancedSyllables) {
+          let decayStrength = 0;
+          if (isLongWord) decayStrength += Math.min((wordLength - 5) / 3, 1.0) * 0.4;
+          if (isShortDuration) decayStrength += Math.max(0, 1.0 - (totalDuration - 1000) / 500) * 0.4;
+          if (hasUnbalancedSyllables) decayStrength += Math.pow(1.0 - penaltyFactor, 0.7) * 1.2;
+          maxDecayRate = Math.min(decayStrength, 0.85);
+        }
+
+        let cumulativeWidth = 0;
+        wordSpan._cachedChars.forEach((span, index) => {
+          const positionInWord = numChars > 1 ? index / (numChars - 1) : 0;
+          const decayFactor = 1.0 - positionInWord * maxDecayRate;
+          const charProgress = easedProgress * penaltyFactor * decayFactor;
+
+          const baseGrowth = numChars <= 3 ? 0.07 : 0.05;
+          const charMaxScale = 1.0 + baseGrowth + charProgress * 0.1;
+          const charShadowIntensity = 0.4 + charProgress * 0.4;
+          const normalizedGrowth = (charMaxScale - 1.0) / 0.13;
+          const charTranslateYPeak = -normalizedGrowth * 2.5;
+
+          span.style.setProperty("--max-scale", charMaxScale.toFixed(3));
+          span.style.setProperty("--shadow-intensity", charShadowIntensity.toFixed(3));
+          span.style.setProperty("--translate-y-peak", charTranslateYPeak.toFixed(3));
+
+          const charWidth = this._getTextWidth(span.textContent.trim(), referenceFont);
+          const position = (cumulativeWidth + charWidth / 2) / wordWidth;
+          const horizontalOffset = (position - 0.5) * 2 * ((charMaxScale - 1.0) * 25);
+
+          span.dataset.horizontalOffset = horizontalOffset;
+          cumulativeWidth += charWidth;
+        });
+      };
+
+      // --- Core Render Function ---
+
+      const renderWordSpan = (wordBuffer, shouldEmphasize) => {
+        if (!wordBuffer.length) return;
+
+        const currentWordStartTime = wordBuffer[0].time;
+        const lastSyllable = wordBuffer[wordBuffer.length - 1];
+        const currentWordEndTime = lastSyllable.time + lastSyllable.duration;
+        const totalDuration = currentWordEndTime - currentWordStartTime;
+        const combinedText = wordBuffer.map((s) => this._getDataText(s)).join("");
+        const isBgWord = wordBuffer[0].isBackground || false;
+
+        const wordSpan = elementPool.syllables.pop() || document.createElement("span");
+        wordSpan.innerHTML = "";
+        wordSpan.className = "lyrics-word";
         wordSpan.style.setProperty("--min-scale", 1.02);
 
-        let isCurrentWordBackground = wordBuffer[0].isBackground || false;
-        const characterData = [];
+        const referenceFont = mainContainer.firstChild
+          ? getComputedFont(mainContainer.firstChild)
+          : "400 16px sans-serif";
 
+        let emphasisMetrics = { easedProgress: 0, penaltyFactor: 1.0 };
+        if (shouldEmphasize) {
+          emphasisMetrics = calculateEmphasisMetrics(totalDuration, wordBuffer.length, wordBuffer[0].duration);
+          wordSpan.classList.add("growable");
+        }
+
+        const characterData = [];
         const syllableElements = [];
 
-        wordBuffer.forEach((s, syllableIndex) => {
+        // Process Syllables
+        wordBuffer.forEach((s, idx) => {
           const wrap = document.createElement("span");
           wrap.className = "lyrics-syllable-wrap";
-          const sylSpan =
-            elementPool.syllables.pop() || document.createElement("span");
-          sylSpan.innerHTML = "";
-          sylSpan.className = "lyrics-syllable";
 
-          sylSpan.dataset.startTime = s.time;
-          sylSpan.dataset.duration = s.duration;
-          sylSpan.dataset.endTime = s.time + s.duration;
-          sylSpan.dataset.wordDuration = totalDuration;
-          sylSpan.dataset.syllableIndex = syllableIndex;
-
-          sylSpan._startTimeMs = s.time;
-          sylSpan._durationMs = s.duration;
-          sylSpan._endTimeMs = s.time + s.duration;
-          sylSpan._wordDurationMs = totalDuration;
-          sylSpan._isBackground = s.isBackground || false;
-
-          if (s.isBackground) {
-            if (isFirstSyllableInBackgroundContainer) {
-              sylSpan._isFirstInContainer = true;
-              isFirstSyllableInBackgroundContainer = false;
-            }
-          } else {
-            if (isFirstSyllableInMainContainer) {
-              sylSpan._isFirstInContainer = true;
-              isFirstSyllableInMainContainer = false;
-            }
-          }
-
-          if (this._isRTL(this._getDataText(s, true)))
-            sylSpan.classList.add("rtl-text");
-
-          const charSpansForSyllable = [];
+          const sylSpan = createSyllableElement(s, totalDuration, idx, s.isBackground || false);
 
           if (s.isBackground) {
             sylSpan.textContent = this._getDataText(s).replace(/[()]/g, "");
+          } else if (shouldEmphasize) {
+            renderCharWipes(s, sylSpan, referenceFont, characterData);
           } else {
-            if (shouldEmphasize) {
-              wordSpan.classList.add("growable");
-              const syllableText = this._getDataText(s);
-              const totalSyllableWidth = this._getTextWidth(syllableText, referenceFont);
-              let cumulativeCharWidth = 0;
-
-              syllableText.split("").forEach((char) => {
-                if (char === " ") {
-                  sylSpan.appendChild(document.createTextNode(" "));
-                } else {
-                  const charSpan =
-                    elementPool.chars.pop() || document.createElement("span");
-                  charSpan.textContent = char;
-                  charSpan.className = "char";
-
-                  const charWidth = this._getTextWidth(char, referenceFont);
-                  if (totalSyllableWidth > 0) {
-                    const startPercent = cumulativeCharWidth / totalSyllableWidth;
-                    const durationPercent = charWidth / totalSyllableWidth;
-                    charSpan.dataset.wipeStart = startPercent.toFixed(4);
-                    charSpan.dataset.wipeDuration = durationPercent.toFixed(4);
-                  }
-                  cumulativeCharWidth += charWidth;
-
-                  charSpan.dataset.syllableCharIndex = characterData.length;
-                  characterData.push({ charSpan, syllableSpan: sylSpan, isBackground: s.isBackground });
-                  charSpansForSyllable.push(charSpan);
-                  sylSpan.appendChild(charSpan);
-                }
-              });
-            } else {
-              sylSpan.textContent = this._getDataText(s);
-            }
+            sylSpan.textContent = this._getDataText(s);
           }
-          if (charSpansForSyllable.length > 0) {
-            sylSpan._cachedCharSpans = charSpansForSyllable;
-          }
+
           wrap.appendChild(sylSpan);
           syllableElements.push(sylSpan);
           wordSpan.appendChild(wrap);
         });
 
-        // Handle pending syllable from previous word (cross-word linking)
-        if (pendingSyllable && syllableElements.length > 0 && pendingSyllable._isBackground === isCurrentWordBackground) {
-          const nextSyllable = syllableElements[0];
-          const currentDuration = pendingSyllable._durationMs;
-          const delayMs = calculatePreHighlightDelay(pendingSyllable, pendingSyllableFont, currentDuration) * 1.03;
-
-          pendingSyllable._nextSyllableInWord = nextSyllable;
-          //avoid bleeding lmao
-          pendingSyllable._preHighlightDurationMs = currentDuration - delayMs;
-          pendingSyllable._preHighlightDelayMs = delayMs;
-        }
-
         if (shouldEmphasize) {
           wordSpan._cachedChars = characterData.map((cd) => cd.charSpan);
         }
 
-        // Handle syllables within the same word (intra-word linking)
+        // Inter-word Linking (Previous Word -> Current Word)
+        if (pendingSyllable && syllableElements.length > 0 && pendingSyllable._isBackground === isBgWord) {
+          linkSyllables(pendingSyllable, syllableElements[0], pendingSyllableFont);
+        }
+
+        // Intra-word Linking (Syllable -> Syllable)
         syllableElements.forEach((syllable, index) => {
           if (index < syllableElements.length - 1) {
-            const nextSyllable = syllableElements[index + 1];
-            const currentDuration = syllable._durationMs;
-            const delayMs = calculatePreHighlightDelay(syllable, referenceFont, currentDuration);
-
-            syllable._nextSyllableInWord = nextSyllable;
-            syllable._preHighlightDurationMs = currentDuration - delayMs;
-            syllable._preHighlightDelayMs = delayMs;
+            linkSyllables(syllable, syllableElements[index + 1], referenceFont);
           }
         });
 
-        if (shouldEmphasize && wordSpan._cachedChars?.length > 0) {
-          const wordWidth = this._getTextWidth(wordSpan.textContent, referenceFont);
-          let cumulativeWidth = 0;
-
-          const numChars = wordSpan._cachedChars.length;
-          const wordLength = combinedText.trim().length;
-
-          let maxDecayRate = 0;
-
-          const isLongWord = wordLength > 5;
-          const isShortDuration = totalDuration < 1500;
-          const hasUnbalancedSyllables = penaltyFactor < 0.95;
-
-          if (isLongWord || isShortDuration || hasUnbalancedSyllables) {
-            let decayStrength = 0;
-
-            if (isLongWord) decayStrength += Math.min((wordLength - 5) / 3, 1.0) * 0.4;
-            if (isShortDuration) decayStrength += Math.max(0, 1.0 - (totalDuration - 1000) / 500) * 0.4;
-            if (hasUnbalancedSyllables) decayStrength += Math.pow(1.0 - penaltyFactor, 0.7) * 1.2;
-
-            maxDecayRate = Math.min(decayStrength, 0.7);
-          }
-          wordSpan._cachedChars.forEach((span, index) => {
-            const positionInWord = numChars > 1 ? index / (numChars - 1) : 0;
-            const decayFactor = 1.0 - positionInWord * maxDecayRate;
-
-            const charProgress = easedProgress * penaltyFactor * decayFactor;
-
-            const baseGrowth = numChars <= 3 ? 0.07 : 0.05;
-            const charMaxScale = 1.0 + baseGrowth + charProgress * 0.1;
-            const charShadowIntensity = 0.4 + charProgress * 0.4;
-            const normalizedGrowth = (charMaxScale - 1.0) / 0.13;
-            const charTranslateYPeak = -normalizedGrowth * 2.5;
-
-            span.style.setProperty("--max-scale", charMaxScale.toFixed(3));
-            span.style.setProperty("--shadow-intensity", charShadowIntensity.toFixed(3));
-            span.style.setProperty("--translate-y-peak", charTranslateYPeak.toFixed(3));
-
-            const charWidth = this._getTextWidth(span.textContent, referenceFont);
-            const position = (cumulativeWidth + charWidth / 2) / wordWidth;
-            const horizontalOffset = (position - 0.5) * 2 * ((charMaxScale - 1.0) * 25);
-
-            span.dataset.horizontalOffset = horizontalOffset;
-            cumulativeWidth += charWidth;
-          });
+        // Apply Styling
+        if (shouldEmphasize) {
+          applyGrowthStyles(wordSpan, referenceFont, combinedText, totalDuration, emphasisMetrics);
         }
 
-        const targetContainer = isCurrentWordBackground
+        // DOM Insertion
+        const targetContainer = isBgWord
           ? backgroundContainer ||
-            ((backgroundContainer = document.createElement("div")),
+          ((backgroundContainer = document.createElement("div")),
             (backgroundContainer.className = "background-vocal-container"),
             currentLine.appendChild(backgroundContainer))
           : mainContainer;
+
         targetContainer.appendChild(wordSpan);
+
         const trailText = combinedText.match(/\s+$/);
-        if (trailText)
-          targetContainer.appendChild(document.createTextNode(trailText[0]));
+        if (trailText) targetContainer.appendChild(document.createTextNode(trailText[0]));
 
         pendingSyllable = syllableElements.length > 0 ? syllableElements[syllableElements.length - 1] : null;
         pendingSyllableFont = referenceFont;
-
       };
+
+      // --- Syllabus Processing ---
 
       if (line.syllabus && line.syllabus.length > 0) {
         const logicalWordGroups = [];
         let currentGroupBuffer = [];
-        line.syllabus.forEach((s, syllableIndex) => {
+
+        line.syllabus.forEach((s, idx) => {
           currentGroupBuffer.push(s);
           const syllableText = this._getDataText(s);
-          const nextSyllable = line.syllabus[syllableIndex + 1];
+          const nextSyllable = line.syllabus[idx + 1];
+
           const endsWithDelimiter =
             s.isLineEnding ||
             /\s$/.test(syllableText) ||
@@ -947,10 +942,10 @@ class LyricsPlusRenderer {
             renderWordSpan(group, true);
           } else {
             let visualWordBuffer = [];
-            group.forEach((s, indexInGroup) => {
+            group.forEach((s, idxInGroup) => {
               visualWordBuffer.push(s);
               const syllableText = this._getDataText(s);
-              const isLastInGroup = indexInGroup === group.length - 1;
+              const isLastInGroup = idxInGroup === group.length - 1;
 
               if (syllableText.endsWith("-") || isLastInGroup) {
                 renderWordSpan(visualWordBuffer, false);
@@ -962,10 +957,12 @@ class LyricsPlusRenderer {
       } else {
         mainContainer.textContent = line.text;
       }
-      if (this._isRTL(mainContainer.textContent))
+
+      // 3. Final Line Cleanup
+      if (this._isRTL(mainContainer.textContent)) {
         mainContainer.classList.add("rtl-text");
-      if (this._isRTL(mainContainer.textContent))
         currentLine.classList.add("rtl-text");
+      }
       fragment.appendChild(currentLine);
 
       this._renderTranslationContainer(currentLine, line, displayMode);
@@ -996,9 +993,9 @@ class LyricsPlusRenderer {
       lineDiv.classList.add(singerClass);
       if (this._isRTL(this._getDataText(line, true)))
         lineDiv.classList.add("rtl-text");
-      if (!lineDiv.hasClickListener) {
-        lineDiv.addEventListener("click", this._onLyricClick.bind(this));
-        lineDiv.hasClickListener = true;
+      if (!lineDiv._hasSharedListener) {
+        lineDiv.addEventListener("click", this._boundLyricClickHandler);
+        lineDiv._hasSharedListener = true;
       }
       const mainContainer = document.createElement("div");
       mainContainer.className = "main-vocal-container";
@@ -1399,9 +1396,9 @@ class LyricsPlusRenderer {
       gapLine.className = "lyrics-line lyrics-gap";
       gapLine.dataset.startTime = gapStart;
       gapLine.dataset.endTime = gapEnd;
-      if (!gapLine.hasClickListener) {
-        gapLine.addEventListener("click", this._onLyricClick.bind(this));
-        gapLine.hasClickListener = true;
+      if (!gapLine._hasSharedListener) {
+        gapLine.addEventListener("click", this._boundLyricClickHandler);
+        gapLine._hasSharedListener = true;
       }
       if (classesToInherit) {
         if (classesToInherit.includes("rtl-text"))
@@ -1605,12 +1602,14 @@ class LyricsPlusRenderer {
     currentSettings = {},
     fetchAndDisplayLyricsFn,
     setCurrentDisplayModeAndRefetchFn,
-    largerTextMode = "lyrics"
+    largerTextMode = "lyrics",
+    offsetLatency = 0
   ) {
     this.lastKnownSongInfo = songInfo;
     this.fetchAndDisplayLyricsFn = fetchAndDisplayLyricsFn;
     this.setCurrentDisplayModeAndRefetchFn = setCurrentDisplayModeAndRefetchFn;
     this.largerTextMode = largerTextMode;
+    this.offsetLatency = offsetLatency;
 
     const container = this._getContainer();
     if (!container) return;
@@ -1820,6 +1819,7 @@ class LyricsPlusRenderer {
       (this.textWidthCanvas = document.createElement("canvas"));
     const context = canvas.getContext("2d");
     context.font = font;
+    context.fontKerning = "none";
     return context.measureText(text).width;
   }
 
@@ -1857,7 +1857,7 @@ class LyricsPlusRenderer {
     this.lastTime = this._getCurrentPlayerTime() * 1000;
     if (!this.uiConfig.disableNativeTick) {
       const sync = () => {
-        const currentTime = this._getCurrentPlayerTime() * 1000;
+        const currentTime = (this._getCurrentPlayerTime() - this.offsetLatency) * 1000;
         const isForceScroll = Math.abs(currentTime - this.lastTime) > 1000;
         this._updateLyricsHighlight(
           currentTime,
@@ -1889,7 +1889,7 @@ class LyricsPlusRenderer {
   updateCurrentTick(currentTime) {
     currentTime = currentTime * 1000;
     const isForceScroll = Math.abs(currentTime - this.lastTime) > 1000;
-    this._updateLyricsHighlight(currentTime, isForceScroll, currentSettings);
+    this._updateLyricsHighlight((currentTime - this.offsetLatency * 1000), isForceScroll, currentSettings);
     this.lastTime = currentTime;
   }
 
@@ -2254,7 +2254,7 @@ class LyricsPlusRenderer {
 
           if (prevWipeDuration > 0) {
             animationParts.push(
-              `pre-wipe-char ${prevWipeDuration}ms linear ${prevWipeDelay}ms`
+              `pre-wipe-char ${prevWipeDuration}ms linear ${prevWipeDelay}ms forwards`
             );
           }
         }
@@ -2308,7 +2308,7 @@ class LyricsPlusRenderer {
 
       const nextCharSpan = nextSyllable._cachedCharSpans?.[0];
       if (nextCharSpan) {
-        const preWipeAnim = `pre-wipe-char ${preHighlightDuration}ms ${preHighlightDelay}ms forwards`;
+        const preWipeAnim = `pre-wipe-char ${preHighlightDuration}ms linear ${preHighlightDelay}ms forwards`;
         const existingAnimation =
           charAnimationsMap.get(nextCharSpan) ||
           nextCharSpan.style.animation ||
@@ -2598,15 +2598,16 @@ class LyricsPlusRenderer {
   }
 
   _createControlButtons() {
-    let buttonsWrapper = document.getElementById("lyrics-plus-buttons-wrapper");
-    if (!buttonsWrapper) {
-      buttonsWrapper = document.createElement("div");
-      buttonsWrapper.id = "lyrics-plus-buttons-wrapper";
+    this.buttonsWrapper = document.getElementById("lyrics-plus-buttons-wrapper");
+
+    if (!this.buttonsWrapper) {
+      this.buttonsWrapper = document.createElement("div");
+      this.buttonsWrapper.id = "lyrics-plus-buttons-wrapper";
       const originalLyricsSection = document.querySelector(
         this.uiConfig.patchParent
       );
       if (originalLyricsSection) {
-        originalLyricsSection.appendChild(buttonsWrapper);
+        originalLyricsSection.appendChild(this.buttonsWrapper);
       }
     }
 
@@ -2614,34 +2615,39 @@ class LyricsPlusRenderer {
       if (!this.translationButton) {
         this.translationButton = document.createElement("button");
         this.translationButton.id = "lyrics-plus-translate-button";
-        buttonsWrapper.appendChild(this.translationButton);
+        this.buttonsWrapper.appendChild(this.translationButton);
         this._updateTranslationButtonText();
+
         this.translationButton.addEventListener("click", (event) => {
           event.stopPropagation();
-          this._createDropdownMenu(buttonsWrapper);
+          this._createDropdownMenu(this.buttonsWrapper);
           if (this.dropdownMenu) this.dropdownMenu.classList.toggle("hidden");
         });
-        document.addEventListener("click", (event) => {
-          if (
-            this.dropdownMenu &&
-            !this.dropdownMenu.classList.contains("hidden") &&
-            !this.dropdownMenu.contains(event.target) &&
-            event.target !== this.translationButton
-          ) {
-            this.dropdownMenu.classList.add("hidden");
-          }
-        });
+
+        if (!this._boundDocumentClickHandler) {
+          this._boundDocumentClickHandler = (event) => {
+            if (
+              this.dropdownMenu &&
+              !this.dropdownMenu.classList.contains("hidden") &&
+              !this.dropdownMenu.contains(event.target) &&
+              event.target !== this.translationButton
+            ) {
+              this.dropdownMenu.classList.add("hidden");
+            }
+          };
+          document.addEventListener("click", this._boundDocumentClickHandler);
+        }
       }
     }
 
     if (!this.reloadButton) {
       this.reloadButton = document.createElement("button");
       this.reloadButton.id = "lyrics-plus-reload-button";
-      this.reloadButton.innerHTML = `<svg width="16" height="16" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
-        <path d="M17.65 6.35C16.2 4.9 14.21 4 12 4c-4.42 0-7.99 3.58-7.99 8s3.57 8 7.99 8c3.73 0 6.84-2.55 7.73-6h-2.08c-.82 2.33-3.04 4-5.65 4-3.31 0-6-2.69-6-6s2.69-6 6-6c1.66 0 3.14.69 4.22 1.78L13 11h7V4l-2.35 2.35z" fill="currentColor"/>
-      </svg>`;
+      this.reloadButton.innerHTML =
+        '<svg xmlns="http://www.w3.org/2000/svg" height="20px" viewBox="0 -960 960 960" width="20px" fill="#e3e3e3"><path d="M480-192q-120 0-204-84t-84-204q0-120 84-204t204-84q65 0 120.5 27t95.5 72v-99h72v240H528v-72h131q-29-44-76-70t-103-26q-90 0-153 63t-63 153q0 90 63 153t153 63q84 0 144-55.5T693-456h74q-9 112-91 188t-196 76Z"/></svg>';
       this.reloadButton.title = t("RefreshLyrics") || "Refresh Lyrics";
-      buttonsWrapper.appendChild(this.reloadButton);
+      this.buttonsWrapper.appendChild(this.reloadButton);
+
       this.reloadButton.addEventListener("click", () => {
         if (this.lastKnownSongInfo && this.fetchAndDisplayLyricsFn) {
           this.fetchAndDisplayLyricsFn(this.lastKnownSongInfo, true, true);
@@ -2817,94 +2823,87 @@ class LyricsPlusRenderer {
    * Cleans up the lyrics container and resets the state for the next song.
    */
   cleanupLyrics() {
-    // --- Animation Frame Cleanup ---
+    this._removeUserScrollListener();
+
     if (this.lyricsAnimationFrameId) {
       cancelAnimationFrame(this.lyricsAnimationFrameId);
       this.lyricsAnimationFrameId = null;
     }
 
-    // --- Touch State Cleanup ---
+    if (this._debouncedResizeHandler && this._debouncedResizeHandler.cancel) {
+      this._debouncedResizeHandler.cancel();
+    }
+
     if (this.touchState) {
       if (this.touchState.momentum) {
         cancelAnimationFrame(this.touchState.momentum);
-        this.touchState.momentum = null;
       }
-      this.touchState.isActive = false;
-      this.touchState.startY = 0;
-      this.touchState.lastY = 0;
-      this.touchState.velocity = 0;
-      this.touchState.lastTime = 0;
-      this.touchState.samples = [];
+      this.touchState = null;
     }
 
-    // --- Timer Cleanup ---
-    if (this.endProgrammaticScrollTimer)
-      clearTimeout(this.endProgrammaticScrollTimer);
+    if (this.endProgrammaticScrollTimer) clearTimeout(this.endProgrammaticScrollTimer);
     if (this.userScrollIdleTimer) clearTimeout(this.userScrollIdleTimer);
     if (this.userScrollRevertTimer) clearTimeout(this.userScrollRevertTimer);
+
     this.endProgrammaticScrollTimer = null;
     this.userScrollIdleTimer = null;
     this.userScrollRevertTimer = null;
 
-    // --- Observer Cleanup ---
-    if (this.visibilityObserver) this.visibilityObserver.disconnect();
-    if (this.resizeObserver) this.resizeObserver.disconnect();
-    this.visibilityObserver = null;
-    this.resizeObserver = null;
+    if (this.visibilityObserver) {
+      this.visibilityObserver.disconnect();
+      this.visibilityObserver = null;
+    }
+    if (this.resizeObserver) {
+      this.resizeObserver.disconnect();
+      this.resizeObserver = null;
+    }
 
-    // --- DOM Elements Cleanup ---
+    if (this.translationButton) {
+      const newBtn = this.translationButton.cloneNode(true);
+      if (this.translationButton.parentNode) this.translationButton.parentNode.replaceChild(newBtn, this.translationButton);
+      newBtn.remove();
+      this.translationButton = null;
+    }
+    if (this.reloadButton) {
+      const newBtn = this.reloadButton.cloneNode(true);
+      if (this.reloadButton.parentNode) this.reloadButton.parentNode.replaceChild(newBtn, this.reloadButton);
+      newBtn.remove();
+      this.reloadButton = null;
+    }
+    if (this.dropdownMenu) {
+      this.dropdownMenu.remove();
+      this.dropdownMenu = null;
+    }
+
     const container = this._getContainer();
+
+    if (this.cachedLyricsLines) {
+      for (let i = 0; i < this.cachedLyricsLines.length; i++) {
+        const line = this.cachedLyricsLines[i];
+        if (line) {
+          line.removeEventListener("click", this._boundLyricClickHandler);
+          line._cachedSyllableElements = null;
+          line._cachedCharSpans = null;
+          line._hasSharedListener = false;
+        }
+      }
+    }
+
+    if (this.cachedSyllables) {
+      for (let i = 0; i < this.cachedSyllables.length; i++) {
+        const syl = this.cachedSyllables[i];
+        if (syl) {
+          syl._cachedCharSpans = null;
+          syl._nextSyllableInWord = null;
+          syl.style.animation = "";
+        }
+      }
+    }
+
     if (container) {
-      if (this.cachedLyricsLines) {
-        this.cachedLyricsLines.forEach((line) => {
-          if (line && line._cachedSyllableElements) {
-            line._cachedSyllableElements = null;
-          }
-        });
-      }
-
-      if (this.cachedSyllables) {
-        this.cachedSyllables.forEach((syllable) => {
-          if (syllable) {
-            syllable._cachedCharSpans = null;
-            syllable.style.animation = "";
-            syllable.style.removeProperty("--pre-wipe-duration");
-            syllable.style.removeProperty("--pre-wipe-delay");
-          }
-        });
-      }
-
-      container.innerHTML = `<span class="text-loading">${t("loading")}</span>`;
+      container.innerHTML = `<div class="loading-container"><span class="text-loading">${t("loading")}</span><div class="loading-loop-m3"></div></div>`;
       container.classList.add("lyrics-plus-message");
-
-      const buttonsWrapper = document.getElementById("lyrics-plus-buttons-wrapper");
-      if (buttonsWrapper) {
-        buttonsWrapper.style.display = "none";
-        buttonsWrapper.style.opacity = "0";
-        buttonsWrapper.style.pointerEvents = "none";
-      }
-
-      const classesToRemove = [
-        "user-scrolling",
-        "wheel-scrolling",
-        "touch-scrolling",
-        "not-focused",
-        "lyrics-translated",
-        "lyrics-romanized",
-        "lyrics-both-modes",
-        "word-by-word-mode",
-        "line-by-line-mode",
-        "mixed-direction-lyrics",
-        "dual-side-lyrics",
-        "fullscreen",
-        "blur-inactive-enabled",
-        "use-song-palette-fullscreen",
-        "use-song-palette-all-modes",
-        "override-palette-color",
-        "hide-offscreen",
-        "romanized-big-mode",
-      ];
-      container.classList.remove(...classesToRemove);
+      container.className = "lyrics-plus-integrated lyrics-plus-message blur-inactive-enabled";
 
       container.style.removeProperty("--lyrics-scroll-offset");
       container.style.removeProperty("--lyplus-override-pallete");
@@ -2913,7 +2912,12 @@ class LyricsPlusRenderer {
       container.style.removeProperty("--lyplus-song-white-pallete");
     }
 
-    // --- State Variables Reset ---
+    if (this.textWidthCanvas) {
+      this.textWidthCanvas.width = 0;
+      this.textWidthCanvas.height = 0;
+      this.textWidthCanvas = null;
+    }
+
     this.currentPrimaryActiveLine = null;
     this.lastPrimaryActiveLine = null;
     this.currentFullscreenFocusedLine = null;
@@ -2923,6 +2927,7 @@ class LyricsPlusRenderer {
     this.visibleLineIds.clear();
     this.cachedLyricsLines = [];
     this.cachedSyllables = [];
+    this.fontCache = {};
 
     this._cachedContainerRect = null;
     this._cachedVisibleLines = null;
@@ -2939,8 +2944,6 @@ class LyricsPlusRenderer {
     this.lastKnownSongInfo = null;
     this.fetchAndDisplayLyricsFn = null;
     this.setCurrentDisplayModeAndRefetchFn = null;
-
-    this.fontCache = {};
 
     this._playerElement = undefined;
     this._customCssStyleTag = null;

@@ -10,12 +10,20 @@ const LyricsPlusAPI = {
   updateDisplayMode: (...args) => lyricsRendererInstance?.updateDisplayMode(...args)
 };
 
+const pBrowser = typeof browser !== 'undefined'
+  ? browser
+  : (typeof chrome !== 'undefined' ? chrome : null);
+
 function injectPlatformCSS() {
     if (document.querySelector('link[data-lyrics-plus-platform-style]')) return;
     const linkElement = document.createElement('link');
     linkElement.rel = 'stylesheet';
     linkElement.type = 'text/css';
-    linkElement.href = (chrome || browser).runtime.getURL('src/modules/tidal/style.css');
+    if (!pBrowser?.runtime?.getURL) {
+        console.warn('Tidal: runtime.getURL unavailable, skipping CSS inject');
+        return;
+    }
+    linkElement.href = pBrowser.runtime.getURL('src/modules/tidal/style.css');
     linkElement.setAttribute('data-lyrics-plus-platform-style', 'true');
     document.head.appendChild(linkElement);
 }

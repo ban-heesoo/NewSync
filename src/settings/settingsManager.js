@@ -1,6 +1,40 @@
 // Browser compatibility
-const pBrowser = window.chrome || window.browser;
+const pBrowser = typeof browser !== 'undefined'
+    ? browser
+    : (typeof chrome !== 'undefined' ? chrome : null);
 let currentSettings = {};
+
+export const defaultSettings = {
+    lyricsProvider: 'kpoe',
+    lyricsSourceOrder: 'apple,lyricsplus,musixmatch,spotify,musixmatch-word',
+    wordByWord: true,
+    lightweight: false,
+    isEnabled: true,
+    useSponsorBlock: false,
+    autoHideLyrics: false,
+    cacheStrategy: 'aggressive',
+    fontSize: 16,
+    hideOffscreen: false,
+    blurInactive: false,
+    dynamicPlayer: false,
+    customCSS: '',
+    translationProvider: 'google',
+    geminiApiKey: '',
+    geminiModel: 'gemini-flash-lite-latest',
+    overrideTranslateTarget: false,
+    customTranslateTarget: '',
+    overrideGeminiPrompt: false,
+    customGeminiPrompt: '',
+    overrideGeminiRomanizePrompt: false,
+    customGeminiRomanizePrompt: '',
+    romanizationProvider: 'google',
+    geminiRomanizationModel: 'gemini-flash-latest',
+    useSongPaletteFullscreen: false,
+    useSongPaletteAllModes: false,
+    overridePaletteColor: '',
+    largerTextMode: 'lyrics',
+    customKpoeUrl: '',
+};
 
 function storageLocalGet(keys) {
     return new Promise(resolve => pBrowser.storage.local.get(keys, resolve));
@@ -39,6 +73,14 @@ export function saveSettings() {
                 type: 'UPDATE_SETTINGS',
                 settings: currentSettings
             }, '*');
+        }
+        if (pBrowser && pBrowser.runtime && typeof pBrowser.runtime.sendMessage === 'function') {
+            pBrowser.runtime.sendMessage({
+                type: 'SETTINGS_CHANGED',
+                settings: currentSettings
+            }).catch(err => {
+                console.warn("Could not notify background of settings change:", err);
+            });
         }
     }).catch(error => {
         console.error("Error saving settings:", error);

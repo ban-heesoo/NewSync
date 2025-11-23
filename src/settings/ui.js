@@ -1,7 +1,7 @@
-import { loadSettings, saveSettings, updateSettings, getSettings, updateCacheSize, clearCache, clearCacheSilently, setupSettingsMessageListener, uploadLocalLyrics, getLocalLyricsList, deleteLocalLyrics, updateLocalLyrics, fetchLocalLyrics } from './settingsManager.js';
-import { parseSyncedLyrics, parseAppleMusicLRC, parseAppleTTML, convertToStandardJson, v1Tov2 } from './parser.js';
+import { loadSettings, saveSettings, updateSettings, getSettings, updateCacheSize, clearCache, clearCacheSilently, setupSettingsMessageListener, uploadLocalLyrics, getLocalLyricsList, deleteLocalLyrics, updateLocalLyrics, fetchLocalLyrics, defaultSettings } from './settingsManager.js';
+import { parseSyncedLyrics, parseAppleTTML, convertToStandardJson, v1Tov2 } from './parser.js';
 
-let currentSettings = getSettings();
+let currentSettings = { ...defaultSettings };
 
 function showReloadNotification() {
     const notification = document.getElementById('reload-notification');
@@ -56,7 +56,7 @@ function setupAutoSaveListeners() {
 }
 
 function updateUI(settings) {
-    currentSettings = settings;
+    currentSettings = { ...currentSettings, ...settings };
     console.log("Updating UI with settings:", currentSettings);
 
     document.getElementById('enabled').checked = currentSettings.isEnabled;
@@ -84,7 +84,7 @@ function updateUI(settings) {
     document.getElementById('custom-gemini-prompt').value = currentSettings.customGeminiPrompt || '';
     document.getElementById('override-gemini-romanize-prompt').checked = currentSettings.overrideGeminiRomanizePrompt;
     document.getElementById('custom-gemini-romanize-prompt').value = currentSettings.customGeminiRomanizePrompt || '';
-    document.getElementById('custom-css').value = currentSettings.customCSS;
+    document.getElementById('custom-css').value = currentSettings.customCSS || '';
     document.getElementById('cache-strategy').value = currentSettings.cacheStrategy;
 
     toggleKpoeSourcesVisibility();
@@ -111,38 +111,320 @@ document.querySelectorAll('.navigation-drawer .nav-item').forEach(item => {
     });
 });
 
-document.getElementById('save-general').addEventListener('click', () => {
-    const orderedSources = Array.from(document.getElementById('lyrics-source-order-draggable').children)
-        .map(item => item.dataset.source);
+document.addEventListener('DOMContentLoaded', () => {
+    const saveGeneralBtn = document.getElementById('save-general');
+    if (saveGeneralBtn) {
+        saveGeneralBtn.addEventListener('click', () => {
+            const orderedSources = Array.from(document.getElementById('lyrics-source-order-draggable').children)
+                .map(item => item.dataset.source);
 
-    updateSettings({
-        lyricsSourceOrder: orderedSources.join(','),
-        customKpoeUrl: document.getElementById('custom-kpoe-url').value,
+            updateSettings({
+                lyricsSourceOrder: orderedSources.join(','),
+                customKpoeUrl: document.getElementById('custom-kpoe-url').value,
+            });
+            saveSettings();
+            showStatusMessage('general-save-status', 'General settings saved!', false);
+        });
+    }
+
+    const saveAppearanceBtn = document.getElementById('save-appearance');
+    if (saveAppearanceBtn) {
+        saveAppearanceBtn.addEventListener('click', () => {
+            const customCssElement = document.getElementById('custom-css');
+            if (!customCssElement) {
+                console.error('custom-css element not found!');
+                return;
+            }
+            const customCssValue = customCssElement.value || '';
+            console.log('Saving custom CSS, length:', customCssValue.length, 'value:', customCssValue.substring(0, 50));
+            updateSettings({ customCSS: customCssValue });
+            saveSettings();
+            showStatusMessage('appearance-save-status', 'Custom CSS saved!', false);
+        });
+    }
+
+    const saveTranslationBtn = document.getElementById('save-translation');
+    if (saveTranslationBtn) {
+        saveTranslationBtn.addEventListener('click', () => {
+            updateSettings({
+                geminiApiKey: document.getElementById('gemini-api-key').value,
+                customTranslateTarget: document.getElementById('custom-translate-target').value,
+                customGeminiPrompt: document.getElementById('custom-gemini-prompt').value,
+                customGeminiRomanizePrompt: document.getElementById('custom-gemini-romanize-prompt').value
+            });
+            saveSettings();
+            clearCacheSilently();
+            showStatusMessage('translation-save-status', 'Translation input fields saved! Cache cleared automatically.', false);
+        });
+    }
+
+    const clearCacheBtn = document.getElementById('clear-cache');
+    if (clearCacheBtn) {
+        clearCacheBtn.addEventListener('click', clearCache);
+    }
+
+    const addSourceBtn = document.getElementById('add-source-button');
+    if (addSourceBtn) {
+        addSourceBtn.addEventListener('click', addSource);
+    }
+
+    const defaultProvider = document.getElementById('default-provider');
+    if (defaultProvider) {
+        defaultProvider.addEventListener('change', (e) => {
+            currentSettings.lyricsProvider = e.target.value;
+            toggleKpoeSourcesVisibility();
+            toggleCustomKpoeUrlVisibility();
+            toggleLocalLyricsVisibility();
+        });
+    }
+
+    const addLyricsFab = document.getElementById('add-lyrics-fab');
+    if (addLyricsFab) {
+        addLyricsFab.addEventListener('click', () => {
+            document.getElementById('upload-lyrics-modal').classList.add('show');
+        });
+    }
+
+    const uploadModalCloseBtn = document.querySelector('#upload-lyrics-modal .close-button');
+    if (uploadModalCloseBtn) {
+        uploadModalCloseBtn.addEventListener('click', () => {
+            document.getElementById('upload-lyrics-modal').classList.remove('show');
+        });
+    }
+
+    window.addEventListener('click', (event) => {
+        const modal = document.getElementById('upload-lyrics-modal');
+        if (event.target === modal) {
+            modal.classList.remove('show');
+        }
     });
-    saveSettings();
-    showStatusMessage('general-save-status', 'General settings saved!', false);
-});
 
-document.getElementById('save-appearance').addEventListener('click', () => {
-    updateSettings({ customCSS: document.getElementById('custom-css').value });
-    saveSettings();
-    showStatusMessage('appearance-save-status', 'Custom CSS saved!', false);
-});
+    const modalUploadBtn = document.getElementById('modal-upload-lyrics-button');
+    if (modalUploadBtn) {
+        modalUploadBtn.addEventListener('click', handleUploadLocalLyrics);
+    }
 
-document.getElementById('save-translation').addEventListener('click', () => {
-    updateSettings({
-        geminiApiKey: document.getElementById('gemini-api-key').value,
-        customTranslateTarget: document.getElementById('custom-translate-target').value,
-        customGeminiPrompt: document.getElementById('custom-gemini-prompt').value,
-        customGeminiRomanizePrompt: document.getElementById('custom-gemini-romanize-prompt').value
+    const refreshLocalLyricsBtn = document.getElementById('refresh-local-lyrics-list');
+    if (refreshLocalLyricsBtn) {
+        refreshLocalLyricsBtn.addEventListener('click', populateLocalLyricsList);
+    }
+
+    const overrideTranslateTarget = document.getElementById('override-translate-target');
+    if (overrideTranslateTarget) {
+        overrideTranslateTarget.addEventListener('change', (e) => {
+            currentSettings.overrideTranslateTarget = e.target.checked;
+            toggleTranslateTargetVisibility();
+            clearCacheSilently();
+            console.log('Cache cleared automatically after translate target toggle change.');
+        });
+    }
+
+    const overrideGeminiPrompt = document.getElementById('override-gemini-prompt');
+    if (overrideGeminiPrompt) {
+        overrideGeminiPrompt.addEventListener('change', (e) => {
+            currentSettings.overrideGeminiPrompt = e.target.checked;
+            toggleGeminiPromptVisibility();
+            clearCacheSilently();
+            console.log('Cache cleared automatically after Gemini prompt toggle change.');
+        });
+    }
+
+    const overrideGeminiRomanizePrompt = document.getElementById('override-gemini-romanize-prompt');
+    if (overrideGeminiRomanizePrompt) {
+        overrideGeminiRomanizePrompt.addEventListener('change', (e) => {
+            currentSettings.overrideGeminiRomanizePrompt = e.target.checked;
+            toggleGeminiRomanizePromptVisibility();
+            clearCacheSilently();
+            console.log('Cache cleared automatically after Gemini romanization prompt toggle change.');
+        });
+    }
+
+    const romanizationProvider = document.getElementById('romanization-provider');
+    if (romanizationProvider) {
+        romanizationProvider.addEventListener('change', () => {
+            toggleRomanizationModelVisibility();
+        });
+    }
+
+    const translationProvider = document.getElementById('translation-provider');
+    if (translationProvider) {
+        translationProvider.addEventListener('change', (e) => {
+            currentSettings.translationProvider = e.target.value;
+            toggleGeminiSettingsVisibility();
+        });
+    }
+
+    const toggleGeminiApiKeyBtn = document.getElementById('toggle-gemini-api-key-visibility');
+    if (toggleGeminiApiKeyBtn) {
+        toggleGeminiApiKeyBtn.addEventListener('click', () => {
+            const apiKeyInput = document.getElementById('gemini-api-key');
+            const icon = toggleGeminiApiKeyBtn.querySelector('.material-symbols-outlined');
+            if (apiKeyInput.type === 'password') {
+                apiKeyInput.type = 'text';
+                icon.textContent = 'visibility_off';
+            } else {
+                apiKeyInput.type = 'password';
+                icon.textContent = 'visibility';
+            }
+        });
+    }
+
+    const customGeminiPrompt = document.getElementById('custom-gemini-prompt');
+    if (customGeminiPrompt) {
+        let geminiPromptSaveTimeout = null;
+        customGeminiPrompt.addEventListener('input', () => {
+            schedulePromptCacheClear();
+            clearTimeout(geminiPromptSaveTimeout);
+            geminiPromptSaveTimeout = setTimeout(() => {
+                updateSettings({ customGeminiPrompt: customGeminiPrompt.value });
+                saveSettings();
+            }, 1000);
+        });
+        customGeminiPrompt.addEventListener('blur', () => {
+            if (promptClearTimeout) {
+                clearTimeout(promptClearTimeout);
+            }
+            if (geminiPromptSaveTimeout) {
+                clearTimeout(geminiPromptSaveTimeout);
+            }
+            updateSettings({ customGeminiPrompt: customGeminiPrompt.value });
+            saveSettings();
+            clearCacheSilently();
+            console.log('Cache cleared automatically after prompt input blur.');
+        });
+    }
+
+    const customGeminiRomanizePrompt = document.getElementById('custom-gemini-romanize-prompt');
+    if (customGeminiRomanizePrompt) {
+        let geminiRomanizePromptSaveTimeout = null;
+        customGeminiRomanizePrompt.addEventListener('input', () => {
+            schedulePromptCacheClear();
+            clearTimeout(geminiRomanizePromptSaveTimeout);
+            geminiRomanizePromptSaveTimeout = setTimeout(() => {
+                updateSettings({ customGeminiRomanizePrompt: customGeminiRomanizePrompt.value });
+                saveSettings();
+            }, 1000);
+        });
+        customGeminiRomanizePrompt.addEventListener('blur', () => {
+            if (promptClearTimeout) {
+                clearTimeout(promptClearTimeout);
+            }
+            if (geminiRomanizePromptSaveTimeout) {
+                clearTimeout(geminiRomanizePromptSaveTimeout);
+            }
+            updateSettings({ customGeminiRomanizePrompt: customGeminiRomanizePrompt.value });
+            saveSettings();
+            clearCacheSilently();
+            console.log('Cache cleared automatically after romanization prompt input blur.');
+        });
+    }
+
+    const customTranslateTarget = document.getElementById('custom-translate-target');
+    if (customTranslateTarget) {
+        let translateTargetSaveTimeout = null;
+        customTranslateTarget.addEventListener('input', () => {
+            schedulePromptCacheClear();
+            clearTimeout(translateTargetSaveTimeout);
+            translateTargetSaveTimeout = setTimeout(() => {
+                updateSettings({ customTranslateTarget: customTranslateTarget.value });
+                saveSettings();
+            }, 1000);
+        });
+        customTranslateTarget.addEventListener('blur', () => {
+            if (promptClearTimeout) {
+                clearTimeout(promptClearTimeout);
+            }
+            if (translateTargetSaveTimeout) {
+                clearTimeout(translateTargetSaveTimeout);
+            }
+            updateSettings({ customTranslateTarget: customTranslateTarget.value });
+            saveSettings();
+            clearCacheSilently();
+            console.log('Cache cleared automatically after translate target input blur.');
+        });
+    }
+
+    const geminiApiKey = document.getElementById('gemini-api-key');
+    if (geminiApiKey) {
+        let geminiApiKeySaveTimeout = null;
+        geminiApiKey.addEventListener('input', () => {
+            clearTimeout(geminiApiKeySaveTimeout);
+            geminiApiKeySaveTimeout = setTimeout(() => {
+                updateSettings({ geminiApiKey: geminiApiKey.value });
+                saveSettings();
+            }, 1000);
+        });
+        geminiApiKey.addEventListener('blur', () => {
+            if (geminiApiKeySaveTimeout) {
+                clearTimeout(geminiApiKeySaveTimeout);
+            }
+            updateSettings({ geminiApiKey: geminiApiKey.value });
+            saveSettings();
+        });
+    }
+    
+    loadSettings((settings) => {
+        updateUI(settings);
+        setupAutoSaveListeners();
+
+        const firstNavItem = document.querySelector('.navigation-drawer .nav-item');
+        const activeSectionId = firstNavItem?.getAttribute('data-section') || 'general';
+
+        document.querySelectorAll('.navigation-drawer .nav-item').forEach(i => i.classList.remove('active'));
+        const activeNavItem = document.querySelector(`.navigation-drawer .nav-item[data-section="${activeSectionId}"]`);
+        if (activeNavItem) {
+            activeNavItem.classList.add('active');
+        }
+
+        document.querySelectorAll('.settings-card').forEach(section => section.classList.remove('active'));
+        const activeSection = document.getElementById(activeSectionId);
+        if (activeSection) {
+            activeSection.classList.add('active');
+        }
     });
-    saveSettings();
-    // Auto-clear cache after saving translation prompts to ensure new prompts are used
-    clearCacheSilently();
-    showStatusMessage('translation-save-status', 'Translation input fields saved! Cache cleared automatically.', false);
-});
 
-document.getElementById('clear-cache').addEventListener('click', clearCache);
+    setAppVersion();
+
+    const reloadBtn = document.getElementById('reload-button');
+    if (reloadBtn) {
+        reloadBtn.addEventListener('click', () => {
+            chrome.tabs.query({ url: "*://music.youtube.com/*" }, (tabs) => {
+                if (tabs.length > 0) {
+                    chrome.tabs.reload(tabs[0].id, () => {
+                        hideReloadNotification();
+                        showStatusMessage('general-save-status', 'YouTube Music tab reloaded!', false);
+                    });
+                } else {
+                    alert("No YouTube Music tab found. Please open one and try again.");
+                }
+            });
+        });
+    }
+
+    setTimeout(() => {
+        populateLocalLyricsList();
+    }, 100);
+
+    const editCloseButton = document.querySelector('#edit-lyrics-modal .close-button');
+    if (editCloseButton) {
+        editCloseButton.addEventListener('click', (e) => {
+            e.preventDefault();
+            closeEditModal();
+        });
+    }
+
+    window.addEventListener('click', (event) => {
+        const editModal = document.getElementById('edit-lyrics-modal');
+        if (event.target === editModal) {
+            closeEditModal();
+        }
+    });
+
+    const editButton = document.getElementById('modal-edit-lyrics-button');
+    if (editButton) {
+        editButton.addEventListener('click', handleEditLocalLyrics);
+    }
+});
 
 setupSettingsMessageListener(updateUI);
 
@@ -328,111 +610,16 @@ function getDragAfterElement(container, y) {
     }, { offset: -Infinity }).element;
 }
 
-document.getElementById('add-source-button').addEventListener('click', addSource);
-
-document.getElementById('default-provider').addEventListener('change', (e) => {
-    currentSettings.lyricsProvider = e.target.value;
-    toggleKpoeSourcesVisibility();
-    toggleCustomKpoeUrlVisibility();
-    toggleLocalLyricsVisibility();
-});
-
-document.getElementById('add-lyrics-fab').addEventListener('click', () => {
-    document.getElementById('upload-lyrics-modal').classList.add('show');
-});
-
-document.querySelector('#upload-lyrics-modal .close-button').addEventListener('click', () => {
-    document.getElementById('upload-lyrics-modal').classList.remove('show');
-});
-
-window.addEventListener('click', (event) => {
-    const modal = document.getElementById('upload-lyrics-modal');
-    if (event.target === modal) {
-        modal.classList.remove('show');
-    }
-});
-
-document.getElementById('modal-upload-lyrics-button').addEventListener('click', handleUploadLocalLyrics);
-document.getElementById('refresh-local-lyrics-list').addEventListener('click', populateLocalLyricsList);
-
-document.getElementById('override-translate-target').addEventListener('change', (e) => {
-    currentSettings.overrideTranslateTarget = e.target.checked;
-    toggleTranslateTargetVisibility();
-    clearCacheSilently();
-    console.log('Cache cleared automatically after translate target toggle change.');
-});
-
-document.getElementById('override-gemini-prompt').addEventListener('change', (e) => {
-    currentSettings.overrideGeminiPrompt = e.target.checked;
-    toggleGeminiPromptVisibility();
-    clearCacheSilently();
-    console.log('Cache cleared automatically after Gemini prompt toggle change.');
-});
-
-document.getElementById('override-gemini-romanize-prompt').addEventListener('change', (e) => {
-    currentSettings.overrideGeminiRomanizePrompt = e.target.checked;
-    toggleGeminiRomanizePromptVisibility();
-    clearCacheSilently();
-    console.log('Cache cleared automatically after Gemini romanization prompt toggle change.');
-});
-
-// Auto-clear cache when prompt fields are modified
 let promptClearTimeout = null;
 function schedulePromptCacheClear() {
     if (promptClearTimeout) {
         clearTimeout(promptClearTimeout);
     }
-    // Debounce: clear cache 1 second after user stops typing
     promptClearTimeout = setTimeout(() => {
         clearCacheSilently();
         console.log('Cache cleared automatically after prompt input change.');
     }, 1000);
 }
-
-const customGeminiPrompt = document.getElementById('custom-gemini-prompt');
-if (customGeminiPrompt) {
-    customGeminiPrompt.addEventListener('input', schedulePromptCacheClear);
-    customGeminiPrompt.addEventListener('blur', () => {
-        if (promptClearTimeout) {
-            clearTimeout(promptClearTimeout);
-        }
-        clearCacheSilently();
-        console.log('Cache cleared automatically after prompt input blur.');
-    });
-}
-
-const customGeminiRomanizePrompt = document.getElementById('custom-gemini-romanize-prompt');
-if (customGeminiRomanizePrompt) {
-    customGeminiRomanizePrompt.addEventListener('input', schedulePromptCacheClear);
-    customGeminiRomanizePrompt.addEventListener('blur', () => {
-        if (promptClearTimeout) {
-            clearTimeout(promptClearTimeout);
-        }
-        clearCacheSilently();
-        console.log('Cache cleared automatically after romanization prompt input blur.');
-    });
-}
-
-const customTranslateTarget = document.getElementById('custom-translate-target');
-if (customTranslateTarget) {
-    customTranslateTarget.addEventListener('input', schedulePromptCacheClear);
-    customTranslateTarget.addEventListener('blur', () => {
-        if (promptClearTimeout) {
-            clearTimeout(promptClearTimeout);
-        }
-        clearCacheSilently();
-        console.log('Cache cleared automatically after translate target input blur.');
-    });
-}
-
-document.getElementById('romanization-provider').addEventListener('change', () => {
-    toggleRomanizationModelVisibility();
-});
-
-document.getElementById('translation-provider').addEventListener('change', (e) => {
-    currentSettings.translationProvider = e.target.value;
-    toggleGeminiSettingsVisibility();
-});
 
 function toggleElementVisibility(elementId, isVisible) {
     const element = document.getElementById(elementId);
@@ -528,7 +715,7 @@ async function handleUploadLocalLyrics() {
                     parsedLyrics = parseSyncedLyrics(lyricsContent);
                     break;
                 case 'apple-lrc':
-                    parsedLyrics = parseAppleMusicLRC(lyricsContent, songInfo);
+                    parsedLyrics = parseSyncedLyrics(lyricsContent);
                     break;
                 case 'ttml':
                     parsedLyrics = parseAppleTTML(lyricsContent);
@@ -655,7 +842,7 @@ async function handleEditLocalLyrics() {
                     parsedLyrics = parseSyncedLyrics(lyricsContent);
                     break;
                 case 'apple-lrc':
-                    parsedLyrics = parseAppleMusicLRC(lyricsContent, songInfo);
+                    parsedLyrics = parseSyncedLyrics(lyricsContent);
                     break;
                 case 'ttml':
                     parsedLyrics = parseAppleTTML(lyricsContent);
@@ -772,18 +959,6 @@ async function populateLocalLyricsList() {
     }
 }
 
-document.getElementById('toggle-gemini-api-key-visibility').addEventListener('click', () => {
-    const apiKeyInput = document.getElementById('gemini-api-key');
-    const icon = document.querySelector('#toggle-gemini-api-key-visibility .material-symbols-outlined');
-    if (apiKeyInput.type === 'password') {
-        apiKeyInput.type = 'text';
-        icon.textContent = 'visibility_off';
-    } else {
-        apiKeyInput.type = 'password';
-        icon.textContent = 'visibility';
-    }
-});
-
 function setAppVersion() {
     try {
         const version = chrome.runtime.getManifest().version;
@@ -796,57 +971,3 @@ function setAppVersion() {
     }
 }
 
-document.addEventListener('DOMContentLoaded', () => {
-    loadSettings((settings) => {
-        updateUI(settings);
-        setupAutoSaveListeners();
-
-        const firstNavItem = document.querySelector('.navigation-drawer .nav-item');
-        const activeSectionId = firstNavItem?.getAttribute('data-section') || 'general';
-
-        document.querySelectorAll('.navigation-drawer .nav-item').forEach(i => i.classList.remove('active'));
-        document.querySelector(`.navigation-drawer .nav-item[data-section="${activeSectionId}"]`)?.classList.add('active');
-
-        document.querySelectorAll('.settings-card').forEach(section => section.classList.remove('active'));
-        document.getElementById(activeSectionId)?.classList.add('active');
-    });
-
-    setAppVersion();
-
-    document.getElementById('reload-button')?.addEventListener('click', () => {
-        chrome.tabs.query({ url: "*://music.youtube.com/*" }, (tabs) => {
-            if (tabs.length > 0) {
-                chrome.tabs.reload(tabs[0].id, () => {
-                    hideReloadNotification();
-                    showStatusMessage('general-save-status', 'YouTube Music tab reloaded!', false);
-                });
-            } else {
-                alert("No YouTube Music tab found. Please open one and try again.");
-            }
-        });
-    });
-
-    setTimeout(() => {
-        populateLocalLyricsList();
-    }, 100);
-
-    const editCloseButton = document.querySelector('#edit-lyrics-modal .close-button');
-    if (editCloseButton) {
-        editCloseButton.addEventListener('click', (e) => {
-            e.preventDefault();
-            closeEditModal();
-        });
-    }
-
-    window.addEventListener('click', (event) => {
-        const editModal = document.getElementById('edit-lyrics-modal');
-        if (event.target === editModal) {
-            closeEditModal();
-        }
-    });
-
-    const editButton = document.getElementById('modal-edit-lyrics-button');
-    if (editButton) {
-        editButton.addEventListener('click', handleEditLocalLyrics);
-    }
-});

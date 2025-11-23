@@ -953,7 +953,7 @@ canvas#lyplus-webgl-canvas {
     left: 50%;
     min-width: 100vw;
     min-height: 100vh;
-    aspect-ratio: 16 / 9;
+    aspect-ratio: 1 / 1;
     transform: translate(-50%, -50%);
 }
 
@@ -978,7 +978,7 @@ canvas#lyplus-webgl-canvas {
 @keyframes start-wipe {
     0% {
         background-size: 0.75em 100%, 0% 100%;
-        background-position: -0.375em 0%, left;
+        background-position: -0.75em 0%, -0.375em 0%;
     }
 
     100% {

@@ -20,7 +20,8 @@ export class MessageHandler {
       [MESSAGE_TYPES.UPLOAD_LOCAL_LYRICS]: () => this.uploadLocalLyrics(message, sendResponse),
       [MESSAGE_TYPES.GET_LOCAL_LYRICS_LIST]: () => this.getLocalLyricsList(sendResponse),
       [MESSAGE_TYPES.DELETE_LOCAL_LYRICS]: () => this.deleteLocalLyrics(message, sendResponse),
-      [MESSAGE_TYPES.FETCH_LOCAL_LYRICS]: () => this.fetchLocalLyrics(message, sendResponse)
+      [MESSAGE_TYPES.FETCH_LOCAL_LYRICS]: () => this.fetchLocalLyrics(message, sendResponse),
+      [MESSAGE_TYPES.UPDATE_LOCAL_LYRICS]: () => this.updateLocalLyrics(message, sendResponse)
     };
 
     const handler = handlers[message.type];
@@ -160,6 +161,29 @@ export class MessageHandler {
       }
     } catch (error) {
       console.error("Error fetching local lyrics:", error);
+      sendResponse({ success: false, error: error.message });
+    }
+  }
+
+  static async updateLocalLyrics(message, sendResponse) {
+    try {
+      // Check if the entry exists
+      const existingLyrics = await localLyricsDB.get(message.songId);
+      if (!existingLyrics) {
+        sendResponse({ success: false, error: "Local lyrics not found" });
+        return;
+      }
+
+      // Update the entry with new data
+      await localLyricsDB.set({
+        songId: message.songId,
+        songInfo: message.songInfo,
+        lyrics: message.jsonLyrics,
+        timestamp: existingLyrics.timestamp || Date.now() // Preserve original timestamp or use current
+      });
+      sendResponse({ success: true, message: "Local lyrics updated successfully" });
+    } catch (error) {
+      console.error("Error updating local lyrics:", error);
       sendResponse({ success: false, error: error.message });
     }
   }

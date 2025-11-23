@@ -134,8 +134,20 @@ export class TranslationService {
       return GeminiService.romanize(originalLyrics, settings);
     }
     
-    // Try Google first, fallback to Gemini if available and Google appears to have failed
-    const googleResult = await GoogleService.romanize(originalLyrics);
+    // Try Google first, with error handling and fallback to Gemini
+    let googleResult;
+    try {
+      googleResult = await GoogleService.romanize(originalLyrics);
+    } catch (error) {
+      console.error("Google romanization failed with error:", error);
+      // Fallback to Gemini if available
+      if (settings.geminiApiKey) {
+        console.warn("Google romanization failed, attempting Gemini fallback");
+        return GeminiService.romanize(originalLyrics, settings);
+      }
+      // If no Gemini, return original lyrics without romanization
+      return originalLyrics.data;
+    }
     
     // Check if Google actually succeeded (results should differ from input for non-Latin scripts)
     const allResultsSameAsInput = originalLyrics.data.every((line, index) => {
