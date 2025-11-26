@@ -33,7 +33,6 @@ class LyricsPlusRenderer {
     this.buttonsWrapper = null;
     this._boundLyricClickHandler = this._onLyricClick.bind(this);
     this._boundDocumentClickHandler = null;
-
     this.isProgrammaticScrolling = false;
     this.endProgrammaticScrollTimer = null;
     this.scrollEventHandlerAttached = false;
@@ -49,7 +48,6 @@ class LyricsPlusRenderer {
     this.userScrollIdleTimer = null;
     this.isUserControllingScroll = false;
     this.userScrollRevertTimer = null;
-
     this._getContainer();
   }
 
@@ -1037,6 +1035,7 @@ class LyricsPlusRenderer {
    * @private
    */
   _renderTranslationContainer(lineElement, lineData, displayMode) {
+    // Utility to insert translation/romanization blocks immediately after the primary lyric text.
     const insertAfterMainContainer = (element) => {
       const mainContainer = lineElement.querySelector(".main-vocal-container");
       if (mainContainer && mainContainer.parentNode === lineElement) {
@@ -1076,9 +1075,10 @@ class LyricsPlusRenderer {
       }
     }
     
-    // Skip romanization if main line is purely Latin (including both main and background vocal if both exist)
+    // Guard: when the original lyric is already Latin, romanization adds no value.
     const shouldSkipRomanization = isPurelyLatin;
     
+    // Render romanization only when requested and when the text actually needs it.
     if ((displayMode === "romanize" || displayMode === "both") && !shouldSkipRomanization) {
       // Check if we have romanization in syllables (could be prebuilt Apple or from Google/Gemini for word-by-word)
       const hasSyllableRomanization = hasSyl && 
@@ -1087,7 +1087,7 @@ class LyricsPlusRenderer {
           return romanized && romanized.trim();
         });
       
-      // Check if romanization in syllables is actually different from original (prebuilt Apple style)
+      // Detect Apple-style syllables where romanization differs from the source text (ideal for inline wrapping).
       const hasPrebuiltRomanization = hasSyllableRomanization && 
         lineData.syllabus.some(s => {
           const romanized = this._getDataText(s, false);
@@ -1095,7 +1095,7 @@ class LyricsPlusRenderer {
           return romanized && romanized.trim() && romanized !== original;
         });
       
-      // Check if we have line-level romanization from Google/Gemini
+      // Line-level romanization usually comes from external services (Google/Gemini) and isn't word synced.
       const hasLineLevelRomanization = lineData.romanizedText && 
         lineData.text.trim() !== lineData.romanizedText.trim();
 
