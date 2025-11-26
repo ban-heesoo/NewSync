@@ -49,6 +49,11 @@ ytmusic-tab-renderer:has(#lyrics-plus-container[style*="display: block"]) #lyric
     display: flex;
 }
 
+/* Modern mobile layout font size */
+ytmusic-app-layout[is-mweb-modernization-enabled] .lyrics-plus-integrated .lyrics-line {
+    font-size: 34px;
+    --lyplus-font-size-base-grow: 24;
+}
 
 /* --- Dynamic Player UI Integration --- */
 
@@ -231,6 +236,7 @@ ytmusic-app #layout[player-ui-state="FULLSCREEN"] .lyplus-blur-container {
     ytmusic-app-layout:not([is-mweb-modernization-enabled])[player-fullscreened]>[slot="player-page"] #side-panel .lyrics-line {
         margin-bottom: .5rem;
         font-size: 4.5rem;
+        --lyplus-font-size-base-grow: 25;
     }
 
     ytmusic-app-layout:not([is-mweb-modernization-enabled])[player-fullscreened]>[slot="player-page"] .lyrics-line:not(.active) .main-vocal-container {
