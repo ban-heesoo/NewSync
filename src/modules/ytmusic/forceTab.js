@@ -19,6 +19,12 @@
   let rafId = null;
   let lastMiddleTab = null;
   let currentMiddleIndex = -1;
+  let tabsReady = false;
+  let bootstrapIntervalId = null;
+  let bootstrapAttempts = 0;
+
+  const BOOTSTRAP_INTERVAL = 100;
+  const MAX_BOOTSTRAP_ATTEMPTS = 60;
 
   function forceActivateMiddleTab(tabElement) {
     if (!tabElement || isUpdating) return;
@@ -213,6 +219,29 @@
     }
   }
 
+  function stopBootstrapCycle() {
+    if (bootstrapIntervalId) {
+      clearInterval(bootstrapIntervalId);
+      bootstrapIntervalId = null;
+    }
+  }
+
+  function startBootstrapCycle(force = false) {
+    if (tabsReady && !force) return;
+    if (bootstrapIntervalId) return;
+
+    bootstrapAttempts = 0;
+    bootstrapIntervalId = setInterval(() => {
+      if (tabsReady || bootstrapAttempts >= MAX_BOOTSTRAP_ATTEMPTS) {
+        stopBootstrapCycle();
+        return;
+      }
+
+      bootstrapAttempts += 1;
+      maintainObservers();
+    }, BOOTSTRAP_INTERVAL);
+  }
+
   function maintainObservers() {
     const currentSidePanel = document.querySelector('#side-panel');
 
@@ -246,6 +275,11 @@
     const currentContainer = sampleTab?.parentElement;
 
     if (currentContainer) {
+      if (!tabsReady) {
+        tabsReady = true;
+        stopBootstrapCycle();
+      }
+
       if (currentContainer !== observedTabContainerEl) {
         if (tabContainerObserver) tabContainerObserver.disconnect();
 
@@ -268,12 +302,18 @@
       } else if (lastMiddleTab && !document.contains(lastMiddleTab)) {
         checkAndApplyTabLogic();
       }
-    } else if (observedTabContainerEl) {
-      if (tabContainerObserver) {
-        tabContainerObserver.disconnect();
-        tabContainerObserver = null;
+    } else {
+      if (observedTabContainerEl) {
+        if (tabContainerObserver) {
+          tabContainerObserver.disconnect();
+          tabContainerObserver = null;
+        }
+        observedTabContainerEl = null;
       }
-      observedTabContainerEl = null;
+      if (tabsReady) {
+        tabsReady = false;
+        startBootstrapCycle(true);
+      }
       currentMiddleIndex = -1;
       lastMiddleTab = null;
     }
@@ -281,6 +321,7 @@
 
   // Initial setup
   maintainObservers();
+  startBootstrapCycle();
 
   const intervalId = setInterval(maintainObservers, 3000);
 
@@ -292,6 +333,7 @@
 
   window.addEventListener('beforeunload', () => {
     clearInterval(intervalId);
+    stopBootstrapCycle();
     if (rafId) cancelAnimationFrame(rafId);
     middleTabObserver?.disconnect();
     sidePanelObserver?.disconnect();
