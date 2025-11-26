@@ -56,6 +56,10 @@ const BLUR_DOWNSAMPLE = 1; // The factor by which to reduce the canvas resolutio
 const BLUR_RADIUS = 6; // Controls the radius/intensity of the blur.
 
 // Palette Constants
+const MASTER_PALETTE_TEX_WIDTH = 8;
+const MASTER_PALETTE_TEX_HEIGHT = 5;
+const MASTER_PALETTE_SIZE = MASTER_PALETTE_TEX_WIDTH * MASTER_PALETTE_TEX_HEIGHT;
+
 const STRETCHED_GRID_WIDTH = 128;
 const STRETCHED_GRID_HEIGHT = 128;
 
@@ -131,31 +135,18 @@ const fragmentShaderSource = `
     
     void main() {
         vec2 centered = v_uv - 0.5;
-        centered.y = -centered.y;
+        centered.y = -centered.y; // betulin flip
         centered -= u_position;
-        centered = rotate(centered, -u_rotation);
+        centered = rotate(centered, -u_rotation); // betulin arah rotasi
         centered /= u_scale;
         centered += 0.5;
 
-        vec4 color = texture2D(u_artworkTexture, centered);
-        
-        float edgeFade = 1.0;
-        float edgeMargin = 0.08;
-        
-        float distX = min(centered.x, 1.0 - centered.x);
-        float distY = min(centered.y, 1.0 - centered.y);
-        float minDist = min(distX, distY);
-        
-        if (minDist < edgeMargin) {
-            edgeFade = smoothstep(0.0, edgeMargin, minDist);
+        if (centered.x < 0.0 || centered.x > 1.0 || centered.y < 0.0 || centered.y > 1.0) {
+            discard;
+        } else {
+            vec4 color = texture2D(u_artworkTexture, centered);
+            gl_FragColor = vec4(color.rgb, color.a * u_transitionProgress);
         }
-        
-        if (centered.x < -edgeMargin || centered.x > 1.0 + edgeMargin || 
-            centered.y < -edgeMargin || centered.y > 1.0 + edgeMargin) {
-            edgeFade = 0.0;
-        }
-        
-        gl_FragColor = vec4(color.rgb, color.a * u_transitionProgress * edgeFade);
 }
 `;
 
@@ -163,6 +154,7 @@ const blurFragmentShaderSource = `
     #ifdef GL_ES
     precision highp float;
     #endif
+
     varying vec2 v_uv;
     uniform sampler2D u_image;
     uniform vec2 u_resolution;
@@ -172,7 +164,6 @@ const blurFragmentShaderSource = `
     const int SAMPLES = 40;
     const int HALF = SAMPLES / 2;
 
-    // gaussian function
     float interleavedGradientNoise(vec2 uv) {
         vec3 magic = vec3(0.06711056, 0.00583715, 52.9829189);
         return fract(magic.z * fract(dot(uv, magic.xy)));
@@ -180,13 +171,13 @@ const blurFragmentShaderSource = `
 
     void main() {
         vec2 texelSize = 1.0 / u_resolution;
-
+        
         vec2 step = u_direction * texelSize * (u_blurRadius * 0.3);
 
         vec3 color = vec3(0.0);
         float totalWeight = 0.0;
 
-        float sigma = float(HALF) * 0.45;
+        float sigma = float(HALF) * 0.45; 
         float k = 2.0 * sigma * sigma;
 
         for (int i = -HALF; i <= HALF; ++i) {
@@ -350,7 +341,7 @@ function LYPLUS_setupBlurEffect() {
 function handleResize() {
     if (!gl || !webglCanvas) return;
 
-    const displayWidth = 256;
+    const displayWidth = 256; 
     const displayHeight = 256;
 
     if (displayWidth === canvasDimensions.width && displayHeight === canvasDimensions.height) {
@@ -654,7 +645,6 @@ function animateWebGLBackground() {
         globalAnimationId = null;
         return;
     }
-
     const now = performance.now();
     const elapsed = now - lastDrawTime;
     
@@ -662,6 +652,7 @@ function animateWebGLBackground() {
         globalAnimationId = requestAnimationFrame(animateWebGLBackground);
         return;
     }
+
     const deltaTime = (now - lastFrameTime) / 1000.0;
     lastFrameTime = now;
 
