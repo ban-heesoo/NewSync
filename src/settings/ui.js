@@ -115,16 +115,16 @@ document.addEventListener('DOMContentLoaded', () => {
     const saveGeneralBtn = document.getElementById('save-general');
     if (saveGeneralBtn) {
         saveGeneralBtn.addEventListener('click', () => {
-            const orderedSources = Array.from(document.getElementById('lyrics-source-order-draggable').children)
-                .map(item => item.dataset.source);
+    const orderedSources = Array.from(document.getElementById('lyrics-source-order-draggable').children)
+        .map(item => item.dataset.source);
 
-            updateSettings({
-                lyricsSourceOrder: orderedSources.join(','),
-                customKpoeUrl: document.getElementById('custom-kpoe-url').value,
-            });
-            saveSettings();
-            showStatusMessage('general-save-status', 'General settings saved!', false);
-        });
+    updateSettings({
+        lyricsSourceOrder: orderedSources.join(','),
+        customKpoeUrl: document.getElementById('custom-kpoe-url').value,
+    });
+    saveSettings();
+    showStatusMessage('general-save-status', 'General settings saved!', false);
+});
     }
 
     const saveAppearanceBtn = document.getElementById('save-appearance');
@@ -138,24 +138,24 @@ document.addEventListener('DOMContentLoaded', () => {
             const customCssValue = customCssElement.value || '';
             console.log('Saving custom CSS, length:', customCssValue.length, 'value:', customCssValue.substring(0, 50));
             updateSettings({ customCSS: customCssValue });
-            saveSettings();
-            showStatusMessage('appearance-save-status', 'Custom CSS saved!', false);
-        });
+    saveSettings();
+    showStatusMessage('appearance-save-status', 'Custom CSS saved!', false);
+});
     }
 
     const saveTranslationBtn = document.getElementById('save-translation');
     if (saveTranslationBtn) {
         saveTranslationBtn.addEventListener('click', () => {
-            updateSettings({
-                geminiApiKey: document.getElementById('gemini-api-key').value,
-                customTranslateTarget: document.getElementById('custom-translate-target').value,
-                customGeminiPrompt: document.getElementById('custom-gemini-prompt').value,
-                customGeminiRomanizePrompt: document.getElementById('custom-gemini-romanize-prompt').value
-            });
-            saveSettings();
-            clearCacheSilently();
-            showStatusMessage('translation-save-status', 'Translation input fields saved! Cache cleared automatically.', false);
-        });
+    updateSettings({
+        geminiApiKey: document.getElementById('gemini-api-key').value,
+        customTranslateTarget: document.getElementById('custom-translate-target').value,
+        customGeminiPrompt: document.getElementById('custom-gemini-prompt').value,
+        customGeminiRomanizePrompt: document.getElementById('custom-gemini-romanize-prompt').value
+    });
+    saveSettings();
+    clearCacheSilently();
+    showStatusMessage('translation-save-status', 'Translation input fields saved! Cache cleared automatically.', false);
+});
     }
 
     const clearCacheBtn = document.getElementById('clear-cache');
