@@ -134,7 +134,11 @@ async function fetchAndDisplayLyrics(currentSong, isNewSong = false, forceReload
     // --- 2. Determine Effective Mode (User's Intent) ---
     let effectiveMode = currentDisplayMode;
     if (isNewSong) {
-      effectiveMode = 'none';
+      const { translationEnabled, romanizationEnabled } = currentSettings;
+      if (translationEnabled && romanizationEnabled) effectiveMode = 'both';
+      else if (translationEnabled) effectiveMode = 'translate';
+      else if (romanizationEnabled) effectiveMode = 'romanize';
+      else effectiveMode = 'none';
       currentDisplayMode = effectiveMode;
     }
 

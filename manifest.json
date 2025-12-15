@@ -11,7 +11,8 @@
     "128": "icons/icon128.png"
   },
   "host_permissions": [
-    "*://*.music.youtube.com/*"
+    "*://*.music.youtube.com/*",
+    "*://*.tidal.com/*"
   ],
   "action": {
     "default_popup": "src/popup/ui.html",
@@ -34,6 +35,7 @@
       "js": [
         "src/lib/sponsorblock.js",
         "src/lib/polyfill.js",
+        "src/lib/colorTunes.js",
         "src/localization.js",
         "src/modules/lyrics/settings.js",
         "src/modules/lyrics/lyricsManager.js",

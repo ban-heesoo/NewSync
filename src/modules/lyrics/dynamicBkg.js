@@ -484,7 +484,19 @@ function processNextArtworkFromQueue() {
     }
 
     const onImageLoadSuccess = (img) => {
-        const palette = extractPaletteFromImage(img);
+        let palette;
+        if (typeof ColorTunes !== 'undefined') {
+            try {
+                palette = ColorTunes.getSongPalette(img);
+            } catch (e) {
+                console.error("LYPLUS: ColorTunes failed", e);
+                palette = getDefaultMasterPalette();
+            }
+        } else {
+            console.warn("LYPLUS: ColorTunes library not found, using default.");
+            palette = getDefaultMasterPalette();
+        }
+
         const texture = createTextureFromImage(img);
         finishProcessing(texture, palette);
     };

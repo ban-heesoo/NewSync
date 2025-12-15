@@ -470,6 +470,7 @@ span.lyrics-source-provider {
 
 #lyrics-plus-container .text-not-found {
     opacity: 0.7;
+    animation: fadeInUp 0.6s ease-out;
 }
 
 #lyrics-plus-container .text-loading {
@@ -639,9 +640,9 @@ ytmusic-player-page[player-fullscreened] #lyrics-plus-reload-button:active {
 
 /* --- Dropdown Menu --- */
 #lyrics-plus-translation-dropdown {
-    position: absolute;
-    bottom: calc(100% + 8px);
-    left: 50%;
+    position: absolute !important;
+    bottom: 0%;
+    left: 0%;
     transform: translateX(-50%);
     /*background: #1e1e1e;*/
     backdrop-filter: blur(30px) saturate(180%);
