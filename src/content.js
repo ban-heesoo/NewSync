@@ -1,3 +1,15 @@
+// Initialize immediately to ensure songTracker.js is injected right away
+// This fixes the issue where lyrics don't work on first install or after reinstall
+initializeLyricsPlus();
+
+// Load settings and enable/disable based on isEnabled setting
+loadSettings(() => {
+    if (!currentSettings.isEnabled) {
+        // If disabled, we can still keep the injection but won't process song changes
+        console.log('LyricsPlus is disabled in settings');
+    }
+});
+
 // Expose fetchAndDisplayLyrics and t globally for other modules to use
 window.LyricsPlusAPI = {
     fetchAndDisplayLyrics: fetchAndDisplayLyrics,
@@ -13,18 +25,6 @@ window.LyricsPlusAPI = {
         });
     }
 };
-
-// Load settings and initialize based on isEnabled setting
-// Initialize immediately to ensure songTracker.js is injected right away
-// This fixes the issue where lyrics don't work on first install or after reinstall
-initializeLyricsPlus();
-
-loadSettings(() => {
-    if (!currentSettings.isEnabled) {
-        // If disabled, we can still keep the injection but won't process song changes
-        console.log('LyricsPlus is disabled in settings');
-    }
-});
 
 function injectPlatformCSS() {
     const pBrowser = typeof browser !== 'undefined'

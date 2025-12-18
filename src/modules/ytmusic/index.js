@@ -58,6 +58,39 @@ const LyricsPlusAPI = {
   updateCurrentTick: (...args) => lyricsRendererInstance.updateCurrentTick(...args)
 };
 
+function injectPlatformCSS() {
+    const pBrowser = typeof browser !== 'undefined'
+        ? browser
+        : (typeof chrome !== 'undefined' ? chrome : null);
+    if (document.querySelector('link[data-lyrics-plus-platform-style]')) return;
+    const linkElement = document.createElement('link');
+    linkElement.rel = 'stylesheet';
+    linkElement.type = 'text/css';
+    if (!pBrowser?.runtime?.getURL) {
+        console.warn('YTMusic: runtime.getURL unavailable, skipping CSS inject');
+        return;
+    }
+    linkElement.href = pBrowser.runtime.getURL('src/modules/ytmusic/style.css');
+    linkElement.setAttribute('data-lyrics-plus-platform-style', 'true');
+    document.head.appendChild(linkElement);
+}
+
+function injectDOMScript() {
+    const pBrowser = typeof browser !== 'undefined'
+        ? browser
+        : (typeof chrome !== 'undefined' ? chrome : null);
+    if (!pBrowser?.runtime?.getURL) {
+        console.warn('YTMusic: runtime.getURL unavailable, skipping DOM script inject');
+        return;
+    }
+    const script = document.createElement('script');
+    script.src = pBrowser.runtime.getURL('src/inject/ytmusic/songTracker.js');
+    script.onload = function () {
+        this.remove();
+    };
+    (document.head || document.documentElement).appendChild(script);
+}
+
 window.addEventListener('message', (event) => {
     if (event.source !== window || !event.data) {
         return;

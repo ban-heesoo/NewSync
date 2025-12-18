@@ -10,7 +10,6 @@ class LyricsPlusRenderer {
     this.lastPrimaryActiveLine = null;
     this.currentFullscreenFocusedLine = null;
     this.lastTime = 0;
-    this.offsetLatency = 0;
     this.uiConfig = uiConfig;
     this.lyricsContainer = null;
     this.cachedLyricsLines = [];
@@ -49,10 +48,6 @@ class LyricsPlusRenderer {
     this.userScrollIdleTimer = null;
     this.isUserControllingScroll = false;
     this.userScrollRevertTimer = null;
-
-    this._lastActiveIndex = 0;
-    this._tempActiveLines = [];
-
     this._getContainer();
   }
 
@@ -1913,7 +1908,7 @@ class LyricsPlusRenderer {
   updateCurrentTick(currentTime) {
     currentTime = currentTime * 1000;
     const isForceScroll = Math.abs(currentTime - this.lastTime) > 1000;
-    this._updateLyricsHighlight((currentTime - this.offsetLatency), isForceScroll, currentSettings);
+    this._updateLyricsHighlight((currentTime - this.offsetLatency * 1000), isForceScroll, currentSettings);
     this.lastTime = currentTime;
   }
 
@@ -2047,22 +2042,15 @@ class LyricsPlusRenderer {
       this.currentFullscreenFocusedLine = mostRecentActiveLine;
     }
 
-    // Build active lines array for _updateSyllables
-    this._tempActiveLines.length = 0;
-    for (const lineId of this.activeLineIds) {
-      const line = document.getElementById(lineId);
-      if (line) this._tempActiveLines.push(line);
-    }
-
-    this._updateSyllables(currentTime, this._tempActiveLines);
+    this._updateSyllables(currentTime);
 
     if (
       this.lyricsContainer &&
       this.lyricsContainer.classList.contains("hide-offscreen")
     ) {
-      if (this._visibilityHasChanged) {
+      if (this._lastVisibilityUpdateSize !== this.visibleLineIds.size) {
         this._batchUpdateViewportVisibility();
-        this._visibilityHasChanged = false;
+        this._lastVisibilityUpdateSize = this.visibleLineIds.size;
       }
     }
   }
@@ -2137,11 +2125,14 @@ class LyricsPlusRenderer {
     }
   }
 
-  _updateSyllables(currentTime, activeLines) {
-    if (!activeLines || activeLines.length === 0) return;
+  _updateSyllables(currentTime) {
+    if (!this.activeLineIds.size) return;
 
-    for (let i = 0; i < activeLines.length; i++) {
-      const parentLine = activeLines[i];
+    // Cache syllable queries to avoid repeated DOM lookups
+    const activeSyllables = [];
+
+    for (const lineId of this.activeLineIds) {
+      const parentLine = document.getElementById(lineId);
       if (!parentLine) continue;
 
       let syllables = parentLine._cachedSyllableElements;
@@ -2152,50 +2143,54 @@ class LyricsPlusRenderer {
 
       for (let j = 0; j < syllables.length; j++) {
         const syllable = syllables[j];
-        const startTime = syllable._startTimeMs;
-        const endTime = syllable._endTimeMs;
-
-        if (startTime === undefined) continue;
-
-        const classList = syllable.classList;
-
-        const hasHighlight = classList.contains("highlight");
-        const hasFinished = classList.contains("finished");
-        const hasPreHighlight = classList.contains("pre-highlight");
-
-        if (currentTime >= startTime && currentTime <= endTime) {
-          if (!hasHighlight) {
-            this._updateSyllableAnimation(syllable);
-          }
-          if (hasFinished) {
-            classList.remove("finished");
-          }
-        } else if (currentTime > endTime) {
-          if (!hasFinished) {
-            if (!hasHighlight) {
-              this._updateSyllableAnimation(syllable);
-            }
-            classList.add("finished");
-          }
-        } else {
-          if (hasHighlight || hasFinished) {
-            this._resetSyllable(syllable);
-          } else if (hasPreHighlight) {
-            let shouldReset = true;
-
-            if (j > 0) {
-              const prevSyllable = syllables[j - 1];
-              if (prevSyllable && prevSyllable.classList.contains("highlight")) {
-                shouldReset = false;
-              }
-            }
-
-            if (shouldReset) {
-              this._resetSyllable(syllable, true);
-            }
-          }
+        if (syllable && typeof syllable._startTimeMs === "number") {
+          activeSyllables.push(syllable);
         }
       }
+    }
+
+    // Process all syllables in batches
+    const toHighlight = [];
+    const toFinish = [];
+    const toReset = [];
+
+    for (const syllable of activeSyllables) {
+      const startTime = syllable._startTimeMs;
+      const endTime = syllable._endTimeMs;
+      const classList = syllable.classList;
+      const hasHighlight = classList.contains("highlight");
+      const hasFinished = classList.contains("finished");
+
+      if (currentTime >= startTime && currentTime <= endTime) {
+        if (!hasHighlight) {
+          toHighlight.push(syllable);
+        }
+        if (hasFinished) {
+          classList.remove("finished");
+        }
+      } else if (currentTime > endTime) {
+        if (!hasFinished) {
+          if (!hasHighlight) {
+            toHighlight.push(syllable);
+          }
+          toFinish.push(syllable);
+        }
+      } else {
+        if (hasHighlight || hasFinished) {
+          toReset.push(syllable);
+        }
+      }
+    }
+
+    // Batch apply changes
+    for (const syllable of toHighlight) {
+      this._updateSyllableAnimation(syllable);
+    }
+    for (const syllable of toFinish) {
+      syllable.classList.add("finished");
+    }
+    for (const syllable of toReset) {
+      this._resetSyllable(syllable);
     }
   }
 
@@ -2584,31 +2579,13 @@ class LyricsPlusRenderer {
     const container = this._getContainer();
     if (!container || !container.parentElement) return null;
     if (this.visibilityObserver) this.visibilityObserver.disconnect();
-
-    this._visibilityHasChanged = true;
-
     this.visibilityObserver = new IntersectionObserver(
       (entries) => {
-        let hasChanges = false;
         entries.forEach((entry) => {
-          const target = entry.target;
-          const id = target.id;
-
-          if (entry.isIntersecting) {
-            if (!this.visibleLineIds.has(id)) {
-              this.visibleLineIds.add(id);
-              hasChanges = true;
-            }
-          } else {
-            if (this.visibleLineIds.has(id)) {
-              this.visibleLineIds.delete(id);
-              hasChanges = true;
-            }
-          }
+          const id = entry.target.id;
+          if (entry.isIntersecting) this.visibleLineIds.add(id);
+          else this.visibleLineIds.delete(id);
         });
-        if (hasChanges) {
-          this._visibilityHasChanged = true;
-        }
       },
       { root: container.parentElement, rootMargin: "200px 0px", threshold: 0.1 }
     );
@@ -2943,7 +2920,7 @@ class LyricsPlusRenderer {
     }
 
     if (container) {
-      container.innerHTML = `<div class="loading-container"><span class="text-loading">${t("loading")}</span></div>`;
+      container.innerHTML = `<div class="loading-container"><span class="text-loading">${t("loading")}</span><div class="loading-loop-m3"></div></div>`;
       container.classList.add("lyrics-plus-message");
       container.className = "lyrics-plus-integrated lyrics-plus-message blur-inactive-enabled";
 
@@ -2974,7 +2951,7 @@ class LyricsPlusRenderer {
     this._cachedContainerRect = null;
     this._cachedVisibleLines = null;
     this._lastVisibilityHash = null;
-    this._visibilityHasChanged = false;
+    this._lastVisibilityUpdateSize = null;
 
     this.currentScrollOffset = 0;
     this.isProgrammaticScrolling = false;
