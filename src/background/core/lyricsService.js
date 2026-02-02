@@ -18,45 +18,67 @@ export class LyricsService {
   }
 
   static async getOrFetch(songInfo, forceReload = false) {
-    const cacheKey = this.createCacheKey(songInfo);
+    let embeddedFallback = null;
 
-    if (!forceReload && state.hasCached(cacheKey)) {
-      return state.getCached(cacheKey);
+    if (songInfo.lyricsJSON && songInfo.lyricsJSON.lyrics.length > 0) {
+      const settings = await SettingsManager.get({ appleMusicTTMLBypass: false });
+      const lyricsJsonType = songInfo.lyricsJSON.type.toUpperCase();
+
+      const embeddedResult = {
+        lyrics: DataParser.parseKPoeFormat(songInfo.lyricsJSON),
+        version: Date.now()
+      };
+
+      if (!settings.appleMusicTTMLBypass || lyricsJsonType === "WORD") {
+        console.log('Using embedded lyrics (platform specific)');
+        return embeddedResult;
+      }
+      
+      console.log('Apple Music TTML bypass active. Attempting to fetch external lyrics...');
+      embeddedFallback = embeddedResult;
     }
+
+    const cacheKey = this.createCacheKey(songInfo);
+    let result = null;
 
     if (!forceReload) {
-      const dbResult = await this.getFromDB(cacheKey);
-      if (dbResult) {
-        state.setCached(cacheKey, dbResult);
-        return dbResult;
-      }
-
-      const localResult = await this.checkLocalLyrics(songInfo);
-      if (localResult) {
-        state.setCached(cacheKey, localResult);
-        return localResult;
+      if (state.hasCached(cacheKey)) {
+        result = state.getCached(cacheKey);
+      } else {
+        result = await this.getFromDB(cacheKey) || await this.checkLocalLyrics(songInfo);
+        if (result) state.setCached(cacheKey, result);
       }
     }
 
-    if (state.hasOngoingFetch(cacheKey)) {
-      return state.getOngoingFetch(cacheKey);
+    if (!result) {
+      if (state.hasOngoingFetch(cacheKey)) {
+        result = await state.getOngoingFetch(cacheKey);
+      } else {
+        const fetchPromise = this.fetchNewLyrics(songInfo, cacheKey, forceReload);
+        state.setOngoingFetch(cacheKey, fetchPromise);
+        result = await fetchPromise;
+      }
     }
 
-    const fetchPromise = this.fetchNewLyrics(songInfo, cacheKey, forceReload);
-    state.setOngoingFetch(cacheKey, fetchPromise);
-    
-    return fetchPromise;
+    if (embeddedFallback) {
+      if (!result || (result.type && result.type.toUpperCase() !== "WORD")) {
+        console.log('Fetched lyrics not WORD synced. Reverting to embedded Apple Music lyrics.');
+        return embeddedFallback;
+      }
+    }
+
+    return result;
   }
 
   static async getFromDB(key) {
     const settings = await SettingsManager.get({ cacheStrategy: 'aggressive' });
-    
+
     if (settings.cacheStrategy === 'none') {
       return null;
     }
 
     const result = await lyricsDB.get(key);
-    
+
     if (!result) return null;
 
     const now = Date.now();
@@ -98,7 +120,7 @@ export class LyricsService {
       const fetchOptions = settings.cacheStrategy === 'none' ? { cache: 'no-store' } : {};
 
       const providers = this.getProviderOrder(settings);
-      
+
       let lyrics = null;
       for (const provider of providers) {
         lyrics = await this.fetchFromProvider(provider, songInfo, settings, fetchOptions, forceReload);
@@ -118,7 +140,7 @@ export class LyricsService {
       const result = { lyrics, version };
 
       state.setCached(cacheKey, result);
-      
+
       if (settings.cacheStrategy !== 'none') {
         await lyricsDB.set({ key: cacheKey, lyrics, version, timestamp: Date.now(), duration: songInfo.duration });
       }
@@ -134,7 +156,7 @@ export class LyricsService {
     const allProviders = Object.values(PROVIDERS).filter(
       p => p !== PROVIDERS.GOOGLE && p !== PROVIDERS.GEMINI
     );
-    
+
     return [
       settings.lyricsProvider,
       ...allProviders.filter(p => p !== settings.lyricsProvider)
@@ -145,7 +167,7 @@ export class LyricsService {
     switch (provider) {
       case PROVIDERS.KPOE:
         return KPoeService.fetch(songInfo, settings.lyricsSourceOrder, forceReload, fetchOptions);
-      
+
       case PROVIDERS.CUSTOM_KPOE:
         if (settings.customKpoeUrl) {
           return KPoeService.fetchCustom(
@@ -157,17 +179,16 @@ export class LyricsService {
           );
         }
         return null;
-      
+
       case PROVIDERS.LRCLIB:
         return LRCLibService.fetch(songInfo, fetchOptions);
-      
+
       case PROVIDERS.LOCAL:
         const localResult = await this.checkLocalLyrics(songInfo);
         return localResult?.lyrics || null;
-      
+
       default:
         return null;
     }
   }
 }
-

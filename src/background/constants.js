@@ -15,10 +15,9 @@ export const CONFIG = {
   },
   
   KPOE_SERVERS: [
+    "https://lyricsplus-seven.vercel.app",
     "https://lyricsplus.prjktla.workers.dev",
-    "https://lyrics-plus-backend.vercel.app",
-    "https://lyricsplus.onrender.com",
-    "https://lyricsplus.prjktla.online"
+    "https://lyrics-plus-backend.vercel.app"
   ],
   
   GEMINI: {
@@ -53,4 +52,3 @@ export const MESSAGE_TYPES = {
   FETCH_LOCAL_LYRICS: 'FETCH_LOCAL_LYRICS',
   UPDATE_LOCAL_LYRICS: 'UPDATE_LOCAL_LYRICS'
 };
-

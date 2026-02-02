@@ -1,12 +1,6 @@
-// Initialize immediately to ensure songTracker.js is injected right away
-// This fixes the issue where lyrics don't work on first install or after reinstall
-initializeLyricsPlus();
-
-// Load settings and enable/disable based on isEnabled setting
 loadSettings(() => {
-    if (!currentSettings.isEnabled) {
-        // If disabled, we can still keep the injection but won't process song changes
-        console.log('LyricsPlus is disabled in settings');
+    if (currentSettings.isEnabled) {
+        initializeLyricsPlus();
     }
 });
 
@@ -26,49 +20,6 @@ window.LyricsPlusAPI = {
     }
 };
 
-function injectPlatformCSS() {
-    const pBrowser = typeof browser !== 'undefined'
-        ? browser
-        : (typeof chrome !== 'undefined' ? chrome : null);
-    if (document.querySelector('link[data-lyrics-plus-platform-style]')) return;
-    const linkElement = document.createElement('link');
-    linkElement.rel = 'stylesheet';
-    linkElement.type = 'text/css';
-    if (!pBrowser?.runtime?.getURL) {
-        console.warn('LyricsPlus: runtime.getURL unavailable, skipping platform CSS inject');
-        return;
-    }
-    const hostname = window.location.hostname;
-    if (hostname.includes('music.youtube.com')) {
-        linkElement.href = pBrowser.runtime.getURL('src/modules/ytmusic/style.css');
-    } else if (hostname.includes('listen.tidal.com')) {
-        linkElement.href = pBrowser.runtime.getURL('src/modules/tidal/style.css');
-    } else {
-        return;
-    }
-    linkElement.setAttribute('data-lyrics-plus-platform-style', 'true');
-    document.head.appendChild(linkElement);
-}
-
-function injectDOMScript() {
-    const pBrowser = typeof browser !== 'undefined'
-        ? browser
-        : (typeof chrome !== 'undefined' ? chrome : null);
-    if (!pBrowser?.runtime?.getURL) {
-        console.warn('LyricsPlus: runtime.getURL unavailable, skipping DOM script inject');
-        return;
-    }
-    const hostname = window.location.hostname;
-    if (hostname.includes('music.youtube.com')) {
-        const script = document.createElement('script');
-        script.src = pBrowser.runtime.getURL('src/inject/ytmusic/songTracker.js');
-        script.onload = function () {
-            this.remove();
-        };
-        (document.head || document.documentElement).appendChild(script);
-    }
-}
-
 function initializeLyricsPlus() {
     // Inject the DOM script
     injectPlatformCSS();
@@ -84,11 +35,6 @@ function initializeLyricsPlus() {
         if (event.data.type && event.data.type.startsWith('LYPLUS_')) {
             // Handle song info updates
             if (event.data.type === 'LYPLUS_SONG_CHANGED') {
-                // Check if extension is enabled (defaults to true if settings not loaded yet)
-                if (currentSettings && !currentSettings.isEnabled) {
-                    return;
-                }
-
                 const songInfo = event.data.songInfo;
                 const isNewSong = event.data.isNewSong; // Get the new song flag
                 console.log('Song changed (received in extension):', songInfo);

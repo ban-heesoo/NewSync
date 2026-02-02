@@ -43,4 +43,3 @@ class StateManager {
 }
 
 export const state = new StateManager();
-

@@ -1,7 +1,7 @@
-import { loadSettings, saveSettings, updateSettings, getSettings, updateCacheSize, clearCache, clearCacheSilently, setupSettingsMessageListener, uploadLocalLyrics, getLocalLyricsList, deleteLocalLyrics, updateLocalLyrics, fetchLocalLyrics, defaultSettings } from './settingsManager.js';
-import { parseSyncedLyrics, parseAppleTTML, convertToStandardJson, v1Tov2 } from './parser.js';
+import { loadSettings, saveSettings, updateSettings, getSettings, updateCacheSize, clearCache, clearCacheSilently, setupSettingsMessageListener, uploadLocalLyrics, getLocalLyricsList, deleteLocalLyrics, updateLocalLyrics, fetchLocalLyrics } from './settingsManager.js';
+import { parseSyncedLyrics, parseAppleTTML, convertToStandardJson, v1Tov2 } from '../lib/parser.js';
 
-let currentSettings = { ...defaultSettings };
+let currentSettings = getSettings();
 
 function showReloadNotification() {
     const notification = document.getElementById('reload-notification');
@@ -40,6 +40,7 @@ function setupAutoSaveListeners() {
         { id: 'romanization-provider', key: 'romanizationProvider', type: 'value' },
         { id: 'gemini-romanization-model', key: 'geminiRomanizationModel', type: 'value' },
         { id: 'cache-strategy', key: 'cacheStrategy', type: 'value' },
+        { id: 'bypass-apple', key: 'appleMusicTTMLBypass', type: 'checkbox' },
     ];
 
     autoSaveControls.forEach(control => {
@@ -56,7 +57,7 @@ function setupAutoSaveListeners() {
 }
 
 function updateUI(settings) {
-    currentSettings = { ...currentSettings, ...settings };
+    currentSettings = settings;
     console.log("Updating UI with settings:", currentSettings);
 
     document.getElementById('enabled').checked = currentSettings.isEnabled;
@@ -84,8 +85,9 @@ function updateUI(settings) {
     document.getElementById('custom-gemini-prompt').value = currentSettings.customGeminiPrompt || '';
     document.getElementById('override-gemini-romanize-prompt').checked = currentSettings.overrideGeminiRomanizePrompt;
     document.getElementById('custom-gemini-romanize-prompt').value = currentSettings.customGeminiRomanizePrompt || '';
-    document.getElementById('custom-css').value = currentSettings.customCSS || '';
+    document.getElementById('custom-css').value = currentSettings.customCSS;
     document.getElementById('cache-strategy').value = currentSettings.cacheStrategy;
+    document.getElementById('bypass-apple').checked = currentSettings.appleMusicTTMLBypass;
 
     toggleKpoeSourcesVisibility();
     toggleCustomKpoeUrlVisibility();
@@ -97,6 +99,7 @@ function updateUI(settings) {
 
     populateDraggableSources();
     updateCacheSize();
+    populateLocalLyricsList();
 }
 
 document.querySelectorAll('.navigation-drawer .nav-item').forEach(item => {
@@ -111,10 +114,7 @@ document.querySelectorAll('.navigation-drawer .nav-item').forEach(item => {
     });
 });
 
-document.addEventListener('DOMContentLoaded', () => {
-    const saveGeneralBtn = document.getElementById('save-general');
-    if (saveGeneralBtn) {
-        saveGeneralBtn.addEventListener('click', () => {
+document.getElementById('save-general').addEventListener('click', () => {
     const orderedSources = Array.from(document.getElementById('lyrics-source-order-draggable').children)
         .map(item => item.dataset.source);
 
@@ -125,27 +125,14 @@ document.addEventListener('DOMContentLoaded', () => {
     saveSettings();
     showStatusMessage('general-save-status', 'General settings saved!', false);
 });
-    }
 
-    const saveAppearanceBtn = document.getElementById('save-appearance');
-    if (saveAppearanceBtn) {
-        saveAppearanceBtn.addEventListener('click', () => {
-            const customCssElement = document.getElementById('custom-css');
-            if (!customCssElement) {
-                console.error('custom-css element not found!');
-                return;
-            }
-            const customCssValue = customCssElement.value || '';
-            console.log('Saving custom CSS, length:', customCssValue.length, 'value:', customCssValue.substring(0, 50));
-            updateSettings({ customCSS: customCssValue });
+document.getElementById('save-appearance').addEventListener('click', () => {
+    updateSettings({ customCSS: document.getElementById('custom-css').value });
     saveSettings();
     showStatusMessage('appearance-save-status', 'Custom CSS saved!', false);
 });
-    }
 
-    const saveTranslationBtn = document.getElementById('save-translation');
-    if (saveTranslationBtn) {
-        saveTranslationBtn.addEventListener('click', () => {
+document.getElementById('save-translation').addEventListener('click', () => {
     updateSettings({
         geminiApiKey: document.getElementById('gemini-api-key').value,
         customTranslateTarget: document.getElementById('custom-translate-target').value,
@@ -156,275 +143,8 @@ document.addEventListener('DOMContentLoaded', () => {
     clearCacheSilently();
     showStatusMessage('translation-save-status', 'Translation input fields saved! Cache cleared automatically.', false);
 });
-    }
 
-    const clearCacheBtn = document.getElementById('clear-cache');
-    if (clearCacheBtn) {
-        clearCacheBtn.addEventListener('click', clearCache);
-    }
-
-    const addSourceBtn = document.getElementById('add-source-button');
-    if (addSourceBtn) {
-        addSourceBtn.addEventListener('click', addSource);
-    }
-
-    const defaultProvider = document.getElementById('default-provider');
-    if (defaultProvider) {
-        defaultProvider.addEventListener('change', (e) => {
-            currentSettings.lyricsProvider = e.target.value;
-            toggleKpoeSourcesVisibility();
-            toggleCustomKpoeUrlVisibility();
-            toggleLocalLyricsVisibility();
-        });
-    }
-
-    const addLyricsFab = document.getElementById('add-lyrics-fab');
-    if (addLyricsFab) {
-        addLyricsFab.addEventListener('click', () => {
-            document.getElementById('upload-lyrics-modal').classList.add('show');
-        });
-    }
-
-    const uploadModalCloseBtn = document.querySelector('#upload-lyrics-modal .close-button');
-    if (uploadModalCloseBtn) {
-        uploadModalCloseBtn.addEventListener('click', () => {
-            document.getElementById('upload-lyrics-modal').classList.remove('show');
-        });
-    }
-
-    window.addEventListener('click', (event) => {
-        const modal = document.getElementById('upload-lyrics-modal');
-        if (event.target === modal) {
-            modal.classList.remove('show');
-        }
-    });
-
-    const modalUploadBtn = document.getElementById('modal-upload-lyrics-button');
-    if (modalUploadBtn) {
-        modalUploadBtn.addEventListener('click', handleUploadLocalLyrics);
-    }
-
-    const refreshLocalLyricsBtn = document.getElementById('refresh-local-lyrics-list');
-    if (refreshLocalLyricsBtn) {
-        refreshLocalLyricsBtn.addEventListener('click', populateLocalLyricsList);
-    }
-
-    const overrideTranslateTarget = document.getElementById('override-translate-target');
-    if (overrideTranslateTarget) {
-        overrideTranslateTarget.addEventListener('change', (e) => {
-            currentSettings.overrideTranslateTarget = e.target.checked;
-            toggleTranslateTargetVisibility();
-            clearCacheSilently();
-            console.log('Cache cleared automatically after translate target toggle change.');
-        });
-    }
-
-    const overrideGeminiPrompt = document.getElementById('override-gemini-prompt');
-    if (overrideGeminiPrompt) {
-        overrideGeminiPrompt.addEventListener('change', (e) => {
-            currentSettings.overrideGeminiPrompt = e.target.checked;
-            toggleGeminiPromptVisibility();
-            clearCacheSilently();
-            console.log('Cache cleared automatically after Gemini prompt toggle change.');
-        });
-    }
-
-    const overrideGeminiRomanizePrompt = document.getElementById('override-gemini-romanize-prompt');
-    if (overrideGeminiRomanizePrompt) {
-        overrideGeminiRomanizePrompt.addEventListener('change', (e) => {
-            currentSettings.overrideGeminiRomanizePrompt = e.target.checked;
-            toggleGeminiRomanizePromptVisibility();
-            clearCacheSilently();
-            console.log('Cache cleared automatically after Gemini romanization prompt toggle change.');
-        });
-    }
-
-    const romanizationProvider = document.getElementById('romanization-provider');
-    if (romanizationProvider) {
-        romanizationProvider.addEventListener('change', () => {
-            toggleRomanizationModelVisibility();
-        });
-    }
-
-    const translationProvider = document.getElementById('translation-provider');
-    if (translationProvider) {
-        translationProvider.addEventListener('change', (e) => {
-            currentSettings.translationProvider = e.target.value;
-            toggleGeminiSettingsVisibility();
-        });
-    }
-
-    const toggleGeminiApiKeyBtn = document.getElementById('toggle-gemini-api-key-visibility');
-    if (toggleGeminiApiKeyBtn) {
-        toggleGeminiApiKeyBtn.addEventListener('click', () => {
-            const apiKeyInput = document.getElementById('gemini-api-key');
-            const icon = toggleGeminiApiKeyBtn.querySelector('.material-symbols-outlined');
-            if (apiKeyInput.type === 'password') {
-                apiKeyInput.type = 'text';
-                icon.textContent = 'visibility_off';
-            } else {
-                apiKeyInput.type = 'password';
-                icon.textContent = 'visibility';
-            }
-        });
-    }
-
-    const customGeminiPrompt = document.getElementById('custom-gemini-prompt');
-    if (customGeminiPrompt) {
-        let geminiPromptSaveTimeout = null;
-        customGeminiPrompt.addEventListener('input', () => {
-            schedulePromptCacheClear();
-            clearTimeout(geminiPromptSaveTimeout);
-            geminiPromptSaveTimeout = setTimeout(() => {
-                updateSettings({ customGeminiPrompt: customGeminiPrompt.value });
-                saveSettings();
-            }, 1000);
-        });
-        customGeminiPrompt.addEventListener('blur', () => {
-            if (promptClearTimeout) {
-                clearTimeout(promptClearTimeout);
-            }
-            if (geminiPromptSaveTimeout) {
-                clearTimeout(geminiPromptSaveTimeout);
-            }
-            updateSettings({ customGeminiPrompt: customGeminiPrompt.value });
-            saveSettings();
-            clearCacheSilently();
-            console.log('Cache cleared automatically after prompt input blur.');
-        });
-    }
-
-    const customGeminiRomanizePrompt = document.getElementById('custom-gemini-romanize-prompt');
-    if (customGeminiRomanizePrompt) {
-        let geminiRomanizePromptSaveTimeout = null;
-        customGeminiRomanizePrompt.addEventListener('input', () => {
-            schedulePromptCacheClear();
-            clearTimeout(geminiRomanizePromptSaveTimeout);
-            geminiRomanizePromptSaveTimeout = setTimeout(() => {
-                updateSettings({ customGeminiRomanizePrompt: customGeminiRomanizePrompt.value });
-                saveSettings();
-            }, 1000);
-        });
-        customGeminiRomanizePrompt.addEventListener('blur', () => {
-            if (promptClearTimeout) {
-                clearTimeout(promptClearTimeout);
-            }
-            if (geminiRomanizePromptSaveTimeout) {
-                clearTimeout(geminiRomanizePromptSaveTimeout);
-            }
-            updateSettings({ customGeminiRomanizePrompt: customGeminiRomanizePrompt.value });
-            saveSettings();
-            clearCacheSilently();
-            console.log('Cache cleared automatically after romanization prompt input blur.');
-        });
-    }
-
-    const customTranslateTarget = document.getElementById('custom-translate-target');
-    if (customTranslateTarget) {
-        let translateTargetSaveTimeout = null;
-        customTranslateTarget.addEventListener('input', () => {
-            schedulePromptCacheClear();
-            clearTimeout(translateTargetSaveTimeout);
-            translateTargetSaveTimeout = setTimeout(() => {
-                updateSettings({ customTranslateTarget: customTranslateTarget.value });
-                saveSettings();
-            }, 1000);
-        });
-        customTranslateTarget.addEventListener('blur', () => {
-            if (promptClearTimeout) {
-                clearTimeout(promptClearTimeout);
-            }
-            if (translateTargetSaveTimeout) {
-                clearTimeout(translateTargetSaveTimeout);
-            }
-            updateSettings({ customTranslateTarget: customTranslateTarget.value });
-            saveSettings();
-            clearCacheSilently();
-            console.log('Cache cleared automatically after translate target input blur.');
-        });
-    }
-
-    const geminiApiKey = document.getElementById('gemini-api-key');
-    if (geminiApiKey) {
-        let geminiApiKeySaveTimeout = null;
-        geminiApiKey.addEventListener('input', () => {
-            clearTimeout(geminiApiKeySaveTimeout);
-            geminiApiKeySaveTimeout = setTimeout(() => {
-                updateSettings({ geminiApiKey: geminiApiKey.value });
-                saveSettings();
-            }, 1000);
-        });
-        geminiApiKey.addEventListener('blur', () => {
-            if (geminiApiKeySaveTimeout) {
-                clearTimeout(geminiApiKeySaveTimeout);
-            }
-            updateSettings({ geminiApiKey: geminiApiKey.value });
-            saveSettings();
-        });
-    }
-    
-    loadSettings((settings) => {
-        updateUI(settings);
-        setupAutoSaveListeners();
-
-        const firstNavItem = document.querySelector('.navigation-drawer .nav-item');
-        const activeSectionId = firstNavItem?.getAttribute('data-section') || 'general';
-
-        document.querySelectorAll('.navigation-drawer .nav-item').forEach(i => i.classList.remove('active'));
-        const activeNavItem = document.querySelector(`.navigation-drawer .nav-item[data-section="${activeSectionId}"]`);
-        if (activeNavItem) {
-            activeNavItem.classList.add('active');
-        }
-
-        document.querySelectorAll('.settings-card').forEach(section => section.classList.remove('active'));
-        const activeSection = document.getElementById(activeSectionId);
-        if (activeSection) {
-            activeSection.classList.add('active');
-        }
-    });
-
-    setAppVersion();
-
-    const reloadBtn = document.getElementById('reload-button');
-    if (reloadBtn) {
-        reloadBtn.addEventListener('click', () => {
-            chrome.tabs.query({ url: "*://music.youtube.com/*" }, (tabs) => {
-                if (tabs.length > 0) {
-                    chrome.tabs.reload(tabs[0].id, () => {
-                        hideReloadNotification();
-                        showStatusMessage('general-save-status', 'YouTube Music tab reloaded!', false);
-                    });
-                } else {
-                    alert("No YouTube Music tab found. Please open one and try again.");
-                }
-            });
-        });
-    }
-
-    setTimeout(() => {
-        populateLocalLyricsList();
-    }, 100);
-
-    const editCloseButton = document.querySelector('#edit-lyrics-modal .close-button');
-    if (editCloseButton) {
-        editCloseButton.addEventListener('click', (e) => {
-            e.preventDefault();
-            closeEditModal();
-        });
-    }
-
-    window.addEventListener('click', (event) => {
-        const editModal = document.getElementById('edit-lyrics-modal');
-        if (event.target === editModal) {
-            closeEditModal();
-        }
-    });
-
-    const editButton = document.getElementById('modal-edit-lyrics-button');
-    if (editButton) {
-        editButton.addEventListener('click', handleEditLocalLyrics);
-    }
-});
+document.getElementById('clear-cache').addEventListener('click', clearCache);
 
 setupSettingsMessageListener(updateUI);
 
@@ -552,7 +272,6 @@ function addDragDropListeners() {
         showStatusMessage('add-source-status', 'Source order updated. Save to apply.', false);
     };
 
-    // Mouse Events
     draggableContainer.addEventListener('dragstart', (e) => {
         if (e.target.classList.contains('draggable-source-item')) {
             draggedItem = e.target;
@@ -574,27 +293,6 @@ function addDragDropListeners() {
     });
 
     draggableContainer.addEventListener('dragend', onDragEnd);
-
-    draggableContainer.addEventListener('touchstart', (e) => {
-        if (e.target.closest('.drag-handle')) {
-            draggedItem = e.target.closest('.draggable-source-item');
-            draggedItem?.classList.add('dragging');
-        }
-    }, { passive: true });
-
-    draggableContainer.addEventListener('touchmove', (e) => {
-        if (!draggedItem) return;
-        e.preventDefault();
-        const touchY = e.touches[0].clientY;
-        const afterElement = getDragAfterElement(draggableContainer, touchY);
-        if (afterElement) {
-            draggableContainer.insertBefore(draggedItem, afterElement);
-        } else {
-            draggableContainer.appendChild(draggedItem);
-        }
-    }, { passive: false });
-
-    draggableContainer.addEventListener('touchend', onDragEnd);
 }
 
 function getDragAfterElement(container, y) {
@@ -610,15 +308,148 @@ function getDragAfterElement(container, y) {
     }, { offset: -Infinity }).element;
 }
 
-let promptClearTimeout = null;
-function schedulePromptCacheClear() {
-    if (promptClearTimeout) {
-        clearTimeout(promptClearTimeout);
+document.getElementById('add-source-button').addEventListener('click', addSource);
+
+document.getElementById('default-provider').addEventListener('change', (e) => {
+    currentSettings.lyricsProvider = e.target.value;
+    toggleKpoeSourcesVisibility();
+    toggleCustomKpoeUrlVisibility();
+});
+
+document.getElementById('add-lyrics-fab').addEventListener('click', () => {
+    document.getElementById('upload-lyrics-modal').classList.add('show');
+});
+
+document.querySelector('#upload-lyrics-modal .close-button').addEventListener('click', () => {
+    document.getElementById('upload-lyrics-modal').classList.remove('show');
+});
+
+window.addEventListener('click', (event) => {
+    const modal = document.getElementById('upload-lyrics-modal');
+    if (event.target === modal) {
+        modal.classList.remove('show');
     }
-    promptClearTimeout = setTimeout(() => {
+});
+
+const editCloseButton = document.querySelector('#edit-lyrics-modal .close-button');
+if (editCloseButton) {
+    editCloseButton.addEventListener('click', (e) => {
+        e.preventDefault();
+        closeEditModal();
+    });
+}
+
+window.addEventListener('click', (event) => {
+    const editModal = document.getElementById('edit-lyrics-modal');
+    if (event.target === editModal) {
+        closeEditModal();
+    }
+});
+
+document.getElementById('modal-upload-lyrics-button').addEventListener('click', handleUploadLocalLyrics);
+document.getElementById('modal-edit-lyrics-button').addEventListener('click', handleEditLocalLyrics);
+document.getElementById('refresh-local-lyrics-list').addEventListener('click', populateLocalLyricsList);
+
+document.getElementById('override-translate-target').addEventListener('change', (e) => {
+    currentSettings.overrideTranslateTarget = e.target.checked;
+    toggleTranslateTargetVisibility();
+    clearCacheSilently();
+});
+
+document.getElementById('override-gemini-prompt').addEventListener('change', (e) => {
+    currentSettings.overrideGeminiPrompt = e.target.checked;
+    toggleGeminiPromptVisibility();
+    clearCacheSilently();
+});
+
+document.getElementById('override-gemini-romanize-prompt').addEventListener('change', (e) => {
+    currentSettings.overrideGeminiRomanizePrompt = e.target.checked;
+    toggleGeminiRomanizePromptVisibility();
+    clearCacheSilently();
+});
+
+document.getElementById('romanization-provider').addEventListener('change', () => {
+    toggleRomanizationModelVisibility();
+});
+
+document.getElementById('translation-provider').addEventListener('change', (e) => {
+    currentSettings.translationProvider = e.target.value;
+    toggleGeminiSettingsVisibility();
+});
+
+const customGeminiPrompt = document.getElementById('custom-gemini-prompt');
+if (customGeminiPrompt) {
+    let geminiPromptSaveTimeout = null;
+    customGeminiPrompt.addEventListener('input', () => {
+        schedulePromptCacheClear();
+        clearTimeout(geminiPromptSaveTimeout);
+        geminiPromptSaveTimeout = setTimeout(() => {
+            updateSettings({ customGeminiPrompt: customGeminiPrompt.value });
+            saveSettings();
+        }, 1000);
+    });
+    customGeminiPrompt.addEventListener('blur', () => {
+        if (promptClearTimeout) {
+            clearTimeout(promptClearTimeout);
+        }
+        if (geminiPromptSaveTimeout) {
+            clearTimeout(geminiPromptSaveTimeout);
+        }
+        updateSettings({ customGeminiPrompt: customGeminiPrompt.value });
+        saveSettings();
         clearCacheSilently();
-        console.log('Cache cleared automatically after prompt input change.');
-    }, 1000);
+        console.log('Cache cleared automatically after prompt input blur.');
+    });
+}
+
+const customGeminiRomanizePrompt = document.getElementById('custom-gemini-romanize-prompt');
+if (customGeminiRomanizePrompt) {
+    let geminiRomanizePromptSaveTimeout = null;
+    customGeminiRomanizePrompt.addEventListener('input', () => {
+        schedulePromptCacheClear();
+        clearTimeout(geminiRomanizePromptSaveTimeout);
+        geminiRomanizePromptSaveTimeout = setTimeout(() => {
+            updateSettings({ customGeminiRomanizePrompt: customGeminiRomanizePrompt.value });
+            saveSettings();
+        }, 1000);
+    });
+    customGeminiRomanizePrompt.addEventListener('blur', () => {
+        if (promptClearTimeout) {
+            clearTimeout(promptClearTimeout);
+        }
+        if (geminiRomanizePromptSaveTimeout) {
+            clearTimeout(geminiRomanizePromptSaveTimeout);
+        }
+        updateSettings({ customGeminiRomanizePrompt: customGeminiRomanizePrompt.value });
+        saveSettings();
+        clearCacheSilently();
+        console.log('Cache cleared automatically after romanization prompt input blur.');
+    });
+}
+
+const customTranslateTarget = document.getElementById('custom-translate-target');
+if (customTranslateTarget) {
+    let translateTargetSaveTimeout = null;
+    customTranslateTarget.addEventListener('input', () => {
+        schedulePromptCacheClear();
+        clearTimeout(translateTargetSaveTimeout);
+        translateTargetSaveTimeout = setTimeout(() => {
+            updateSettings({ customTranslateTarget: customTranslateTarget.value });
+            saveSettings();
+        }, 1000);
+    });
+    customTranslateTarget.addEventListener('blur', () => {
+        if (promptClearTimeout) {
+            clearTimeout(promptClearTimeout);
+        }
+        if (translateTargetSaveTimeout) {
+            clearTimeout(translateTargetSaveTimeout);
+        }
+        updateSettings({ customTranslateTarget: customTranslateTarget.value });
+        saveSettings();
+        clearCacheSilently();
+        console.log('Cache cleared automatically after translate target input blur.');
+    });
 }
 
 function toggleElementVisibility(elementId, isVisible) {
@@ -668,15 +499,23 @@ function toggleRomanizationModelVisibility() {
     toggleElementVisibility('gemini-romanization-model-group', isVisible);
 }
 
-function toggleLocalLyricsVisibility() {
-    const isVisible = document.getElementById('default-provider').value === 'local';
-    toggleElementVisibility('local-lyrics', isVisible);
+let promptClearTimeout = null;
+function schedulePromptCacheClear() {
+    if (promptClearTimeout) {
+        clearTimeout(promptClearTimeout);
+    }
+    promptClearTimeout = setTimeout(() => {
+        clearCacheSilently();
+        console.log('Cache cleared automatically after prompt input change.');
+    }, 1000);
 }
 
 async function handleUploadLocalLyrics() {
     const titleInput = document.getElementById('modal-upload-song-title');
     const artistInput = document.getElementById('modal-upload-artist-name');
     const albumInput = document.getElementById('modal-upload-album-name');
+    const songwriterInput = document.getElementById('modal-upload-songwriter-name');
+    const formatSelect = document.getElementById('modal-upload-lyrics-format');
     const lyricsFileInput = document.getElementById('modal-upload-lyrics-file');
     const uploadButton = document.getElementById('modal-upload-lyrics-button');
     const uploadButtonIcon = uploadButton.querySelector('.material-symbols-outlined');
@@ -684,6 +523,7 @@ async function handleUploadLocalLyrics() {
     const title = titleInput.value.trim();
     const artist = artistInput.value.trim();
     const album = albumInput.value.trim();
+    const songwriter = songwriterInput?.value.trim() || '';
     const lyricsFile = lyricsFileInput.files[0];
 
     if (!title || !artist || !lyricsFile) {
@@ -691,29 +531,21 @@ async function handleUploadLocalLyrics() {
         return;
     }
 
-    const getFileExtension = (filename) => {
-        return filename.split('.').pop().toLowerCase();
-    };
+    const format = formatSelect?.value || lyricsFile.name.split('.').pop().toLowerCase();
 
-    const format = getFileExtension(lyricsFile.name);
-
-    // Show loading state
     uploadButton.disabled = true;
     uploadButtonIcon.textContent = 'hourglass_empty';
     showStatusMessage('modal-upload-status', 'Uploading lyrics...', false);
 
     const reader = new FileReader();
     reader.onload = async (e) => {
-        const lyricsContent = e.target.result;
-        const songInfo = { title, artist, album };
-
         try {
+            const lyricsContent = e.target.result;
+            const songInfo = { title, artist, album, songwriter };
             let parsedLyrics;
             switch (format) {
                 case 'lrc':
                 case 'elrc':
-                    parsedLyrics = parseSyncedLyrics(lyricsContent);
-                    break;
                 case 'apple-lrc':
                     parsedLyrics = parseSyncedLyrics(lyricsContent);
                     break;
@@ -722,24 +554,19 @@ async function handleUploadLocalLyrics() {
                     break;
                 case 'json':
                     parsedLyrics = JSON.parse(lyricsContent);
-                    if (parsedLyrics && parsedLyrics.KpoeTools && !parsedLyrics.KpoeTools.includes('1.31R2-LPlusBcknd')) {
-                        console.log("Converting V1 JSON to V2 format.");
-                        parsedLyrics = v1Tov2(parsedLyrics);
-                    } else if (parsedLyrics && !parsedLyrics.KpoeTools && parsedLyrics.lyrics && parsedLyrics.lyrics.length > 0 && parsedLyrics.lyrics[0].isLineEnding !== undefined) {
-                        console.log("Converting older V1 JSON (no KpoeTools) to V2 format.");
+                    if (parsedLyrics && (parsedLyrics.KpoeTools && !parsedLyrics.KpoeTools.includes('1.31R2-LPlusBcknd') || !parsedLyrics.KpoeTools && parsedLyrics.lyrics?.[0]?.isLineEnding !== undefined)) {
                         parsedLyrics = v1Tov2(parsedLyrics);
                     }
                     break;
-                default:
-                    throw new Error('Unsupported lyrics format.');
+                default: throw new Error('Unsupported lyrics format.');
             }
             const jsonLyrics = format === 'json' ? parsedLyrics : convertToStandardJson(parsedLyrics);
-
             await uploadLocalLyrics(songInfo, jsonLyrics);
             showStatusMessage('modal-upload-status', 'Lyrics uploaded successfully!', false);
             titleInput.value = '';
             artistInput.value = '';
             albumInput.value = '';
+            if (songwriterInput) songwriterInput.value = '';
             lyricsFileInput.value = '';
             document.getElementById('upload-lyrics-modal').classList.remove('show');
             populateLocalLyricsList();
@@ -772,18 +599,15 @@ async function openEditLyricsModal(item) {
         } else {
             throw new Error(response.error || 'Failed to fetch lyrics data');
         }
-        
+
         document.getElementById('modal-edit-song-title').value = item.songInfo.title || '';
         document.getElementById('modal-edit-artist-name').value = item.songInfo.artist || '';
         document.getElementById('modal-edit-album-name').value = item.songInfo.album || '';
         document.getElementById('modal-edit-songwriter-name').value = item.songInfo.songwriter || '';
-        
         document.getElementById('modal-edit-lyrics-file').value = '';
-        
+
         const modal = document.getElementById('edit-lyrics-modal');
-        if (modal) {
-            modal.classList.add('show');
-        }
+        if (modal) modal.classList.add('show');
     } catch (error) {
         console.error('Error opening edit modal:', error);
         showStatusMessage('local-lyrics-status', `Error loading lyrics for editing: ${error.message || error}`, true);
@@ -809,15 +633,8 @@ async function handleEditLocalLyrics() {
     }
 
     if (!lyricsFile) {
-        const updatedSongInfo = {
-            title,
-            artist,
-            album,
-            songwriter
-        };
-        
+        const updatedSongInfo = { title, artist, album, songwriter };
         const updatedLyrics = currentEditingItem.lyrics;
-        
         try {
             await updateLocalLyrics(currentEditingItem.songId, updatedSongInfo, updatedLyrics);
             showStatusMessage('local-lyrics-status', 'Lyrics metadata updated successfully!', false);
@@ -839,8 +656,6 @@ async function handleEditLocalLyrics() {
             switch (format) {
                 case 'lrc':
                 case 'elrc':
-                    parsedLyrics = parseSyncedLyrics(lyricsContent);
-                    break;
                 case 'apple-lrc':
                     parsedLyrics = parseSyncedLyrics(lyricsContent);
                     break;
@@ -849,11 +664,7 @@ async function handleEditLocalLyrics() {
                     break;
                 case 'json':
                     parsedLyrics = JSON.parse(lyricsContent);
-                    if (parsedLyrics && parsedLyrics.KpoeTools && !parsedLyrics.KpoeTools.includes('1.31R2-LPlusBcknd')) {
-                        console.log("Converting V1 JSON to V2 format.");
-                        parsedLyrics = v1Tov2(parsedLyrics);
-                    } else if (parsedLyrics && !parsedLyrics.KpoeTools && parsedLyrics.lyrics && parsedLyrics.lyrics.length > 0 && parsedLyrics.lyrics[0].isLineEnding !== undefined) {
-                        console.log("Converting older V1 JSON (no KpoeTools) to V2 format.");
+                    if (parsedLyrics && (parsedLyrics.KpoeTools && !parsedLyrics.KpoeTools.includes('1.31R2-LPlusBcknd') || !parsedLyrics.KpoeTools && parsedLyrics.lyrics?.[0]?.isLineEnding !== undefined)) {
                         parsedLyrics = v1Tov2(parsedLyrics);
                     }
                     break;
@@ -861,9 +672,8 @@ async function handleEditLocalLyrics() {
                     throw new Error('Unsupported lyrics format.');
             }
             const jsonLyrics = format === 'json' ? parsedLyrics : convertToStandardJson(parsedLyrics);
-
             await updateLocalLyrics(currentEditingItem.songId, songInfo, jsonLyrics);
-            
+
             showStatusMessage('local-lyrics-status', 'Lyrics updated successfully!', false);
             closeEditModal();
             populateLocalLyricsList();
@@ -871,7 +681,7 @@ async function handleEditLocalLyrics() {
             console.error("Error updating lyrics:", error);
             showStatusMessage('local-lyrics-status', `Error updating lyrics: ${error.message || error}`, true);
         }
-    }
+    };
     reader.onerror = () => {
         showStatusMessage('local-lyrics-status', 'Error reading file.', true);
     };
@@ -880,11 +690,9 @@ async function handleEditLocalLyrics() {
 
 function closeEditModal() {
     const modal = document.getElementById('edit-lyrics-modal');
-    if (modal) {
-        modal.classList.remove('show');
-    }
+    if (modal) modal.classList.remove('show');
     currentEditingItem = null;
-    
+
     document.getElementById('modal-edit-song-title').value = '';
     document.getElementById('modal-edit-artist-name').value = '';
     document.getElementById('modal-edit-album-name').value = '';
@@ -893,21 +701,16 @@ function closeEditModal() {
 }
 
 async function populateLocalLyricsList() {
-    const localLyricsListContainer = document.getElementById('local-lyrics-list');
+    const listContainer = document.getElementById('local-lyrics-list');
     const noLyricsMessage = document.getElementById('no-local-lyrics-message');
-    if (!localLyricsListContainer) return;
+    if (!listContainer) return;
 
-    localLyricsListContainer.innerHTML = ''; // Clear existing list
-    localLyricsListContainer.appendChild(noLyricsMessage); // Re-add the message placeholder
+    listContainer.innerHTML = '';
+    listContainer.appendChild(noLyricsMessage);
 
     try {
         const lyricsList = await getLocalLyricsList();
-        if (lyricsList.length === 0) {
-            noLyricsMessage.style.display = 'block';
-            return;
-        } else {
-            noLyricsMessage.style.display = 'none';
-        }
+        noLyricsMessage.style.display = lyricsList.length === 0 ? 'block' : 'none';
 
         lyricsList.forEach(item => {
             const listItem = document.createElement('div');
@@ -925,7 +728,7 @@ async function populateLocalLyricsList() {
                     </button>
                 </div>
             `;
-            
+
             const editBtn = listItem.querySelector('.edit-source-button');
             if (editBtn) {
                 editBtn.addEventListener('click', async (e) => {
@@ -937,10 +740,10 @@ async function populateLocalLyricsList() {
                     }
                 });
             }
-            
+
             listItem.querySelector('.remove-source-button').addEventListener('click', async (e) => {
                 e.stopPropagation();
-                if (confirm(`Are you sure you want to delete "${item.songInfo.title} - ${item.songInfo.artist}"?`)) {
+                if (confirm(`Delete "${item.songInfo.title} - ${item.songInfo.artist}"?`)) {
                     try {
                         await deleteLocalLyrics(item.songId);
                         showStatusMessage('local-lyrics-status', 'Local lyrics deleted.', false);
@@ -950,7 +753,7 @@ async function populateLocalLyricsList() {
                     }
                 }
             });
-            localLyricsListContainer.appendChild(listItem);
+            listContainer.appendChild(listItem);
         });
     } catch (error) {
         console.error("Failed to load local lyrics list:", error);
@@ -959,15 +762,111 @@ async function populateLocalLyricsList() {
     }
 }
 
+document.getElementById('toggle-gemini-api-key-visibility').addEventListener('click', () => {
+    const apiKeyInput = document.getElementById('gemini-api-key');
+    const icon = document.querySelector('#toggle-gemini-api-key-visibility .material-symbols-outlined');
+    if (apiKeyInput.type === 'password') {
+        apiKeyInput.type = 'text';
+        icon.textContent = 'visibility_off';
+    } else {
+        apiKeyInput.type = 'password';
+        icon.textContent = 'visibility';
+    }
+});
+
 function setAppVersion() {
     try {
         const version = chrome.runtime.getManifest().version;
-        const versionElement = document.querySelector('.version');
-        if (versionElement) {
-            versionElement.textContent = `Version ${version}`;
-        }
+        document.querySelector('.version').textContent = `Version ${version}`;
     } catch (e) {
-        console.error("Could not retrieve extension version from manifest:", e);
+        console.error("Could not retrieve extension version:", e);
     }
 }
+
+function exportSettings() {
+    try {
+        const settings = getSettings();
+        const settingsJson = JSON.stringify(settings, null, 2);
+        const blob = new Blob([settingsJson], { type: 'application/json' });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        const date = new Date().toISOString().slice(0, 10);
+        a.download = `newsync-settings-${date}.json`;
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+        URL.revokeObjectURL(url);
+        showStatusMessage('config-status', 'Settings exported successfully!', false);
+    } catch (error) {
+        console.error('Failed to export settings:', error);
+        showStatusMessage('config-status', `Error exporting settings: ${error.message}`, true);
+    }
+}
+
+function importSettings(event) {
+    const file = event.target.files[0];
+    if (!file) {
+        return;
+    }
+
+    const reader = new FileReader();
+    reader.onload = (e) => {
+        try {
+            const importedSettings = JSON.parse(e.target.result);
+
+            if (typeof importedSettings !== 'object' || importedSettings === null || typeof importedSettings.isEnabled === 'undefined') {
+                throw new Error('Invalid or corrupted settings file.');
+            }
+
+            updateSettings(importedSettings);
+            saveSettings();
+            updateUI(getSettings());
+            showStatusMessage('config-status', 'Settings imported successfully! Reload required.', false);
+            showReloadNotification();
+        } catch (error) {
+            console.error('Failed to import settings:', error);
+            showStatusMessage('config-status', `Error importing settings: ${error.message}`, true);
+        } finally {
+            event.target.value = '';
+        }
+    };
+    reader.onerror = () => {
+        showStatusMessage('config-status', 'Error reading file.', true);
+    };
+    reader.readAsText(file);
+}
+
+document.addEventListener('DOMContentLoaded', () => {
+    loadSettings((settings) => {
+        updateUI(settings);
+        setupAutoSaveListeners();
+
+        const firstNavItem = document.querySelector('.navigation-drawer .nav-item');
+        const activeSectionId = firstNavItem?.getAttribute('data-section') || 'general';
+        document.querySelector(`.navigation-drawer .nav-item[data-section="${activeSectionId}"]`)?.classList.add('active');
+        document.getElementById(activeSectionId)?.classList.add('active');
+    });
+
+    setAppVersion();
+
+    document.getElementById('reload-button')?.addEventListener('click', () => {
+        chrome.tabs.query({ url: "*://music.youtube.com/*" }, (tabs) => {
+            if (tabs.length > 0) {
+                chrome.tabs.reload(tabs[0].id, () => {
+                    hideReloadNotification();
+                    showStatusMessage('general-save-status', 'YouTube Music tab reloaded!', false);
+                });
+            } else {
+                alert("No YouTube Music tab found.");
+            }
+        });
+    });
+
+    document.getElementById('export-settings-button').addEventListener('click', exportSettings);
+    document.getElementById('import-settings-button').addEventListener('click', () => {
+        document.getElementById('import-settings-file').click();
+    });
+    document.getElementById('import-settings-file').addEventListener('change', importSettings);
+});
 

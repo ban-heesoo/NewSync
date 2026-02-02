@@ -8,6 +8,7 @@ import { lyricsDB, translationsDB, localLyricsDB } from '../storage/database.js'
 import { LyricsService } from './lyricsService.js';
 import { TranslationService } from './translationService.js';
 import { SponsorBlockService } from '../services/sponsorblockService.js';
+import { DataParser } from '../utils/dataParser.js';
 
 export class MessageHandler {
   static handle(message, sender, sendResponse) {
@@ -25,7 +26,7 @@ export class MessageHandler {
     };
 
     const handler = handlers[message.type];
-    
+
     if (handler) {
       handler().catch(error => {
         console.error(`Error handling ${message.type}:`, error);
@@ -40,13 +41,13 @@ export class MessageHandler {
   }
 
   static async fetchLyrics(message, sendResponse) {
-    try {
-      const { lyrics } = await LyricsService.getOrFetch(message.songInfo, message.forceReload);
-      sendResponse({ success: true, lyrics, metadata: message.songInfo });
-    } catch (error) {
-      console.error(`Failed to fetch lyrics for "${message.songInfo?.title}":`, error);
-      sendResponse({ success: false, error: error.message, metadata: message.songInfo });
-    }
+      try {
+        const { lyrics } = await LyricsService.getOrFetch(message.songInfo, message.forceReload);
+        sendResponse({ success: true, lyrics, metadata: message.songInfo });
+      } catch (error) {
+        console.error(`Failed to fetch lyrics for "${message.songInfo?.title}":`, error);
+        sendResponse({ success: false, error: error.message, metadata: message.songInfo });
+      }
   }
 
   static async translateLyrics(message, sendResponse) {
@@ -94,7 +95,7 @@ export class MessageHandler {
         lyricsDB.estimateSize(),
         translationsDB.estimateSize()
       ]);
-      
+
       sendResponse({
         success: true,
         sizeKB: lyricsStats.sizeKB + translationsStats.sizeKB,
@@ -167,19 +168,17 @@ export class MessageHandler {
 
   static async updateLocalLyrics(message, sendResponse) {
     try {
-      // Check if the entry exists
       const existingLyrics = await localLyricsDB.get(message.songId);
       if (!existingLyrics) {
         sendResponse({ success: false, error: "Local lyrics not found" });
         return;
       }
 
-      // Update the entry with new data
       await localLyricsDB.set({
         songId: message.songId,
         songInfo: message.songInfo,
         lyrics: message.jsonLyrics,
-        timestamp: existingLyrics.timestamp || Date.now() // Preserve original timestamp or use current
+        timestamp: existingLyrics.timestamp || Date.now()
       });
       sendResponse({ success: true, message: "Local lyrics updated successfully" });
     } catch (error) {
@@ -188,4 +187,3 @@ export class MessageHandler {
     }
   }
 }
-

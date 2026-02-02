@@ -10,6 +10,8 @@ class LyricsPlusRenderer {
     this.lastPrimaryActiveLine = null;
     this.currentFullscreenFocusedLine = null;
     this.lastTime = 0;
+    this.offsetLatency = 0
+
     this.uiConfig = uiConfig;
     this.lyricsContainer = null;
     this.cachedLyricsLines = [];
@@ -17,6 +19,7 @@ class LyricsPlusRenderer {
     this.activeLineIds = new Set();
     this.visibleLineIds = new Set();
     this.fontCache = {};
+
     this.textWidthCanvas = null;
     this.visibilityObserver = null;
     this.resizeObserver = null;
@@ -32,7 +35,7 @@ class LyricsPlusRenderer {
     this.dropdownMenu = null;
     this.buttonsWrapper = null;
     this._boundLyricClickHandler = this._onLyricClick.bind(this);
-    this._boundDocumentClickHandler = null;
+
     this.isProgrammaticScrolling = false;
     this.endProgrammaticScrollTimer = null;
     this.scrollEventHandlerAttached = false;
@@ -43,11 +46,16 @@ class LyricsPlusRenderer {
     this._boundTouchEndHandler = null;
     this._boundTouchCancelHandler = null;
     this.currentScrollOffset = 0;
-    this.touchStartY = 0;
-    this.isTouching = false;
     this.userScrollIdleTimer = null;
     this.isUserControllingScroll = false;
     this.userScrollRevertTimer = null;
+
+    this._boundParentScrollHandler = this._onParentScroll.bind(this);
+    this._boundUserInteractionHandler = this._onUserInteraction.bind(this);
+
+    this._lastActiveIndex = 0;
+    this._tempActiveLines = [];
+
     this._getContainer();
   }
 
@@ -146,7 +154,7 @@ class LyricsPlusRenderer {
     };
 
     if (!this.isUserControllingScroll && this.currentPrimaryActiveLine) {
-      this._scrollToActiveLine(this.currentPrimaryActiveLine, false);
+      this._scrollToActiveLine(this.currentPrimaryActiveLine, false, true);
     }
   }
 
@@ -196,13 +204,7 @@ class LyricsPlusRenderer {
         this._createLyricsContainer();
       }
     }
-    if (
-      this.lyricsContainer &&
-      this.lyricsContainer.parentElement &&
-      !this.scrollEventHandlerAttached
-    ) {
-      this._setupUserScrollListener();
-    }
+    if (this.lyricsContainer) this._attachScrollListeners();
     return this.lyricsContainer;
   }
 
@@ -224,274 +226,55 @@ class LyricsPlusRenderer {
     container.classList.add("lyrics-plus-integrated", "blur-inactive-enabled");
     originalLyricsSection.appendChild(container);
     this.lyricsContainer = container;
-    this._setupUserScrollListener();
     return container;
   }
 
-  /**
-   * Sets up custom event listeners for user scrolling (wheel and touch).
-   * This allows for custom scroll behavior instead of native browser scrolling.
-   */
-  _setupUserScrollListener() {
-    if (this.scrollEventHandlerAttached || !this.lyricsContainer) {
-      return;
-    }
+  _attachScrollListeners() {
+    const scrollContainer = this.lyricsContainer?.parentElement;
+    if (!scrollContainer || this.scrollEventHandlerAttached) return;
 
-    const scrollListeningElement = this.lyricsContainer;
-    const parentScrollElement = this.lyricsContainer.parentElement;
-
-    this.touchState = {
-      isActive: false,
-      startY: 0,
-      lastY: 0,
-      velocity: 0,
-      lastTime: 0,
-      momentum: null,
-      samples: [],
-      maxSamples: 5,
-    };
-
-    this._boundParentScrollHandler = () => {
-      if (this.isProgrammaticScrolling) {
-        clearTimeout(this.endProgrammaticScrollTimer);
-        this.endProgrammaticScrollTimer = setTimeout(() => {
-          this.isProgrammaticScrolling = false;
-          this.endProgrammaticScrollTimer = null;
-        }, 250);
-        return;
-      }
-      if (this.lyricsContainer) {
-        this.lyricsContainer.classList.add("not-focused");
-      }
-    };
-
-    this._boundWheelHandler = (event) => {
-      event.preventDefault();
-      this.isProgrammaticScrolling = false;
-      if (this.lyricsContainer) {
-        this.lyricsContainer.classList.add("not-focused", "user-scrolling", "wheel-scrolling");
-        this.lyricsContainer.classList.remove("touch-scrolling");
-      }
-      this._handleUserScroll(event.deltaY);
-      clearTimeout(this.userScrollIdleTimer);
-      this.userScrollIdleTimer = setTimeout(() => {
-        if (this.lyricsContainer) {
-          this.lyricsContainer.classList.remove("user-scrolling", "wheel-scrolling");
-        }
-      }, 200);
-    };
-
-    this._boundTouchStartHandler = (event) => {
-      const touch = event.touches[0];
-      const now = performance.now();
-      if (this.touchState.momentum) {
-        cancelAnimationFrame(this.touchState.momentum);
-        this.touchState.momentum = null;
-      }
-      this.touchState.isActive = true;
-      this.touchState.startY = touch.clientY;
-      this.touchState.lastY = touch.clientY;
-      this.touchState.lastTime = now;
-      this.touchState.velocity = 0;
-      this.touchState.samples = [{ y: touch.clientY, time: now }];
-
-      this.isProgrammaticScrolling = false;
-      if (this.lyricsContainer) {
-        this.lyricsContainer.classList.add("not-focused", "user-scrolling", "touch-scrolling");
-        this.lyricsContainer.classList.remove("wheel-scrolling");
-      }
-      clearTimeout(this.userScrollIdleTimer);
-    };
-
-    this._boundTouchMoveHandler = (event) => {
-      if (!this.touchState.isActive) return;
-      event.preventDefault();
-      const touch = event.touches[0];
-      const now = performance.now();
-      const currentY = touch.clientY;
-      const deltaY = this.touchState.lastY - currentY;
-      this.touchState.lastY = currentY;
-      this.touchState.samples.push({ y: currentY, time: now });
-      if (this.touchState.samples.length > this.touchState.maxSamples) {
-        this.touchState.samples.shift();
-      }
-      this._handleUserScroll(deltaY * 0.8);
-    };
-
-    this._boundTouchEndHandler = () => {
-      if (!this.touchState.isActive) return;
-      this.touchState.isActive = false;
-      const now = performance.now();
-      const samples = this.touchState.samples;
-      if (samples.length >= 2) {
-        const recentSamples = samples.filter((sample) => now - sample.time <= 100);
-        if (recentSamples.length >= 2) {
-          const newest = recentSamples[recentSamples.length - 1];
-          const oldest = recentSamples[0];
-          const timeDelta = newest.time - oldest.time;
-          const yDelta = oldest.y - newest.y;
-          if (timeDelta > 0) {
-            this.touchState.velocity = yDelta / timeDelta;
-          }
-        }
-      }
-      if (Math.abs(this.touchState.velocity) > 0.1) {
-        this._startMomentumScroll();
-      } else {
-        this._endTouchScrolling();
-      }
-    };
-
-    this._boundTouchCancelHandler = () => {
-      this.touchState.isActive = false;
-      if (this.touchState.momentum) {
-        cancelAnimationFrame(this.touchState.momentum);
-        this.touchState.momentum = null;
-      }
-      this._endTouchScrolling();
-    };
-
-    if (parentScrollElement) {
-      parentScrollElement.addEventListener("scroll", this._boundParentScrollHandler, { passive: true });
-    }
-
-    scrollListeningElement.addEventListener("wheel", this._boundWheelHandler, { passive: false });
-    scrollListeningElement.addEventListener("touchstart", this._boundTouchStartHandler, { passive: true });
-    scrollListeningElement.addEventListener("touchmove", this._boundTouchMoveHandler, { passive: false });
-    scrollListeningElement.addEventListener("touchend", this._boundTouchEndHandler, { passive: true });
-    scrollListeningElement.addEventListener("touchcancel", this._boundTouchCancelHandler, { passive: true });
+    scrollContainer.addEventListener('wheel', this._boundUserInteractionHandler, { passive: true });
+    scrollContainer.addEventListener('touchstart', this._boundUserInteractionHandler, { passive: true });
+    scrollContainer.addEventListener('keydown', this._boundUserInteractionHandler, { passive: true });
 
     this.scrollEventHandlerAttached = true;
   }
 
-  _removeUserScrollListener() {
-    const container = this.lyricsContainer;
-
-    if (container && container.parentElement && this._boundParentScrollHandler) {
-      container.parentElement.removeEventListener("scroll", this._boundParentScrollHandler);
-    }
-
-    if (container) {
-      if (this._boundWheelHandler) container.removeEventListener("wheel", this._boundWheelHandler);
-      if (this._boundTouchStartHandler) container.removeEventListener("touchstart", this._boundTouchStartHandler);
-      if (this._boundTouchMoveHandler) container.removeEventListener("touchmove", this._boundTouchMoveHandler);
-      if (this._boundTouchEndHandler) container.removeEventListener("touchend", this._boundTouchEndHandler);
-      if (this._boundTouchCancelHandler) container.removeEventListener("touchcancel", this._boundTouchCancelHandler);
-    }
-
-    this.scrollEventHandlerAttached = false;
-    this._boundParentScrollHandler = null;
-    this._boundWheelHandler = null;
-    this._boundTouchStartHandler = null;
-    this._boundTouchMoveHandler = null;
-    this._boundTouchEndHandler = null;
-    this._boundTouchCancelHandler = null;
+  /**
+   * Fired on wheel, touch, or keydown. 
+   * Immediately flags user control.
+   */
+  _onUserInteraction() {
+    this._setUserScrolled(true);
   }
 
   /**
-   * Starts momentum scrolling after touch end.
-   * @private
+   * Fired on any scroll movement.
    */
-  _startMomentumScroll() {
-    const deceleration = 0.95;
-    const minVelocity = 0.01;
-
-    const animate = () => {
-      const scrollDelta = this.touchState.velocity * 16;
-      this._handleUserScroll(scrollDelta);
-
-      this.touchState.velocity *= deceleration;
-
-      if (Math.abs(this.touchState.velocity) > minVelocity) {
-        this.touchState.momentum = requestAnimationFrame(animate);
-      } else {
-        this.touchState.momentum = null;
-        this._endTouchScrolling();
-      }
-    };
-
-    this.touchState.momentum = requestAnimationFrame(animate);
+  _onParentScroll() {
+    if (!this.isProgrammaticScrolling) {
+      this._setUserScrolled(true);
+    }
   }
 
   /**
-   * Cleans up touch scrolling state.
-   * @private
+   * Updates state and manages the "revert to auto-scroll" timer
    */
-  _endTouchScrolling() {
-    if (this.lyricsContainer) {
-      this.lyricsContainer.classList.remove(
-        "user-scrolling",
-        "touch-scrolling"
-      );
+  _setUserScrolled(isUserScrolling) {
+    if (isUserScrolling) {
+      this.isUserControllingScroll = true;
+      this.lyricsContainer?.classList.add("user-scrolling", 'not-focused');
+
+      clearTimeout(this.userScrollIdleTimer);
+      this.userScrollIdleTimer = setTimeout(() => {
+        this.isUserControllingScroll = false;
+        this.lyricsContainer?.classList.remove("user-scrolling", 'not-focused');
+
+        if (this.currentPrimaryActiveLine) {
+          this._scrollToActiveLine(this.currentPrimaryActiveLine, true);
+        }
+      }, 5000);
     }
-
-    this.touchState.velocity = 0;
-    this.touchState.samples = [];
-  }
-
-  /**
-   * Handles the logic for manual user scrolling, calculating and clamping the new scroll position.
-   * Also sets a timer to automatically resume player-controlled scrolling after a period of user inactivity.
-   * @param {number} delta - The amount to scroll by.
-   */
-  _handleUserScroll(delta) {
-    this.isUserControllingScroll = true;
-    clearTimeout(this.userScrollRevertTimer);
-
-    this.userScrollRevertTimer = setTimeout(() => {
-      this.isUserControllingScroll = false;
-      if (this.currentPrimaryActiveLine) {
-        this._scrollToActiveLine(this.currentPrimaryActiveLine, true);
-      }
-    }, 4000);
-
-    const scrollSensitivity = 0.7;
-    let newScrollOffset = this.currentScrollOffset - delta * scrollSensitivity;
-
-    const container = this._getContainer();
-    if (!container) {
-      this._animateScroll(newScrollOffset);
-      return;
-    }
-
-    const allScrollableElements = Array.from(
-      container.querySelectorAll(
-        ".lyrics-line, .lyrics-plus-metadata, .lyrics-plus-empty"
-      )
-    );
-    if (allScrollableElements.length === 0) {
-      this._animateScroll(newScrollOffset);
-      return;
-    }
-
-    const scrollContainer = container.parentElement;
-    if (!scrollContainer) {
-      this._animateScroll(newScrollOffset);
-      return;
-    }
-
-    const containerHeight = scrollContainer.clientHeight;
-    let minAllowedScroll = 0;
-    let maxAllowedScroll = 0;
-
-    const firstElement = allScrollableElements[0];
-    const lastElement = allScrollableElements[allScrollableElements.length - 1];
-
-    if (firstElement && lastElement) {
-      const contentTotalHeight =
-        lastElement.offsetTop +
-        lastElement.offsetHeight -
-        firstElement.offsetTop;
-      if (contentTotalHeight > containerHeight) {
-        maxAllowedScroll =
-          containerHeight - (lastElement.offsetTop + lastElement.offsetHeight);
-      }
-    }
-
-    newScrollOffset = Math.max(newScrollOffset, maxAllowedScroll);
-    newScrollOffset = Math.min(newScrollOffset, minAllowedScroll);
-
-    this._animateScroll(newScrollOffset);
   }
 
   /**
@@ -509,6 +292,7 @@ class LyricsPlusRenderer {
       originalEndTime: parseFloat(line.dataset.endTime),
       newEndTime: parseFloat(line.dataset.endTime),
       isHandledByPrecursorPass: false,
+      isHandledByExtensionPass: false,
     }));
 
     for (let i = 0; i <= linesData.length - 3; i++) {
@@ -524,10 +308,45 @@ class LyricsPlusRenderer {
       }
     }
 
+    for (let i = 0; i < linesData.length - 1; i++) {
+      const currentLine = linesData[i];
+      const nextLine = linesData[i + 1];
+      const lineAfterNext = i + 2 < linesData.length ? linesData[i + 2] : null;
+
+      const currentOriginallyLonger = currentLine.originalEndTime > nextLine.originalEndTime;
+      const currentOverlapsNext = nextLine.startTime < currentLine.originalEndTime;
+
+      const nextHasGapToAfter = lineAfterNext
+        ? lineAfterNext.startTime > nextLine.originalEndTime
+        : true;
+
+      if (currentOriginallyLonger && currentOverlapsNext && nextHasGapToAfter) {
+        const longerEnd = currentLine.originalEndTime;
+
+        let targetEnd = longerEnd;
+        if (lineAfterNext) {
+          const gap = lineAfterNext.startTime - longerEnd;
+          if (gap > 0) {
+            const gapExtension = Math.min(1.3, gap);
+            targetEnd = longerEnd + gapExtension;
+          }
+
+          if (targetEnd > lineAfterNext.startTime) {
+            targetEnd = lineAfterNext.startTime;
+          }
+        }
+
+        currentLine.newEndTime = targetEnd;
+        currentLine.isHandledByExtensionPass = true;
+        nextLine.newEndTime = targetEnd;
+        nextLine.isHandledByExtensionPass = true;
+      }
+    }
+
     for (let i = linesData.length - 2; i >= 0; i--) {
       const currentLine = linesData[i];
       const nextLine = linesData[i + 1];
-      if (currentLine.isHandledByPrecursorPass) continue;
+      if (currentLine.isHandledByPrecursorPass || currentLine.isHandledByExtensionPass) continue;
 
       if (nextLine.startTime < currentLine.originalEndTime) {
         const overlap = currentLine.originalEndTime - nextLine.startTime;
@@ -563,19 +382,8 @@ class LyricsPlusRenderer {
    * @param {Event} e - The click event.
    */
   _onLyricClick(e) {
-    e.preventDefault();
-    e.stopPropagation();
-    e.stopImmediatePropagation();
-    
     const time = parseFloat(e.currentTarget.dataset.startTime);
-    if (isNaN(time)) {
-      console.warn('LyricsPlus: Invalid startTime in lyric click', e.currentTarget.dataset);
-      return;
-    }
-    
-    const seekTime = time - 0.05;
-    console.log('LyricsPlus: Seeking to', seekTime, 'from lyric click');
-    this._seekPlayerTo(seekTime);
+    this._seekPlayerTo(time - 0.05);
     this._scrollToActiveLine(e.currentTarget, true);
   }
 
@@ -587,7 +395,6 @@ class LyricsPlusRenderer {
     lyrics,
     displayMode,
     singerClassMap,
-    elementPool,
     fragment
   ) {
     // --- Helper Functions ---
@@ -626,11 +433,15 @@ class LyricsPlusRenderer {
 
     lyrics.data.forEach((line) => {
       // 1. Line & Container Setup
-      let currentLine = elementPool.lines.pop() || document.createElement("div");
+      let currentLine = document.createElement("div");
       currentLine.innerHTML = "";
       currentLine.className = "lyrics-line";
       currentLine.dataset.startTime = line.startTime;
       currentLine.dataset.endTime = line.endTime;
+
+      let currentLineContainer = document.createElement("div");
+      currentLineContainer.className = "lyrics-line-container";
+      currentLine.appendChild(currentLineContainer);
 
       const singerClass = line.element?.singer
         ? singerClassMap[line.element.singer] || "singer-left"
@@ -642,9 +453,9 @@ class LyricsPlusRenderer {
         currentLine._hasSharedListener = true;
       }
 
-      const mainContainer = document.createElement("div");
+      const mainContainer = document.createElement("p");
       mainContainer.classList.add("main-vocal-container");
-      currentLine.appendChild(mainContainer);
+      currentLineContainer.appendChild(mainContainer);
 
       let backgroundContainer = null;
       let isFirstSyllableInMain = true;
@@ -687,7 +498,7 @@ class LyricsPlusRenderer {
       };
 
       const createSyllableElement = (s, totalDuration, idx, isBg) => {
-        const sylSpan = elementPool.syllables.pop() || document.createElement("span");
+        const sylSpan = document.createElement("span");
         sylSpan.innerHTML = "";
         sylSpan.className = "lyrics-syllable";
 
@@ -741,7 +552,7 @@ class LyricsPlusRenderer {
           if (char === " ") {
             sylSpan.appendChild(document.createTextNode(" "));
           } else {
-            const charSpan = elementPool.chars.pop() || document.createElement("span");
+            const charSpan = document.createElement("span");
             charSpan.textContent = char;
             charSpan.className = "char";
 
@@ -797,7 +608,7 @@ class LyricsPlusRenderer {
           const charMaxScale = 1.0 + baseGrowth + charProgress * 0.1;
           const charShadowIntensity = 0.4 + charProgress * 0.4;
           const normalizedGrowth = (charMaxScale - 1.0) / 0.13;
-          const charTranslateYPeak = -normalizedGrowth * 2.5;
+          const charTranslateYPeak = -normalizedGrowth * 6;
 
           span.style.setProperty("--max-scale", charMaxScale.toFixed(3));
           span.style.setProperty("--shadow-intensity", charShadowIntensity.toFixed(3));
@@ -812,9 +623,15 @@ class LyricsPlusRenderer {
         });
       };
 
+      const shouldAllowBreak = (text) => {
+        text = text.trim();
+        if (text.length >= 16) return true;
+        return false;
+      }
+
       // --- Core Render Function ---
 
-      const renderWordSpan = (wordBuffer, shouldEmphasize) => {
+      const renderWordSpan = (wordBuffer, shouldEmphasize, isLastInContiner = false) => {
         if (!wordBuffer.length) return;
 
         const currentWordStartTime = wordBuffer[0].time;
@@ -824,10 +641,13 @@ class LyricsPlusRenderer {
         const combinedText = wordBuffer.map((s) => this._getDataText(s)).join("");
         const isBgWord = wordBuffer[0].isBackground || false;
 
-        const wordSpan = elementPool.syllables.pop() || document.createElement("span");
+        const wordSpan = document.createElement("span");
         wordSpan.innerHTML = "";
         wordSpan.className = "lyrics-word";
-        wordSpan.style.setProperty("--min-scale", 1.02);
+
+        if (shouldAllowBreak(combinedText)) {
+          wordSpan.classList.add("allow-break");
+        }
 
         const referenceFont = mainContainer.firstChild
           ? getComputedFont(mainContainer.firstChild)
@@ -849,12 +669,27 @@ class LyricsPlusRenderer {
 
           const sylSpan = createSyllableElement(s, totalDuration, idx, s.isBackground || false);
 
+          let txtContent = "";
           if (s.isBackground) {
-            sylSpan.textContent = this._getDataText(s).replace(/[()]/g, "");
+            txtContent = this._getDataText(s).replace(/[()]/g, "");
+            sylSpan.textContent = txtContent;
           } else if (shouldEmphasize) {
             renderCharWipes(s, sylSpan, referenceFont, characterData);
           } else {
-            sylSpan.textContent = this._getDataText(s);
+            txtContent = this._getDataText(s);
+            sylSpan.textContent = txtContent;
+          }
+
+          if (!s.isBackground && !shouldEmphasize) {
+            const textWidth = this._getTextWidth(txtContent.trim(), referenceFont);
+            const spaceWidth = this._getTextWidth(txtContent, referenceFont);
+            if (textWidth > 0) {
+              sylSpan._wipeRatio = textWidth / (spaceWidth);
+            } else {
+              sylSpan._wipeRatio = 1;
+            }
+          } else {
+            sylSpan._wipeRatio = 1;
           }
 
           wrap.appendChild(sylSpan);
@@ -896,7 +731,6 @@ class LyricsPlusRenderer {
         pendingSyllable = lastVisible || (syllableElements.length > 0 ? syllableElements[syllableElements.length - 1] : null);
         pendingSyllableFont = referenceFont;
 
-
         // Apply Styling
         if (shouldEmphasize) {
           applyGrowthStyles(wordSpan, referenceFont, combinedText, totalDuration, emphasisMetrics);
@@ -905,15 +739,15 @@ class LyricsPlusRenderer {
         // DOM Insertion
         const targetContainer = isBgWord
           ? backgroundContainer ||
-          ((backgroundContainer = document.createElement("div")),
+          ((backgroundContainer = document.createElement("p")),
             (backgroundContainer.className = "background-vocal-container"),
-            currentLine.appendChild(backgroundContainer))
+            currentLineContainer.appendChild(backgroundContainer))
           : mainContainer;
 
         targetContainer.appendChild(wordSpan);
 
         const trailText = combinedText.match(/\s+$/);
-        if (trailText) targetContainer.appendChild(document.createTextNode(trailText[0]));
+        if (trailText && !isLastInContiner) targetContainer.appendChild(document.createTextNode(trailText[0]));
 
         pendingSyllable = syllableElements.length > 0 ? syllableElements[syllableElements.length - 1] : null;
         pendingSyllableFont = referenceFont;
@@ -944,11 +778,33 @@ class LyricsPlusRenderer {
           logicalWordGroups.push(currentGroupBuffer);
         }
 
-        logicalWordGroups.forEach((group) => {
+        let lastMainGroupIdx = -1;
+        let lastBgGroupIdx = -1;
+
+        for (let i = 0; i < logicalWordGroups.length; i++) {
+          const g = logicalWordGroups[i];
+          if (g.length > 0) {
+            if (g[0].isBackground) {
+              lastBgGroupIdx = i;
+            } else {
+              lastMainGroupIdx = i;
+            }
+          }
+        }
+
+        logicalWordGroups.forEach((group, groupIdx) => {
+          const isBg = group.length > 0 && group[0].isBackground;
+
           const groupText = group.map((s) => this._getDataText(s)).join("");
           const groupDuration = group.reduce((acc, s) => acc + s.duration, 0);
 
+          const isLastGroupInContainer = isBg
+            ? groupIdx === lastBgGroupIdx
+            : groupIdx === lastMainGroupIdx;
+
+
           const isGroupGrowable =
+            !isBg &&
             !currentSettings.lightweight &&
             !this._isRTL(groupText) &&
             !this._isCJK(groupText) &&
@@ -956,7 +812,7 @@ class LyricsPlusRenderer {
             groupDuration >= 1000;
 
           if (isGroupGrowable) {
-            renderWordSpan(group, true);
+            renderWordSpan(group, true, isLastGroupInContainer);
           } else {
             let visualWordBuffer = [];
             group.forEach((s, idxInGroup) => {
@@ -964,8 +820,8 @@ class LyricsPlusRenderer {
               const syllableText = this._getDataText(s);
               const isLastInGroup = idxInGroup === group.length - 1;
 
-              if (syllableText.endsWith("-") || isLastInGroup) {
-                renderWordSpan(visualWordBuffer, false);
+              if (groupText.trim().length >= 12 && syllableText.endsWith("-") || isLastInGroup) {
+                renderWordSpan(visualWordBuffer, false, isLastGroupInContainer);
                 visualWordBuffer = [];
               }
             });
@@ -982,7 +838,7 @@ class LyricsPlusRenderer {
       }
       fragment.appendChild(currentLine);
 
-      this._renderTranslationContainer(currentLine, line, displayMode);
+      this._renderTranslationContainer(currentLineContainer, line, displayMode);
     });
   }
 
@@ -994,14 +850,17 @@ class LyricsPlusRenderer {
     lyrics,
     displayMode,
     singerClassMap,
-    elementPool,
     fragment
   ) {
     const lineFragment = document.createDocumentFragment();
     lyrics.data.forEach((line) => {
-      const lineDiv = elementPool.lines.pop() || document.createElement("div");
+      const lineDiv = document.createElement("div");
       lineDiv.innerHTML = "";
       lineDiv.className = "lyrics-line";
+      const lineDivContainer = document.createElement("div");
+      lineDivContainer.innerHTML = "";
+      lineDivContainer.className = "lyrics-line-container";
+      lineDiv.append(lineDivContainer);
       lineDiv.dataset.startTime = line.startTime;
       lineDiv.dataset.endTime = line.endTime;
       const singerClass = line.element?.singer
@@ -1019,11 +878,47 @@ class LyricsPlusRenderer {
       mainContainer.textContent = this._getDataText(line);
       if (this._isRTL(this._getDataText(line, true)))
         mainContainer.classList.add("rtl-text");
-      lineDiv.appendChild(mainContainer);
-      this._renderTranslationContainer(lineDiv, line, displayMode);
+      lineDivContainer.appendChild(mainContainer);
+      this._renderTranslationContainer(lineDivContainer, line, displayMode);
       lineFragment.appendChild(lineDiv);
     });
     fragment.appendChild(lineFragment);
+  }
+
+  /**
+ * Internal helper to render plain text lyrics as a single text block.
+ * @private
+ */
+  _renderPlainLyrics(lyrics, fragment) {
+    const container = document.createElement("div");
+    container.className = "lyrics-plain-text-container";
+
+    const contentWrapper = document.createElement("div");
+    contentWrapper.className = "lyrics-plain-text-content";
+
+    let fullText = "";
+    let currentSongPartIndex = 0;
+
+    lyrics.data.forEach((line) => {
+      const lineText = this._getDataText(line, true);
+
+      if (line.element.songPartIndex !== currentSongPartIndex && fullText !== "") {
+        fullText += "\n";
+      }
+
+      if (!line.text || !line.text.trim()) {
+        fullText += "\n";
+      } else {
+        fullText += lineText + "\n";
+      }
+
+      currentSongPartIndex = line.element.songPartIndex || currentSongPartIndex;
+    });
+
+    contentWrapper.textContent = fullText;
+
+    container.appendChild(contentWrapper);
+    fragment.appendChild(container);
   }
 
   /**
@@ -1054,148 +949,86 @@ class LyricsPlusRenderer {
    * @private
    */
   _renderTranslationContainer(lineElement, lineData, displayMode) {
-    // Utility to insert translation/romanization blocks immediately after the primary lyric text.
-    const insertAfterMainContainer = (element) => {
-      const mainContainer = lineElement.querySelector(".main-vocal-container");
-      if (mainContainer && mainContainer.parentNode === lineElement) {
-        lineElement.insertBefore(
-          element,
-          mainContainer.nextSibling ? mainContainer.nextSibling : null
-        );
-      } else {
-        lineElement.appendChild(element);
-      }
-    };
-
     const isRTL = this._isRTL(this._getDataText(lineData, true));
     const hasSyl = Array.isArray(lineData.syllabus) && lineData.syllabus.length > 0;
-    const isWordSynced = lineElement.querySelector(".lyrics-syllable-wrap") !== null;
-    
-    // Skip romanization if the line is purely Latin script (no need for romanization)
-    const originalText = this._getDataText(lineData, true);
-    const isPurelyLatin = this._isPurelyLatinScript(originalText);
-    
-    // Check if background vocal exists and is purely Latin (only if not already purely Latin)
-    let hasBackgroundVocal = false;
-    let isBackgroundVocalPurelyLatin = false;
-    if (hasSyl && !isPurelyLatin) {
-      // Only check if we need to (i.e., main line is not purely Latin)
-      // Build background text in single pass instead of filter+map
-      let backgroundText = "";
-      for (let i = 0; i < lineData.syllabus.length; i++) {
-        const s = lineData.syllabus[i];
-        if (s.isBackground) {
-          hasBackgroundVocal = true;
-          backgroundText += this._getDataText(s, true);
-        }
-      }
-      if (hasBackgroundVocal) {
-        isBackgroundVocalPurelyLatin = this._isPurelyLatinScript(backgroundText);
-      }
-    }
-    
-    // Guard: when the original lyric is already Latin, romanization adds no value.
-    const shouldSkipRomanization = isPurelyLatin;
-    
-    // Render romanization only when requested and when the text actually needs it.
-    if ((displayMode === "romanize" || displayMode === "both") && !shouldSkipRomanization) {
-      // Check if we have romanization in syllables (could be prebuilt Apple or from Google/Gemini for word-by-word)
-      const hasSyllableRomanization = hasSyl && 
-        lineData.syllabus.some(s => {
-          const romanized = this._getDataText(s, false);
-          return romanized && romanized.trim();
-        });
-      
-      // Detect Apple-style syllables where romanization differs from the source text (ideal for inline wrapping).
-      const hasPrebuiltRomanization = hasSyllableRomanization && 
-        lineData.syllabus.some(s => {
-          const romanized = this._getDataText(s, false);
-          const original = this._getDataText(s, true);
-          return romanized && romanized.trim() && romanized !== original;
-        });
-      
-      // Line-level romanization usually comes from external services (Google/Gemini) and isn't word synced.
-      const hasLineLevelRomanization = lineData.romanizedText && 
-        lineData.text.trim() !== lineData.romanizedText.trim();
 
-      if (hasPrebuiltRomanization && isWordSynced && !isRTL) {
-        // For word-by-word with prebuilt pronunciation (Apple): use wrapping
-        const wraps = Array.from(lineElement.querySelectorAll(".lyrics-syllable-wrap"));
+    if (displayMode === "romanize" || displayMode === "both") {
+      if (!this._isPurelyLatinScript(lineData.text)) {
+        const isWordSynced = lineElement.querySelector(".lyrics-syllable-wrap") !== null;
 
-        for (let i = 0; i < lineData.syllabus.length && i < wraps.length; i++) {
-          const s = lineData.syllabus[i];
-          const wrap = wraps[i];
+        if (hasSyl && lineData.syllabus.some(s => (this._getDataText(s, false) || "").trim()) && isWordSynced) {
 
-          // Skip romanization for background vocal if it's purely Latin
-          if (s.isBackground && hasBackgroundVocal && isBackgroundVocalPurelyLatin) {
-            continue;
+          if (isRTL) {
+            const cont = document.createElement("div");
+            cont.classList.add("lyrics-romanization-container");
+
+            lineData.syllabus.forEach(s => {
+              const txt = this._getDataText(s, false);
+              if (!txt) return;
+
+              const span = document.createElement("span");
+              span.className = "lyrics-syllable";
+              span.textContent = txt;
+              if (this._isRTL(txt)) span.classList.add("rtl-text");
+
+              span.dataset.startTime = s.time;
+              span.dataset.duration = s.duration;
+              span.dataset.endTime = s.time + s.duration;
+              span._startTimeMs = s.time;
+              span._durationMs = s.duration;
+              span._endTimeMs = s.time + s.duration;
+              span._isFirstInContainer = true; //force fix bleeding?
+
+              cont.appendChild(span);
+            });
+
+            if (cont.textContent.trim()) {
+              if (this._isRTL(cont.textContent)) cont.classList.add("rtl-text");
+              lineElement.appendChild(cont);
+            }
+
+          } else {
+            const wraps = Array.from(lineElement.querySelectorAll(".lyrics-syllable-wrap"));
+
+            for (let i = 0; i < lineData.syllabus.length && i < wraps.length; i++) {
+              const s = lineData.syllabus[i];
+              const wrap = wraps[i];
+              let isBackground = false
+              if (wrap.parentElement.parentElement.classList.contains("background-vocal-container")) isBackground = true
+
+              const transTxt = ((isBackground ? this._getDataText(s, false).replace(/[()]/g, "") : (this._getDataText(s, false))) || "");
+              if (!transTxt) continue;
+
+
+              const tr = document.createElement("span");
+              tr.className = "lyrics-syllable transliteration";
+              wrap.appendChild(tr);
+
+              tr.textContent = transTxt;
+              tr.dataset.startTime = s.time;
+              tr.dataset.duration = s.duration;
+              tr.dataset.endTime = s.time + s.duration;
+              tr._startTimeMs = s.time;
+              tr._durationMs = s.duration;
+              tr._endTimeMs = s.time + s.duration;
+              tr._isFirstInContainer = true; //force fix bleeding?
+            }
           }
 
-          const transTxt = (this._getDataText(s, false) || "");
-          if (!transTxt.trim()) continue;
+        } else if (lineData.romanizedText && lineData.text.trim() !== lineData.romanizedText.trim()) {
+          const cont = document.createElement("div");
+          cont.classList.add("lyrics-romanization-container");
+          cont.textContent = this._getDataText(lineData, false);
 
-          const tr = document.createElement("span");
-          tr.className = "lyrics-syllable transliteration";
-          wrap.appendChild(tr);
-
-          tr.textContent = transTxt;
-          tr.dataset.startTime = s.time;
-          tr.dataset.duration = s.duration;
-          tr.dataset.endTime = s.time + s.duration;
-          tr._startTimeMs = s.time;
-          tr._durationMs = s.duration;
-          tr._endTimeMs = s.time + s.duration;
-          tr._isFirstInContainer = true;
-        }
-      } else if (hasSyllableRomanization) {
-        // For word-by-word with romanization in syllables but no wraps or RTL: use container
-        // This handles Musixmatch word-by-word that gets romanization from Google/Gemini per-syllable
-        // Even if romanization is same as original (Google failed), still render container
-        const cont = document.createElement("div");
-        cont.classList.add("lyrics-romanization-container");
-
-        lineData.syllabus.forEach(s => {
-          // Skip romanization for background vocal if it's purely Latin
-          if (s.isBackground && hasBackgroundVocal && isBackgroundVocalPurelyLatin) {
-            return;
+          if (this._isRTL(cont.textContent)) {
+            cont.classList.add("rtl-text");
           }
-          
-          const txt = this._getDataText(s, false);
-          if (!txt) return;
 
-          const span = document.createElement("span");
-          span.className = "lyrics-syllable";
-          span.textContent = txt;
-
-          span.dataset.startTime = s.time;
-          span.dataset.duration = s.duration;
-          span.dataset.endTime = s.time + s.duration;
-          span._startTimeMs = s.time;
-          span._durationMs = s.duration;
-          span._endTimeMs = s.time + s.duration;
-          span._isFirstInContainer = true;
-
-          cont.appendChild(span);
-        });
-
-        if (cont.textContent.trim()) {
-          if (this._isRTL(cont.textContent)) cont.classList.add("rtl-text");
-          insertAfterMainContainer(cont);
+          lineElement.appendChild(cont);
         }
-      } else if (hasLineLevelRomanization) {
-        // For line-level romanization (Google/Gemini): always use container, no wrapping
-        // This handles Musixmatch word-by-word and other sources that get romanization from Google/Gemini
-        const cont = document.createElement("div");
-        cont.classList.add("lyrics-romanization-container");
-        cont.textContent = this._getDataText(lineData, false);
-
-        if (this._isRTL(cont.textContent)) {
-          cont.classList.add("rtl-text");
-        }
-
-        insertAfterMainContainer(cont);
       }
     }
+
     if (displayMode === "translate" || displayMode === "both") {
       if (lineData.translatedText &&
         lineData.text.trim() !== lineData.translatedText.trim()) {
@@ -1238,10 +1071,6 @@ class LyricsPlusRenderer {
         "--lyplus-override-pallete",
         currentSettings.overridePaletteColor
       );
-      container.style.setProperty(
-        "--lyplus-override-pallete-white",
-        `${currentSettings.overridePaletteColor}85`
-      );
       container.classList.remove(
         "use-song-palette-fullscreen",
         "use-song-palette-all-modes"
@@ -1259,14 +1088,6 @@ class LyricsPlusRenderer {
             container.style.setProperty(
               "--lyplus-song-pallete",
               `rgb(${r}, ${g}, ${b})`
-            );
-            const alpha = 133 / 255;
-            const r_blend = Math.round(alpha * 255 + (1 - alpha) * r);
-            const g_blend = Math.round(alpha * 255 + (1 - alpha) * b);
-            const b_blend = Math.round(alpha * 255 + (1 - alpha) * b);
-            container.style.setProperty(
-              "--lyplus-song-white-pallete",
-              `rgb(${r_blend}, ${g_blend}, ${b_blend})`
             );
           }
         }
@@ -1297,68 +1118,70 @@ class LyricsPlusRenderer {
 
     const singerClassMap = {};
     let isDualSide = false;
+
     if (lyrics && lyrics.data && lyrics.data.length > 0) {
       const hasAgentsMetadata = lyrics.metadata?.agents &&
         Object.keys(lyrics.metadata.agents).length > 0;
 
-        if (hasAgentsMetadata) {
-          const agents = lyrics.metadata.agents;
-          const agentEntries = Object.entries(agents);
+      if (hasAgentsMetadata) {
+        const agents = lyrics.metadata.agents;
+        const agentEntries = Object.entries(agents);
 
-          agentEntries.sort((a, b) => a[0].localeCompare(b[0]));
+        agentEntries.sort((a, b) => a[0].localeCompare(b[0]));
 
-          let leftAgents = [];
-          let rightAgents = [];
-          const personAgents = agentEntries.filter(([_, agentData]) => agentData.type === "person");
+        let leftAgents = [];
+        let rightAgents = [];
 
-          const personIndexMap = new Map();
-          personAgents.forEach(([agentKey, agentData], personIndex) => {
-            personIndexMap.set(agentKey, personIndex);
-          });
-  
-          agentEntries.forEach(([agentKey, agentData]) => {
-            if (agentData.type === "group") {
+        const personAgents = agentEntries.filter(([_, agentData]) => agentData.type === "person");
+
+        const personIndexMap = new Map();
+        personAgents.forEach(([agentKey, agentData], personIndex) => {
+          personIndexMap.set(agentKey, personIndex);
+        });
+
+        agentEntries.forEach(([agentKey, agentData]) => {
+          if (agentData.type === "group") {
+            singerClassMap[agentKey] = "singer-left";
+            leftAgents.push(agentKey);
+          } else if (agentData.type === "other") {
+            singerClassMap[agentKey] = "singer-right";
+            rightAgents.push(agentKey);
+          } else if (agentData.type === "person") {
+            const personIndex = personIndexMap.get(agentKey);
+            if (personIndex % 2 === 0) {
               singerClassMap[agentKey] = "singer-left";
               leftAgents.push(agentKey);
-            } else if (agentData.type === "other") {
+            } else {
               singerClassMap[agentKey] = "singer-right";
               rightAgents.push(agentKey);
-            } else if (agentData.type === "person") {
-              const personIndex = personIndexMap.get(agentKey);
-              if (personIndex % 2 === 0) {
-                singerClassMap[agentKey] = "singer-left";
-                leftAgents.push(agentKey);
-              } else {
-                singerClassMap[agentKey] = "singer-right";
-                rightAgents.push(agentKey);
+            }
+          }
+        });
+
+        const leftCount = lyrics.data.filter(line =>
+          line.element?.singer && leftAgents.includes(line.element.singer)
+        ).length;
+
+        const rightCount = lyrics.data.filter(line =>
+          line.element?.singer && rightAgents.includes(line.element.singer)
+        ).length;
+
+        const totalCount = leftCount + rightCount;
+
+        if (totalCount > 0) {
+          const rightPercentage = rightCount / totalCount;
+
+          if (rightPercentage >= 0.9) {
+            Object.keys(singerClassMap).forEach(key => {
+              if (singerClassMap[key] === "singer-left") {
+                singerClassMap[key] = "singer-right";
+              } else if (singerClassMap[key] === "singer-right") {
+                singerClassMap[key] = "singer-left";
               }
-            }
-          });
-  
-          const leftCount = lyrics.data.filter(line =>
-            line.element?.singer && leftAgents.includes(line.element.singer)
-          ).length;
-  
-          const rightCount = lyrics.data.filter(line =>
-            line.element?.singer && rightAgents.includes(line.element.singer)
-          ).length;
-  
-          const totalCount = leftCount + rightCount;
-  
-          if (totalCount > 0) {
-            const rightPercentage = rightCount / totalCount;
-  
-            if (rightPercentage >= 0.9) {
-              Object.keys(singerClassMap).forEach(key => {
-                if (singerClassMap[key] === "singer-left") {
-                  singerClassMap[key] = "singer-right";
-                } else if (singerClassMap[key] === "singer-right") {
-                  singerClassMap[key] = "singer-left";
-                }
-              });
-  
-              [leftAgents, rightAgents] = [rightAgents, leftAgents];
-            }
+            });
+
+            [leftAgents, rightAgents] = [rightAgents, leftAgents];
+          }
         }
 
         isDualSide = leftAgents.length > 0 && rightAgents.length > 0;
@@ -1405,13 +1228,12 @@ class LyricsPlusRenderer {
         }
       }
     }
-    if (isDualSide) container.classList.add("dual-side-lyrics");
 
-    const elementPool = { lines: [], syllables: [], chars: [] };
+    if (isDualSide) container.classList.add("dual-side-lyrics");
 
     const createGapLine = (gapStart, gapEnd, classesToInherit = null) => {
       const gapDuration = gapEnd - gapStart;
-      const gapLine = elementPool.lines.pop() || document.createElement("div");
+      const gapLine = document.createElement("div");
       gapLine.className = "lyrics-line lyrics-gap";
       gapLine.dataset.startTime = gapStart;
       gapLine.dataset.endTime = gapEnd;
@@ -1436,8 +1258,7 @@ class LyricsPlusRenderer {
       const lyricsWord = document.createElement("div");
       lyricsWord.className = "lyrics-word";
       for (let i = 0; i < 3; i++) {
-        const syllableSpan =
-          elementPool.syllables.pop() || document.createElement("span");
+        const syllableSpan = document.createElement("span");
         syllableSpan.className = "lyrics-syllable";
         const syllableStart = (gapStart + (i * gapDuration) / 3) * 1000;
         const syllableDuration = (gapDuration / 3 / 0.9) * 1000;
@@ -1454,18 +1275,11 @@ class LyricsPlusRenderer {
 
     const fragment = document.createDocumentFragment();
 
-    // Validate lyrics data before rendering
-    if (!lyrics || !lyrics.data || !Array.isArray(lyrics.data) || lyrics.data.length === 0) {
-      console.warn('updateDisplayMode: Invalid lyrics data', lyrics);
-      return;
-    }
-
     if (isWordByWordMode) {
       this._renderWordByWordLyrics(
         lyrics,
         displayMode,
         singerClassMap,
-        elementPool,
         fragment
       );
     } else {
@@ -1473,7 +1287,6 @@ class LyricsPlusRenderer {
         lyrics,
         displayMode,
         singerClassMap,
-        elementPool,
         fragment
       );
     }
@@ -1531,7 +1344,7 @@ class LyricsPlusRenderer {
       metadataContainer.dataset.startTime =
         (lyrics.data[lyrics.data.length - 1]?.endTime || 0) + 0.8;
       metadataContainer.dataset.endTime =
-        (lyrics.data[lyrics.data.length - 1]?.endTime || 0) + 10;
+        (lyrics.data[lyrics.data.length - 1]?.endTime || 0) + 99999999999999; // soooolonggggg
     }
 
     // Note: songWriters and source may not be available on subsequent updates.
@@ -1539,9 +1352,15 @@ class LyricsPlusRenderer {
     if (lyrics.metadata.songWriters && lyrics.metadata.songWriters.length > 0) {
       const songWritersDiv = document.createElement("span");
       songWritersDiv.className = "lyrics-song-writters";
-      songWritersDiv.innerText = `${t(
-        "writtenBy"
-      )} ${lyrics.metadata.songWriters.join(", ")}`;
+      songWritersDiv.textContent = "";
+      const WrittenByTxt = document.createElement("b");
+      WrittenByTxt.textContent = t("writtenBy");
+      const writersText = document.createTextNode(
+        " " + lyrics.metadata.songWriters.join(", ")
+      );
+      songWritersDiv.appendChild(WrittenByTxt);
+      songWritersDiv.appendChild(writersText);
+
       metadataContainer.appendChild(songWritersDiv);
     }
     const sourceDiv = document.createElement("span");
@@ -1561,7 +1380,7 @@ class LyricsPlusRenderer {
 
     this.cachedLyricsLines = Array.from(
       container.querySelectorAll(
-        ".lyrics-line, .lyrics-plus-metadata, .lyrics-plus-empty"
+        ".lyrics-line, .lyrics-plus-metadata"
       )
     )
       .map((line) => {
@@ -1625,10 +1444,11 @@ class LyricsPlusRenderer {
     offsetLatency = 0
   ) {
     this.lastKnownSongInfo = songInfo;
+    this.currentSettings = currentSettings;
     this.fetchAndDisplayLyricsFn = fetchAndDisplayLyricsFn;
     this.setCurrentDisplayModeAndRefetchFn = setCurrentDisplayModeAndRefetchFn;
     this.largerTextMode = largerTextMode;
-    this.offsetLatency = offsetLatency;
+    this.offsetLatency = offsetLatency
 
     const container = this._getContainer();
     if (!container) return;
@@ -1654,10 +1474,6 @@ class LyricsPlusRenderer {
         "--lyplus-override-pallete",
         currentSettings.overridePaletteColor
       );
-      container.style.setProperty(
-        "--lyplus-override-pallete-white",
-        `${currentSettings.overridePaletteColor}85`
-      );
       container.classList.remove(
         "use-song-palette-fullscreen",
         "use-song-palette-all-modes"
@@ -1676,14 +1492,6 @@ class LyricsPlusRenderer {
               "--lyplus-song-pallete",
               `rgb(${r}, ${g}, ${b})`
             );
-            const alpha = 133 / 255;
-            const r_blend = Math.round(alpha * 255 + (1 - alpha) * r);
-            const g_blend = Math.round(alpha * 255 + (1 - alpha) * b);
-            const b_blend = Math.round(alpha * 255 + (1 - alpha) * b);
-            container.style.setProperty(
-              "--lyplus-song-white-pallete",
-              `rgb(${r_blend}, ${g_blend}, ${b_blend})`
-            );
           }
         }
       }
@@ -1693,31 +1501,58 @@ class LyricsPlusRenderer {
       "fullscreen",
       document.body.hasAttribute("player-fullscreened_")
     );
-    const isWordByWordMode = (lyrics.type === "Word") && currentSettings.wordByWord;
+
+    const isPlainLyrics = lyrics.type === "None";
+    const isWordByWordMode = !isPlainLyrics && (lyrics.type === "Word") && currentSettings.wordByWord;
+
+    const isLineByLineMode = !isPlainLyrics && !isWordByWordMode;
+
+    container.classList.toggle("plain-text-mode", isPlainLyrics);
     container.classList.toggle("word-by-word-mode", isWordByWordMode);
-    container.classList.toggle("line-by-line-mode", !isWordByWordMode);
+    container.classList.toggle("line-by-line-mode", isLineByLineMode);
 
     container.classList.toggle(
       "romanized-big-mode",
       largerTextMode != "lyrics"
     );
 
+    if (!isPlainLyrics) {
+      this.updateDisplayMode(lyrics, displayMode, currentSettings);
+    } else {
+      container.innerHTML = "";
+      const fragment = document.createDocumentFragment();
 
-    const buttonsWrapper = document.getElementById("lyrics-plus-buttons-wrapper");
-    if (buttonsWrapper) {
-      buttonsWrapper.style.removeProperty("display");
-      buttonsWrapper.style.removeProperty("opacity");
-      buttonsWrapper.style.removeProperty("pointer-events");
+      const metadataContainer = document.createElement("div");
+      metadataContainer.className = "lyrics-plus-metadata";
+
+      if (lyrics.metadata?.songWriters?.length > 0) {
+        const songWritersDiv = document.createElement("span");
+        songWritersDiv.className = "lyrics-song-writters";
+        songWritersDiv.innerHTML = `<b>${t("writtenBy")}</b> ${lyrics.metadata.songWriters.join(", ")}`;
+        metadataContainer.appendChild(songWritersDiv);
+      }
+
+      const sourceDiv = document.createElement("span");
+      sourceDiv.className = "lyrics-source-provider";
+      sourceDiv.innerText = `${t("source")} ${lyrics.metadata?.source || "Unknown"}`;
+      metadataContainer.appendChild(sourceDiv);
+
+      fragment.appendChild(metadataContainer);
+
+      this._renderPlainLyrics(lyrics, fragment);
+
+      const emptyDiv = document.createElement("div");
+      emptyDiv.className = "lyrics-plus-empty";
+      fragment.appendChild(emptyDiv);
+
+      container.appendChild(fragment);
+
+      this.cachedLyricsLines = [];
+      this.cachedSyllables = [];
+      this.activeLineIds.clear();
+      this.visibleLineIds.clear();
     }
 
-    // Validate lyrics data before attempting to render
-    if (!lyrics || !lyrics.data || !Array.isArray(lyrics.data) || lyrics.data.length === 0) {
-      console.warn('displayLyrics: Invalid or empty lyrics data', lyrics);
-      // Don't render if data is invalid
-      return;
-    }
-
-    this.updateDisplayMode(lyrics, displayMode, currentSettings);
 
     // Control buttons are created once to avoid re-rendering them.
     this._createControlButtons();
@@ -1742,16 +1577,6 @@ class LyricsPlusRenderer {
         "notFound"
       )}</span>`;
       container.classList.add("lyrics-plus-message");
-
-      const buttonsWrapper = document.getElementById("lyrics-plus-buttons-wrapper");
-      if (buttonsWrapper) {
-        buttonsWrapper.style.display = "none";
-        buttonsWrapper.style.opacity = "0";
-        buttonsWrapper.style.pointerEvents = "none";
-      }
-      
-      // Song info in fullscreen - NewSync specific feature
-      // Removed to prevent lag during fullscreen transitions
     }
   }
 
@@ -1765,16 +1590,6 @@ class LyricsPlusRenderer {
         "notFoundError"
       )}</span>`;
       container.classList.add("lyrics-plus-message");
-
-      const buttonsWrapper = document.getElementById("lyrics-plus-buttons-wrapper");
-      if (buttonsWrapper) {
-        buttonsWrapper.style.display = "none";
-        buttonsWrapper.style.opacity = "0";
-        buttonsWrapper.style.pointerEvents = "none";
-      }
-      
-      // Song info in fullscreen - NewSync specific feature
-      // Removed to prevent lag during fullscreen transitions
     }
   }
 
@@ -1811,35 +1626,22 @@ class LyricsPlusRenderer {
    */
   _seekPlayerTo(time) {
     if (typeof this.uiConfig.seekTo === "function") {
-      console.log('LyricsPlus: Using uiConfig.seekTo to seek to', time);
-      try {
-        this.uiConfig.seekTo(time);
-      } catch (error) {
-        console.error('LyricsPlus: Error in uiConfig.seekTo', error);
-      }
+      this.uiConfig.seekTo(time);
       return;
     }
     const player = this._getPlayerElement();
     if (player) {
-      console.log('LyricsPlus: Using player.currentTime to seek to', time);
-      try {
-        player.currentTime = time;
-      } catch (error) {
-        console.error('LyricsPlus: Error setting player.currentTime', error);
-      }
-    } else {
-      console.warn('LyricsPlus: No player element found for seek');
+      player.currentTime = time;
     }
   }
 
   _getTextWidth(text, font) {
-    const canvas =
-      this.textWidthCanvas ||
-      (this.textWidthCanvas = document.createElement("canvas"));
-    const context = canvas.getContext("2d");
-    context.font = font;
-    context.fontKerning = "none";
-    return context.measureText(text).width;
+    if (!this.textWidthCanvas) {
+      this.textWidthCanvas = document.createElement("canvas");
+      this.textWidthCtx = this.textWidthCanvas.getContext("2d", { willReadFrequently: true });
+    }
+    this.textWidthCtx.font = font;
+    return this.textWidthCtx.measureText(text).width;
   }
 
   _ensureElementIds() {
@@ -1855,6 +1657,8 @@ class LyricsPlusRenderer {
    * @returns {Function} - A cleanup function to stop the sync.
    */
   _startLyricsSync(currentSettings = {}) {
+    if (this.currentLyricsType === "None") return () => { };
+
     const canGetTime =
       typeof this.uiConfig.getCurrentTime === "function" ||
       this._getPlayerElement();
@@ -1908,7 +1712,7 @@ class LyricsPlusRenderer {
   updateCurrentTick(currentTime) {
     currentTime = currentTime * 1000;
     const isForceScroll = Math.abs(currentTime - this.lastTime) > 1000;
-    this._updateLyricsHighlight((currentTime - this.offsetLatency * 1000), isForceScroll, currentSettings);
+    this._updateLyricsHighlight((currentTime - this.offsetLatency), isForceScroll, currentSettings);
     this.lastTime = currentTime;
   }
 
@@ -1931,90 +1735,119 @@ class LyricsPlusRenderer {
     const highlightLookAheadMs = 190;
     const predictiveTime = currentTime + scrollLookAheadMs;
 
-    let visibleLines = this._cachedVisibleLines;
-    const currentVisibilityHash =
-      this.visibleLineIds.size > 0
-        ? Array.from(this.visibleLineIds).sort().join(",")
-        : "";
+    // 1. Find Primary Line Index
+    const hint = isForceScroll ? 0 : this._lastActiveIndex;
+    let primaryIndex = this._getLineIndexAtTime(predictiveTime, hint);
 
-    if (!visibleLines || this._lastVisibilityHash !== currentVisibilityHash) {
-      visibleLines = this.cachedLyricsLines.filter((line) =>
-        this.visibleLineIds.has(line.id)
-      );
-      this._cachedVisibleLines = visibleLines;
-      this._lastVisibilityHash = currentVisibilityHash;
-    }
-
-    const activeLinesForHighlighting = [];
-
-    for (let i = 0; i < visibleLines.length; i++) {
-      const line = visibleLines[i];
-      if (
-        line &&
-        currentTime >= line._startTimeMs - highlightLookAheadMs &&
-        currentTime <= line._endTimeMs - highlightLookAheadMs
-      ) {
-        activeLinesForHighlighting.push(line);
+    if (primaryIndex !== -1) {
+      const lineToCheck = this.cachedLyricsLines[primaryIndex];
+      // Sanity check: if we jumped too far ahead/behind
+      if (predictiveTime > lineToCheck._endTimeMs + 10) {
+        primaryIndex = -1;
       }
     }
 
-    if (activeLinesForHighlighting.length > 3) {
-      activeLinesForHighlighting.splice(
-        0,
-        activeLinesForHighlighting.length - 3
-      );
+    if (primaryIndex !== -1) {
+      let scanIndex = primaryIndex;
+      while (scanIndex > 0) {
+        const prevLine = this.cachedLyricsLines[scanIndex - 1];
+        const isPrevActive =
+          predictiveTime >= prevLine._startTimeMs &&
+          predictiveTime <= prevLine._endTimeMs + 50;
+
+        if (isPrevActive) {
+          scanIndex--;
+        } else {
+          break;
+        }
+      }
+      primaryIndex = scanIndex;
+    } else {
+      const firstLineStartTime = this.cachedLyricsLines[0]._startTimeMs;
+      if (predictiveTime < firstLineStartTime) {
+        primaryIndex = 0;
+      } else {
+        primaryIndex = this._lastActiveIndex;
+        if (primaryIndex < 0) primaryIndex = 0;
+        const linesLength = this.cachedLyricsLines.length;
+        if (primaryIndex >= linesLength) {
+          primaryIndex = linesLength - 1;
+        }
+      }
     }
 
-    if (activeLinesForHighlighting.length > 1) {
-      activeLinesForHighlighting.sort(
-        (a, b) => a._startTimeMs - b._startTimeMs
-      );
-    }
+    this._lastActiveIndex = primaryIndex;
+    const lineToScroll = this.cachedLyricsLines[primaryIndex];
 
-    const newActiveLineIds = new Set(
-      activeLinesForHighlighting.map((line) => line.id)
+    // reuse array to avoid allocation
+    let tempActiveCount = 0;
+
+    const startSearch = Math.max(0, primaryIndex - 1);
+    const endSearch = Math.min(
+      this.cachedLyricsLines.length - 1,
+      primaryIndex + 2
     );
 
-    const activeLineIdsChanged =
-      this.activeLineIds.size !== newActiveLineIds.size ||
-      [...this.activeLineIds].some((id) => !newActiveLineIds.has(id));
+    for (let i = startSearch; i <= endSearch; i++) {
+      const line = this.cachedLyricsLines[i];
+      if (this.visibleLineIds.has(line.id)) {
+        if (
+          currentTime >= line._startTimeMs - highlightLookAheadMs &&
+          currentTime <= line._endTimeMs - highlightLookAheadMs
+        ) {
+          this._tempActiveLines[tempActiveCount++] = line;
+        }
+      }
+    }
 
-    if (activeLineIdsChanged) {
-      const toDeactivate = [];
-      for (const lineId of this.activeLineIds) {
-        if (!newActiveLineIds.has(lineId)) {
-          toDeactivate.push(lineId);
+    if (this._tempActiveLines.length > tempActiveCount) {
+      this._tempActiveLines.length = tempActiveCount;
+    }
+
+    if (tempActiveCount > 1) {
+      this._tempActiveLines.sort((a, b) => a._startTimeMs - b._startTimeMs);
+    }
+
+    let hasChanged = this.activeLineIds.size !== tempActiveCount;
+    if (!hasChanged && tempActiveCount > 0) {
+      for (let i = 0; i < tempActiveCount; i++) {
+        if (!this.activeLineIds.has(this._tempActiveLines[i].id)) {
+          hasChanged = true;
+          break;
+        }
+      }
+    }
+
+    if (hasChanged) {
+      for (const oldId of this.activeLineIds) {
+        let stillActive = false;
+        for (let j = 0; j < tempActiveCount; j++) {
+          if (this._tempActiveLines[j].id === oldId) {
+            stillActive = true;
+            break;
+          }
+        }
+
+        if (!stillActive) {
+          const line = document.getElementById(oldId);
+          if (line) {
+            line.classList.remove("active");
+            this._resetSyllables(line);
+          }
+          this.activeLineIds.delete(oldId);
         }
       }
 
-      const toActivate = [];
-      for (const lineId of newActiveLineIds) {
-        if (!this.activeLineIds.has(lineId)) {
-          toActivate.push(lineId);
+      for (let i = 0; i < tempActiveCount; i++) {
+        const line = this._tempActiveLines[i];
+        if (!this.activeLineIds.has(line.id)) {
+          line.classList.add("active");
+          this.activeLineIds.add(line.id);
         }
       }
-
-      if (toDeactivate.length > 0) {
-        this._batchDeactivateLines(toDeactivate);
-      }
-      if (toActivate.length > 0) {
-        this._batchActivateLines(toActivate);
-      }
-
-      this.activeLineIds = newActiveLineIds;
     }
 
-    let candidates = this._findActiveLine(
-      predictiveTime,
-      currentTime - scrollLookAheadMs
-    );
-
-    if (candidates.length > 3) {
-      candidates = candidates.slice(-3);
-    }
-
-    let lineToScroll = candidates[0];
-
+    // 4. Scrolling Logic
     if (
       lineToScroll &&
       (lineToScroll !== this.currentPrimaryActiveLine || isForceScroll)
@@ -2026,15 +1859,13 @@ class LyricsPlusRenderer {
       }
     }
 
+    // 5. Focus Logic
     const mostRecentActiveLine =
-      activeLinesForHighlighting.length > 0
-        ? activeLinesForHighlighting[activeLinesForHighlighting.length - 1]
-        : null;
+      tempActiveCount > 0 ? this._tempActiveLines[tempActiveCount - 1] : null;
+
     if (this.currentFullscreenFocusedLine !== mostRecentActiveLine) {
       if (this.currentFullscreenFocusedLine) {
-        this.currentFullscreenFocusedLine.classList.remove(
-          "fullscreen-focused"
-        );
+        this.currentFullscreenFocusedLine.classList.remove("fullscreen-focused");
       }
       if (mostRecentActiveLine) {
         mostRecentActiveLine.classList.add("fullscreen-focused");
@@ -2042,155 +1873,145 @@ class LyricsPlusRenderer {
       this.currentFullscreenFocusedLine = mostRecentActiveLine;
     }
 
-    this._updateSyllables(currentTime);
+    this._updateSyllables(currentTime, this._tempActiveLines);
 
-    if (
-      this.lyricsContainer &&
-      this.lyricsContainer.classList.contains("hide-offscreen")
-    ) {
-      if (this._lastVisibilityUpdateSize !== this.visibleLineIds.size) {
-        this._batchUpdateViewportVisibility();
-        this._lastVisibilityUpdateSize = this.visibleLineIds.size;
-      }
-    }
-  }
-
-  _findActiveLine(predictiveTime, lookAheadTime) {
-    const lines = this.cachedLyricsLines;
-    const currentlyActiveAndPredictiveLines = [];
-
-    for (let i = 0; i < lines.length; i++) {
-      const line = lines[i];
+    if (this._visibilityHasChanged) {
       if (
-        line &&
-        predictiveTime >= line._startTimeMs &&
-        predictiveTime < line._endTimeMs
+        this.lyricsContainer &&
+        this.lyricsContainer.classList.contains("hide-offscreen")
       ) {
-        currentlyActiveAndPredictiveLines.push(line);
+        this._batchUpdateViewportVisibility();
+      } else {
+        this._visibilityChanges = [];
       }
-    }
-
-    if (currentlyActiveAndPredictiveLines.length > 0) {
-      return currentlyActiveAndPredictiveLines;
-    }
-
-    for (let i = lines.length - 1; i >= 0; i--) {
-      const line = lines[i];
-      if (line && lookAheadTime >= line._startTimeMs) {
-        return [line];
-      }
-    }
-
-    return lines.length > 0 ? [lines[0]] : [];
-  }
-
-  /**
-   * Batch deactivate lines to reduce DOM thrashing
-   */
-  _batchDeactivateLines(lineIds) {
-    for (const lineId of lineIds) {
-      const line = document.getElementById(lineId);
-      if (line) {
-        line.classList.remove("active");
-        this._resetSyllables(line);
-      }
+      this._visibilityHasChanged = false;
     }
   }
 
-  /**
-   * Batch activate lines to reduce DOM thrashing
-   */
-  _batchActivateLines(lineIds) {
-    for (const lineId of lineIds) {
-      const line = document.getElementById(lineId);
-      if (line) {
-        line.classList.add("active");
+  _getLineIndexAtTime(timeMs, startHintIndex = 0) {
+    const lines = this.cachedLyricsLines;
+    const len = lines.length;
+    if (len === 0) return -1;
+
+    // Sequential Check
+    if (startHintIndex >= 0 && startHintIndex < len) {
+      const hintLine = lines[startHintIndex];
+      if (timeMs >= hintLine._startTimeMs && timeMs < hintLine._endTimeMs) {
+        return startHintIndex;
+      }
+      if (startHintIndex + 1 < len) {
+        const nextLine = lines[startHintIndex + 1];
+        if (timeMs >= nextLine._startTimeMs && timeMs < nextLine._endTimeMs) {
+          return startHintIndex + 1;
+        }
       }
     }
+
+    // Binary Search
+    let low = 0;
+    let high = len - 1;
+    let result = -1;
+
+    while (low <= high) {
+      const mid = (low + high) >>> 1;
+      const line = lines[mid];
+
+      if (timeMs >= line._startTimeMs && timeMs < line._endTimeMs) {
+        return mid;
+      } else if (timeMs < line._startTimeMs) {
+        high = mid - 1;
+      } else {
+        low = mid + 1;
+        result = mid;
+      }
+    }
+
+    return result;
   }
 
   /**
    * Batch update viewport visibility
    */
   _batchUpdateViewportVisibility() {
-    const lines = this.cachedLyricsLines;
-    const visibleIds = this.visibleLineIds;
+    if (!this._visibilityChanges) return;
 
-    for (let i = 0; i < lines.length; i++) {
-      const line = lines[i];
-      if (line) {
-        const isOutOfView = !visibleIds.has(line.id);
-        line.classList.toggle("viewport-hidden", isOutOfView);
-      }
+    for (let i = 0; i < this._visibilityChanges.length; i++) {
+      const change = this._visibilityChanges[i];
+      change.target.classList.toggle("viewport-hidden", !change.isIntersecting);
     }
+
+    this._visibilityChanges = [];
   }
 
-  _updateSyllables(currentTime) {
-    if (!this.activeLineIds.size) return;
+  _updateSyllables(currentTime, activeLines) {
+    if (!activeLines || activeLines.length === 0) return;
 
-    // Cache syllable queries to avoid repeated DOM lookups
-    const activeSyllables = [];
+    const activeLinesLength = activeLines.length;
 
-    for (const lineId of this.activeLineIds) {
-      const parentLine = document.getElementById(lineId);
+    for (let i = 0; i < activeLinesLength; i++) {
+      const parentLine = activeLines[i];
       if (!parentLine) continue;
 
       let syllables = parentLine._cachedSyllableElements;
       if (!syllables) {
-        syllables = parentLine.querySelectorAll(".lyrics-syllable");
+        syllables = Array.from(parentLine.querySelectorAll(".lyrics-syllable"));
         parentLine._cachedSyllableElements = syllables;
       }
 
-      for (let j = 0; j < syllables.length; j++) {
+      const syllablesLength = syllables.length;
+
+      for (let j = 0; j < syllablesLength; j++) {
         const syllable = syllables[j];
-        if (syllable && typeof syllable._startTimeMs === "number") {
-          activeSyllables.push(syllable);
-        }
-      }
-    }
+        const startTime = syllable._startTimeMs;
 
-    // Process all syllables in batches
-    const toHighlight = [];
-    const toFinish = [];
-    const toReset = [];
+        if (startTime === undefined) continue;
 
-    for (const syllable of activeSyllables) {
-      const startTime = syllable._startTimeMs;
-      const endTime = syllable._endTimeMs;
-      const classList = syllable.classList;
-      const hasHighlight = classList.contains("highlight");
-      const hasFinished = classList.contains("finished");
+        const classList = syllable.classList;
 
-      if (currentTime >= startTime && currentTime <= endTime) {
-        if (!hasHighlight) {
-          toHighlight.push(syllable);
-        }
-        if (hasFinished) {
-          classList.remove("finished");
-        }
-      } else if (currentTime > endTime) {
-        if (!hasFinished) {
+        const hasHighlight = classList.contains("highlight");
+        const hasFinished = classList.contains("finished");
+        const hasPreHighlight = classList.contains("pre-highlight");
+        const hasActiveState = hasHighlight || hasFinished || hasPreHighlight;
+
+        // Early exit only if syllable is far 
+        if (currentTime < startTime - 1000 && !hasActiveState) continue;
+
+        const endTime = syllable._endTimeMs;
+
+        if (currentTime >= startTime && currentTime <= endTime) {
           if (!hasHighlight) {
-            toHighlight.push(syllable);
+            this._updateSyllableAnimation(syllable);
           }
-          toFinish.push(syllable);
-        }
-      } else {
-        if (hasHighlight || hasFinished) {
-          toReset.push(syllable);
+          if (hasFinished) {
+            classList.remove("finished");
+          }
+        } else if (currentTime > endTime) {
+          if (!hasFinished) {
+            if (!hasHighlight) {
+              this._updateSyllableAnimation(syllable);
+            }
+            classList.add("finished");
+          }
+        } else {
+          // currentTime < startTime
+          if (hasHighlight || hasFinished) {
+            this._resetSyllable(syllable);
+          } else if (hasPreHighlight) {
+            let shouldReset = true;
+
+            if (j > 0) {
+              const prevSyllable = syllables[j - 1];
+              if (prevSyllable) {
+                shouldReset = !prevSyllable.classList.contains("highlight");
+              }
+            }
+
+            if (shouldReset) {
+              this._resetSyllable(syllable, true);
+            }
+          }
         }
       }
-    }
-
-    // Batch apply changes
-    for (const syllable of toHighlight) {
-      this._updateSyllableAnimation(syllable);
-    }
-    for (const syllable of toFinish) {
-      syllable.classList.add("finished");
-    }
-    for (const syllable of toReset) {
-      this._resetSyllable(syllable);
     }
   }
 
@@ -2213,8 +2034,10 @@ class LyricsPlusRenderer {
     const isFirstInContainer = syllable._isFirstInContainer || false;
 
     // --- CALCULATION PHASE ---
-    const pendingStyleUpdates = [];
     const charAnimationsMap = new Map();
+    let styleUpdatesCount = 0;
+    const maxStyleUpdates = 100;
+    const styleUpdates = new Array(maxStyleUpdates);
 
     // Step 1: Grow Pass.
     if (isGrowable && isFirstSyllable && allWordCharSpans) {
@@ -2222,42 +2045,46 @@ class LyricsPlusRenderer {
       const baseDelayPerChar = finalDuration * 0.09;
       const growDurationMs = finalDuration * 1.5;
 
-      allWordCharSpans.forEach((span) => {
+      const charsLength = allWordCharSpans.length;
+      for (let i = 0; i < charsLength; i++) {
+        const span = allWordCharSpans[i];
         const horizontalOffset = parseFloat(span.dataset.horizontalOffset) || 0;
-        const growDelay =
-          baseDelayPerChar * (parseFloat(span.dataset.syllableCharIndex) || 0);
+        const growDelay = baseDelayPerChar * (parseFloat(span.dataset.syllableCharIndex) || 0);
         charAnimationsMap.set(
           span,
           `grow-dynamic ${growDurationMs}ms ease-in-out ${growDelay}ms forwards`
         );
-        pendingStyleUpdates.push({
+        styleUpdates[styleUpdatesCount++] = {
           element: span,
           property: "--char-offset-x",
           value: `${horizontalOffset}`,
-        });
-      });
+        };
+      }
     }
 
     // Step 2: Wipe Pass.
     if (charSpans && charSpans.length > 0) {
       const syllableDuration = syllable._durationMs;
+      const charSpansLength = charSpans.length;
 
-      charSpans.forEach((span, charIndex) => {
-        const wipeDelay =
-          syllableDuration * (parseFloat(span.dataset.wipeStart) || 0);
-        const wipeDuration =
-          syllableDuration * (parseFloat(span.dataset.wipeDuration) || 0);
+      for (let charIndex = 0; charIndex < charSpansLength; charIndex++) {
+        const span = charSpans[charIndex];
+        const startPct = parseFloat(span.dataset.wipeStart) || 0;
+        const durationPct = parseFloat(span.dataset.wipeDuration) || 0;
+
+        const wipeDelay = syllableDuration * startPct;
+        const wipeDuration = syllableDuration * durationPct;
+
         const useStartAnimation = isFirstInContainer && charIndex === 0;
         const charWipeAnimation = useStartAnimation
           ? isRTL
             ? "start-wipe-rtl"
             : "start-wipe"
           : isRTL
-          ? "wipe-rtl"
-          : "wipe";
-          
-        const existingAnimation =
-          charAnimationsMap.get(span) || span.style.animation;
+            ? "wipe-rtl"
+            : "wipe";
+
+        const existingAnimation = charAnimationsMap.get(span) || span.style.animation;
         const animationParts = [];
 
         if (existingAnimation && existingAnimation.includes("grow-dynamic")) {
@@ -2265,15 +2092,14 @@ class LyricsPlusRenderer {
         }
 
         if (charIndex > 0) {
-          const prevChar = charSpans[charIndex - 1];
-          const prevWipeDelay =
-            syllableDuration * (parseFloat(prevChar.dataset.wipeStart) || 0);
-          const prevWipeDuration =
-            syllableDuration * (parseFloat(prevChar.dataset.wipeDuration) || 0);
+          const arrivalTime = parseFloat(span.dataset.preWipeArrival) || 0;
+          const constantDuration = parseFloat(span.dataset.preWipeDuration) || 100;
 
-          if (prevWipeDuration > 0) {
+          const animDelay = arrivalTime - constantDuration;
+
+          if (constantDuration > 0) {
             animationParts.push(
-              `pre-wipe-char ${prevWipeDuration}ms linear ${prevWipeDelay}ms forwards`
+              `pre-wipe-char ${constantDuration}ms linear ${animDelay}ms forwards`
             );
           }
         }
@@ -2285,45 +2111,47 @@ class LyricsPlusRenderer {
         }
 
         charAnimationsMap.set(span, animationParts.join(", "));
-      });
+      }
     } else {
+      const ratio = syllable._wipeRatio || 1;
+      const visualDuration = syllable._durationMs * ratio;
       const wipeAnimation = isFirstInContainer
-      ? isRTL
-        ? "start-wipe-rtl"
-        : "start-wipe"
-      : isRTL
-      ? "wipe-rtl"
-      : "wipe";
+        ? isRTL
+          ? "start-wipe-rtl"
+          : "start-wipe"
+        : isRTL
+          ? "wipe-rtl"
+          : "wipe";
       const currentWipeAnimation = isGap ? "fade-gap" : wipeAnimation;
-      const syllableAnimation = `${currentWipeAnimation} ${syllable._durationMs}ms linear forwards`;
-      pendingStyleUpdates.push({
+      const syllableAnimation = `${currentWipeAnimation} ${visualDuration}ms ${isGap ? 'var(--lyplus-fade-gap-timing-function)' : 'linear'} forwards`;
+      styleUpdates[styleUpdatesCount++] = {
         element: syllable,
         property: "animation",
         value: syllableAnimation,
-      });
+      };
     }
 
-    // Step 3: Pre-Wipe Pass.
+    // Step 3: Pre-Wipe Pass (Cross-Syllable).
     if (nextSyllable) {
       const preHighlightDuration = syllable._preHighlightDurationMs;
       const preHighlightDelay = syllable._preHighlightDelayMs;
 
-      pendingStyleUpdates.push({
+      styleUpdates[styleUpdatesCount++] = {
         element: nextSyllable,
         property: "class",
         action: "add",
         value: "pre-highlight",
-      });
-      pendingStyleUpdates.push({
+      };
+      styleUpdates[styleUpdatesCount++] = {
         element: nextSyllable,
         property: "--pre-wipe-duration",
         value: `${preHighlightDuration}ms`,
-      });
-      pendingStyleUpdates.push({
+      };
+      styleUpdates[styleUpdatesCount++] = {
         element: nextSyllable,
         property: "--pre-wipe-delay",
         value: `${preHighlightDelay}ms`,
-      });
+      };
 
       const nextCharSpan = nextSyllable._cachedCharSpans?.[0];
       if (nextCharSpan) {
@@ -2348,7 +2176,8 @@ class LyricsPlusRenderer {
       span.style.animation = animationString;
     }
 
-    for (const update of pendingStyleUpdates) {
+    for (let i = 0; i < styleUpdatesCount; i++) {
+      const update = styleUpdates[i];
       if (update.action === "add") {
         update.element.classList.add(update.value);
       } else if (update.property === "animation") {
@@ -2359,25 +2188,30 @@ class LyricsPlusRenderer {
     }
   }
 
-  _resetSyllable(syllable) {
+  _resetSyllable(syllable, noFade = false) {
     if (!syllable) return;
     syllable.style.animation = "";
-    if (!syllable.classList.contains("finished")) {
+    if (!syllable.classList.contains("finished") && !noFade) {
       syllable.classList.add("finished");
-      syllable.offsetHeight;
     }
-    syllable.classList.remove("highlight", "finished", "pre-highlight");
+    syllable.classList.add("cleanup");
     syllable.style.removeProperty("--pre-wipe-duration");
     syllable.style.removeProperty("--pre-wipe-delay");
     syllable.querySelectorAll("span.char").forEach((span) => {
       span.style.animation = "";
     });
+
+    requestAnimationFrame(() => {
+      setTimeout(() => {
+        syllable.classList.remove("highlight", "finished", "pre-highlight", "cleanup");
+      }, 16)
+    })
   }
 
-  _resetSyllables(line) {
+  _resetSyllables(line, noFade = false) {
     if (!line) return;
-    Array.from(line.getElementsByClassName("lyrics-syllable")).forEach(
-      this._resetSyllable
+    Array.from(line.getElementsByClassName("lyrics-syllable")).forEach((syllable) =>
+      this._resetSyllable(syllable, noFade)
     );
   }
 
@@ -2418,71 +2252,131 @@ class LyricsPlusRenderer {
    */
   _animateScroll(newTranslateY, forceScroll = false) {
     if (!this.lyricsContainer) return;
+    const parent = this.lyricsContainer.parentElement;
+    if (!parent) return;
 
-    if (
-      !forceScroll &&
-      Math.abs(this.currentScrollOffset - newTranslateY) < 0.1
-    )
+    if (!this._scrollAnimationState) {
+      this._scrollAnimationState = {
+        isAnimating: false,
+        pendingUpdate: null
+      };
+      this._animatingLines = [];
+    }
+
+    const state = this._scrollAnimationState;
+
+    if (state.isAnimating && !forceScroll) {
+      state.pendingUpdate = newTranslateY;
       return;
+    }
 
+    if (this._scrollUnlockTimeout) {
+      clearTimeout(this._scrollUnlockTimeout);
+      this._scrollUnlockTimeout = null;
+    }
+
+    if (this._scrollAnimationTimeout) {
+      clearTimeout(this._scrollAnimationTimeout);
+      this._scrollAnimationTimeout = null;
+    }
+
+    const animatingLines = this._animatingLines;
+    if (animatingLines.length > 0) {
+      for (let i = 0; i < animatingLines.length; i++) {
+        const line = animatingLines[i];
+        line.classList.remove('scroll-animate');
+        line.style.removeProperty('--scroll-delta');
+        line.style.removeProperty('--lyrics-line-delay');
+      }
+      animatingLines.length = 0;
+    }
+
+    const animations = this.lyricsContainer.getAnimations({ subtree: true });
+    for (const anim of animations) {
+      if (anim.animationName === 'lyrics-scroll') {
+        anim.cancel();
+        anim.play();
+      }
+    }
+
+    const targetTop = Math.max(0, -newTranslateY);
+    const prevOffset = -parent.scrollTop || this.currentScrollOffset || 0;
+    const delta = prevOffset - newTranslateY;
     this.currentScrollOffset = newTranslateY;
 
-    this.lyricsContainer.style.setProperty(
-      "--lyrics-scroll-offset",
-      `${newTranslateY}px`
-    );
-
-    const isUserScrolling =
-      this.lyricsContainer.classList.contains("user-scrolling");
-
-    if (forceScroll || isUserScrolling) {
-      // Batch clear delays
-      const elements = this.cachedLyricsLines;
-      for (let i = 0; i < elements.length; i++) {
-        if (elements[i]) {
-          elements[i].style.setProperty("--lyrics-line-delay", "0ms");
-        }
-      }
+    if (forceScroll) {
+      parent.scrollTo({ top: targetTop, behavior: 'smooth' });
+      state.isAnimating = false;
+      state.pendingUpdate = null;
       return;
     }
 
     const referenceLine =
       this.currentPrimaryActiveLine ||
       this.lastPrimaryActiveLine ||
-      (this.cachedLyricsLines.length > 0 ? this.cachedLyricsLines[0] : null);
+      this.cachedLyricsLines[0];
 
     if (!referenceLine) return;
 
-    const referenceLineIndex = this.cachedLyricsLines.indexOf(referenceLine);
-    if (referenceLineIndex === -1) return;
+    const referenceIndex = this.cachedLyricsLines.indexOf(referenceLine);
+    if (referenceIndex === -1) return;
 
     const delayIncrement = 30;
+    const lookBehind = 5;
+    const lookAhead = 20;
+    const len = this.cachedLyricsLines.length;
+
+    const start = Math.max(0, referenceIndex - lookBehind);
+    const end = Math.min(len, referenceIndex + lookAhead);
+
+    let maxAnimationDuration = 0;
     let delayCounter = 0;
-    const elements = this.cachedLyricsLines;
-    const visibleIds = this.visibleLineIds;
 
-    // Batch style updates
-    const styleUpdates = [];
+    for (let i = start; i < end; i++) {
+      const line = this.cachedLyricsLines[i];
+      const delay = i >= referenceIndex ? delayCounter * delayIncrement : 0;
 
-    for (let i = 0; i < elements.length; i++) {
-      const element = elements[i];
-      if (!element) continue;
+      if (i >= referenceIndex && !line.classList.contains('lyrics-gap')) {
+        delayCounter++;
+      }
 
-      if (visibleIds.has(element.id)) {
-        const delay =
-          i >= referenceLineIndex ? delayCounter * delayIncrement : 0;
-        styleUpdates.push({ element, delay: `${delay}ms` });
-        if (i >= referenceLineIndex) {
-          delayCounter++;
-        }
-      } else {
-        styleUpdates.push({ element, delay: "0ms" });
+      line.style.setProperty('--scroll-delta', `${delta}px`);
+      line.style.setProperty('--lyrics-line-delay', `${delay}ms`);
+      line.classList.add('scroll-animate');
+
+      animatingLines.push(line);
+
+      const lineDuration = 400 + delay;
+      if (lineDuration > maxAnimationDuration) {
+        maxAnimationDuration = lineDuration;
       }
     }
 
-    for (const update of styleUpdates) {
-      update.element.style.setProperty("--lyrics-line-delay", update.delay);
-    }
+    state.isAnimating = true;
+    const BASE_DURATION = 400;
+
+    this._scrollUnlockTimeout = setTimeout(() => {
+      state.isAnimating = false;
+
+      if (state.pendingUpdate !== null) {
+        const pendingValue = state.pendingUpdate;
+        state.pendingUpdate = null;
+        this._animateScroll(pendingValue, false);
+      }
+    }, BASE_DURATION);
+
+    this._scrollAnimationTimeout = setTimeout(() => {
+      for (let i = 0; i < animatingLines.length; i++) {
+        const line = animatingLines[i];
+        line.classList.remove('scroll-animate');
+        line.style.removeProperty('--scroll-delta');
+        line.style.removeProperty('--lyrics-line-delay');
+      }
+      animatingLines.length = 0;
+      this._scrollAnimationTimeout = null;
+    }, maxAnimationDuration + 50);
+
+    parent.scrollTo({ top: targetTop, behavior: 'instant' });
   }
 
   _updatePositionClassesAndScroll(lineToScroll, forceScroll = false) {
@@ -2497,7 +2391,7 @@ class LyricsPlusRenderer {
 
     const positionClasses = [
       "lyrics-activest",
-      "pre-active-line",
+      "post-active-line",
       "next-active-line",
       "prev-1",
       "prev-2",
@@ -2522,7 +2416,7 @@ class LyricsPlusRenderer {
       const position = i - scrollLineIndex;
       if (position === 0) continue;
       const element = elements[i];
-      if (position === -1) element.classList.add("pre-active-line");
+      if (position === -1) element.classList.add("post-active-line");
       else if (position === 1) element.classList.add("next-active-line");
       else if (position < 0)
         element.classList.add(`prev-${Math.abs(position)}`);
@@ -2532,7 +2426,7 @@ class LyricsPlusRenderer {
     this._scrollToActiveLine(lineToScroll, forceScroll);
   }
 
-  _scrollToActiveLine(activeLine, forceScroll = false) {
+  _scrollToActiveLine(activeLine, forceScroll = false, isResize = false) {
     if (
       !activeLine ||
       !this.lyricsContainer ||
@@ -2544,10 +2438,6 @@ class LyricsPlusRenderer {
 
     const paddingTop = this._getScrollPaddingTop();
     const targetTranslateY = paddingTop - activeLine.offsetTop;
-
-    const containerTop = this._cachedContainerRect
-      ? this._cachedContainerRect.containerTop
-      : this.lyricsContainer.getBoundingClientRect().top;
     const scrollContainerTop = this._cachedContainerRect
       ? this._cachedContainerRect.scrollContainerTop
       : scrollContainer.getBoundingClientRect().top;
@@ -2572,23 +2462,57 @@ class LyricsPlusRenderer {
       this.endProgrammaticScrollTimer = null;
     }, 250);
 
-    this._animateScroll(targetTranslateY);
+    if (isResize) {
+      this.currentScrollOffset = targetTranslateY;
+      scrollContainer.scrollTo({ top: -targetTranslateY, behavior: 'instant' });
+
+      if (this._scrollAnimationState) {
+        this._scrollAnimationState.targetOffset = targetTranslateY;
+      }
+    } else {
+      this._animateScroll(targetTranslateY, forceScroll);
+    }
   }
 
   _setupVisibilityTracking() {
     const container = this._getContainer();
     if (!container || !container.parentElement) return null;
     if (this.visibilityObserver) this.visibilityObserver.disconnect();
+
+    this._visibilityHasChanged = true;
+    this._visibilityChanges = [];
+
     this.visibilityObserver = new IntersectionObserver(
       (entries) => {
+        let hasChanges = false;
         entries.forEach((entry) => {
-          const id = entry.target.id;
-          if (entry.isIntersecting) this.visibleLineIds.add(id);
-          else this.visibleLineIds.delete(id);
+          const target = entry.target;
+          const id = target.id;
+
+          this._visibilityChanges.push({
+            target: target,
+            isIntersecting: entry.isIntersecting
+          });
+
+          if (entry.isIntersecting) {
+            if (!this.visibleLineIds.has(id)) {
+              this.visibleLineIds.add(id);
+              hasChanges = true;
+            }
+          } else {
+            if (this.visibleLineIds.has(id)) {
+              this.visibleLineIds.delete(id);
+              hasChanges = true;
+            }
+          }
         });
+        if (hasChanges) {
+          this._visibilityHasChanged = true;
+        }
       },
       { root: container.parentElement, rootMargin: "200px 0px", threshold: 0.1 }
     );
+
     if (this.cachedLyricsLines) {
       this.cachedLyricsLines.forEach((line) => {
         if (line) this.visibilityObserver.observe(line);
@@ -2602,12 +2526,10 @@ class LyricsPlusRenderer {
     if (!container) return null;
     if (this.resizeObserver) this.resizeObserver.disconnect();
 
-    this._lastResizeContentRect = null;
 
     this.resizeObserver = new ResizeObserver((entries) => {
       for (const entry of entries) {
         if (entry.target !== container) continue;
-        this._lastResizeContentRect = entry.contentRect || null;
         this._debouncedResizeHandler(container);
       }
     });
@@ -2616,21 +2538,41 @@ class LyricsPlusRenderer {
     return this.resizeObserver;
   }
 
+  restore() {
+    if (!this.lyricsContainer) return;
+
+    this._playerElement = undefined;
+
+    this.scrollEventHandlerAttached = false;
+    this._attachScrollListeners();
+
+    if (this.visibilityObserver) this.visibilityObserver.disconnect();
+    this.visibilityObserver = this._setupVisibilityTracking();
+
+    if (this.resizeObserver) this.resizeObserver.disconnect();
+    this._setupResizeObserver();
+
+    this._startLyricsSync(this.currentSettings);
+    this._createControlButtons();
+  }
+
   _createControlButtons() {
+    // Wrapper Management
     this.buttonsWrapper = document.getElementById("lyrics-plus-buttons-wrapper");
 
     if (!this.buttonsWrapper) {
       this.buttonsWrapper = document.createElement("div");
       this.buttonsWrapper.id = "lyrics-plus-buttons-wrapper";
       const originalLyricsSection = document.querySelector(
-        this.uiConfig.patchParent
+        this.uiConfig.buttonParent || this.uiConfig.patchParent
       );
       if (originalLyricsSection) {
         originalLyricsSection.appendChild(this.buttonsWrapper);
       }
     }
 
-    if (this.setCurrentDisplayModeAndRefetchFn) {
+    // Translation Button Logic
+    if (this.setCurrentDisplayModeAndRefetchFn && this.currentLyricsType !== "None") {
       if (!this.translationButton) {
         this.translationButton = document.createElement("button");
         this.translationButton.id = "lyrics-plus-translate-button";
@@ -2656,9 +2598,12 @@ class LyricsPlusRenderer {
           };
           document.addEventListener("click", this._boundDocumentClickHandler);
         }
+      } else if (!this.buttonsWrapper.contains(this.translationButton)) {
+        this.buttonsWrapper.appendChild(this.translationButton);
       }
     }
 
+    // Reload Button Logic
     if (!this.reloadButton) {
       this.reloadButton = document.createElement("button");
       this.reloadButton.id = "lyrics-plus-reload-button";
@@ -2672,6 +2617,8 @@ class LyricsPlusRenderer {
           this.fetchAndDisplayLyricsFn(this.lastKnownSongInfo, true, true);
         }
       });
+    } else if (!this.buttonsWrapper.contains(this.reloadButton)) {
+      this.buttonsWrapper.appendChild(this.reloadButton);
     }
   }
 
@@ -2842,24 +2789,28 @@ class LyricsPlusRenderer {
    * Cleans up the lyrics container and resets the state for the next song.
    */
   cleanupLyrics() {
-    this._removeUserScrollListener();
+    // Event Cleanup
+    const scrollContainer = this.lyricsContainer?.parentElement;
+    if (scrollContainer) {
+      scrollContainer.removeEventListener('wheel', this._boundUserInteractionHandler);
+      scrollContainer.removeEventListener('touchstart', this._boundUserInteractionHandler);
+      scrollContainer.removeEventListener('keydown', this._boundUserInteractionHandler);
+    }
+    this.scrollEventHandlerAttached = false;
+    clearTimeout(this.userScrollIdleTimer);
 
+    // Animation Frame Cleanup
     if (this.lyricsAnimationFrameId) {
       cancelAnimationFrame(this.lyricsAnimationFrameId);
       this.lyricsAnimationFrameId = null;
     }
 
+    // Cancel Debounced Resize Handler
     if (this._debouncedResizeHandler && this._debouncedResizeHandler.cancel) {
       this._debouncedResizeHandler.cancel();
     }
 
-    if (this.touchState) {
-      if (this.touchState.momentum) {
-        cancelAnimationFrame(this.touchState.momentum);
-      }
-      this.touchState = null;
-    }
-
+    // Timer Cleanup
     if (this.endProgrammaticScrollTimer) clearTimeout(this.endProgrammaticScrollTimer);
     if (this.userScrollIdleTimer) clearTimeout(this.userScrollIdleTimer);
     if (this.userScrollRevertTimer) clearTimeout(this.userScrollRevertTimer);
@@ -2868,6 +2819,7 @@ class LyricsPlusRenderer {
     this.userScrollIdleTimer = null;
     this.userScrollRevertTimer = null;
 
+    // Observer Cleanup
     if (this.visibilityObserver) {
       this.visibilityObserver.disconnect();
       this.visibilityObserver = null;
@@ -2877,6 +2829,7 @@ class LyricsPlusRenderer {
       this.resizeObserver = null;
     }
 
+    // Clean up Control Buttons
     if (this.translationButton) {
       const newBtn = this.translationButton.cloneNode(true);
       if (this.translationButton.parentNode) this.translationButton.parentNode.replaceChild(newBtn, this.translationButton);
@@ -2894,6 +2847,7 @@ class LyricsPlusRenderer {
       this.dropdownMenu = null;
     }
 
+    // DOM & Cache Cleanup
     const container = this._getContainer();
 
     if (this.cachedLyricsLines) {
@@ -2920,17 +2874,16 @@ class LyricsPlusRenderer {
     }
 
     if (container) {
-      container.innerHTML = `<div class="loading-container"><span class="text-loading">${t("loading")}</span><div class="loading-loop-m3"></div></div>`;
+      container.innerHTML = `<span class="text-loading">${t("loading")}</span>`;
       container.classList.add("lyrics-plus-message");
       container.className = "lyrics-plus-integrated lyrics-plus-message blur-inactive-enabled";
 
       container.style.removeProperty("--lyrics-scroll-offset");
       container.style.removeProperty("--lyplus-override-pallete");
-      container.style.removeProperty("--lyplus-override-pallete-white");
       container.style.removeProperty("--lyplus-song-pallete");
-      container.style.removeProperty("--lyplus-song-white-pallete");
     }
 
+    // Release Graphics Memory
     if (this.textWidthCanvas) {
       this.textWidthCanvas.width = 0;
       this.textWidthCanvas.height = 0;
@@ -2949,9 +2902,6 @@ class LyricsPlusRenderer {
     this.fontCache = {};
 
     this._cachedContainerRect = null;
-    this._cachedVisibleLines = null;
-    this._lastVisibilityHash = null;
-    this._lastVisibilityUpdateSize = null;
 
     this.currentScrollOffset = 0;
     this.isProgrammaticScrolling = false;
@@ -2966,6 +2916,9 @@ class LyricsPlusRenderer {
 
     this._playerElement = undefined;
     this._customCssStyleTag = null;
+
+    this._lastActiveIndex = 0;
+    this._tempActiveLines = [];
   }
 
   /**
@@ -2990,34 +2943,34 @@ class LyricsPlusRenderer {
     try {
       const titleElement = document.querySelector('.title.style-scope.ytmusic-player-bar');
       const byline = document.querySelector('.byline.style-scope.ytmusic-player-bar');
-      
+
       if (!titleElement || !byline) {
         return null;
       }
-      
+
       const title = titleElement.textContent.trim();
       if (!title) {
         return null;
       }
-      
+
       let artists = [];
       let artistUrls = [];
       let album = "";
       let albumUrl = "";
-      
+
       let links = byline.querySelectorAll('a');
-      
+
       if (links.length === 0) {
         const bylineWrapper = document.querySelector('.byline-wrapper');
         if (bylineWrapper) {
           links = bylineWrapper.querySelectorAll('a');
         }
       }
-      
+
       for (const link of links) {
         const href = link.getAttribute('href');
         const text = link.textContent?.trim();
-        
+
         if (href) {
           if (href.startsWith('channel/')) {
             artists.push(text);
@@ -3028,7 +2981,7 @@ class LyricsPlusRenderer {
           }
         }
       }
-      
+
       let artist = "";
       if (artists.length === 1) {
         artist = artists[0];
@@ -3037,17 +2990,17 @@ class LyricsPlusRenderer {
       } else if (artists.length > 2) {
         artist = artists.slice(0, -1).join(", ") + ", & " + artists[artists.length - 1];
       }
-      
+
       if (!artist && byline.textContent) {
         const bylineText = byline.textContent.trim();
-        const parts = bylineText.split(/[•·–—]/);
+        const parts = bylineText.split(/[â€¢Â·â€“â€”]/);
         if (parts.length > 0) {
           artist = parts[0].trim();
         }
       }
-      
+
       const isVideo = album === '' && artist === '';
-      
+
       return {
         title: title,
         artist: artist,
@@ -3065,7 +3018,7 @@ class LyricsPlusRenderer {
             const byline = document.querySelector('.byline.style-scope.ytmusic-player-bar');
             let artistUrl = null;
             let albumUrl = null;
-            
+
             if (byline) {
               const links = byline.querySelectorAll('a');
               for (const link of links) {
@@ -3079,7 +3032,7 @@ class LyricsPlusRenderer {
                 }
               }
             }
-            
+
             return {
               title: fallbackInfo.title,
               artist: fallbackInfo.artist,
@@ -3093,7 +3046,7 @@ class LyricsPlusRenderer {
         }
       } catch (fallbackError) {
       }
-      
+
       return null;
     }
   }
@@ -3106,40 +3059,40 @@ class LyricsPlusRenderer {
     const playerPage = document.querySelector('ytmusic-player-page');
     const isFullscreen = playerPage && playerPage.hasAttribute('player-fullscreened');
     const isVideoMode = playerPage && playerPage.hasAttribute('video-mode');
-    
+
     if (!isFullscreen) {
       return;
     }
-    
+
     if (isVideoMode) {
       return;
     }
-    
+
     const existingSongInfo = document.querySelector('.lyrics-song-info');
     if (existingSongInfo) {
       existingSongInfo.remove();
     }
-    
+
     const songInfo = this._getSongInfoFromDOM();
     if (!songInfo) {
       return;
     }
-    
+
     if (songInfo.isVideo) {
       return;
     }
-    
+
     const songInfoContainer = document.createElement('div');
     songInfoContainer.className = 'lyrics-song-info';
     songInfoContainer.style.display = 'block';
-    
+
     const titleElement = document.createElement('p');
     titleElement.id = 'lyrics-song-title';
     titleElement.textContent = songInfo.title;
-    
+
     const artistElement = document.createElement('p');
     artistElement.id = 'lyrics-song-artist';
-    
+
     if (songInfo.artistUrl && songInfo.artist) {
       const artistLink = document.createElement('a');
       artistLink.href = `/${songInfo.artistUrl}`;
@@ -3148,23 +3101,23 @@ class LyricsPlusRenderer {
       artistLink.style.cursor = 'pointer';
       artistLink.style.textDecoration = 'none';
       artistLink.style.color = 'inherit';
-      
+
       artistLink.addEventListener('click', (e) => {
         e.preventDefault();
         window.open(`/${songInfo.artistUrl}`, '_blank');
       });
-      
+
       artistElement.appendChild(artistLink);
     } else if (songInfo.artist) {
       artistElement.textContent = songInfo.artist;
     }
-    
+
     if (songInfo.album && songInfo.album.trim() !== '') {
       if (songInfo.artist) {
         const separator = document.createTextNode(' — ');
         artistElement.appendChild(separator);
       }
-      
+
       if (songInfo.albumUrl) {
         const albumLink = document.createElement('a');
         albumLink.href = `/${songInfo.albumUrl}`;
@@ -3173,23 +3126,24 @@ class LyricsPlusRenderer {
         albumLink.style.cursor = 'pointer';
         albumLink.style.textDecoration = 'none';
         albumLink.style.color = 'inherit';
-        
+
         albumLink.addEventListener('click', (e) => {
           e.preventDefault();
           window.open(`/${songInfo.albumUrl}`, '_blank');
         });
-        
+
         artistElement.appendChild(albumLink);
       } else {
         artistElement.appendChild(document.createTextNode(songInfo.album));
       }
     }
-    
+
     songInfoContainer.appendChild(titleElement);
     songInfoContainer.appendChild(artistElement);
-    
+
     document.body.appendChild(songInfoContainer);
     this._positionSongInfoRelativeToArtwork(songInfoContainer);
+    this._applySongInfoMarquee(songInfoContainer);
     this._setupArtworkObservers(songInfoContainer);
   }
 
@@ -3201,14 +3155,14 @@ class LyricsPlusRenderer {
     const playerPage = document.querySelector('ytmusic-player-page');
     const isFullscreen = playerPage && playerPage.hasAttribute('player-fullscreened');
     const isVideoMode = playerPage && playerPage.hasAttribute('video-mode');
-    
+
     if (!isFullscreen) {
       return;
     }
     if (isVideoMode) {
       return;
     }
-    
+
     const existingSongInfo = document.querySelector('.lyrics-song-info');
     if (existingSongInfo) {
       existingSongInfo.remove();
@@ -3235,14 +3189,14 @@ class LyricsPlusRenderer {
     const songInfoContainer = document.createElement('div');
     songInfoContainer.className = 'lyrics-song-info';
     songInfoContainer.style.display = 'block';
-    
+
     const titleElement = document.createElement('p');
     titleElement.id = 'lyrics-song-title';
     titleElement.textContent = songInfo.title;
-    
+
     const artistElement = document.createElement('p');
     artistElement.id = 'lyrics-song-artist';
-    
+
     if (songInfo.artistUrl && songInfo.artist) {
       const artistLink = document.createElement('a');
       artistLink.href = `/${songInfo.artistUrl}`;
@@ -3251,23 +3205,23 @@ class LyricsPlusRenderer {
       artistLink.style.cursor = 'pointer';
       artistLink.style.textDecoration = 'none';
       artistLink.style.color = 'inherit';
-      
+
       artistLink.addEventListener('click', (e) => {
         e.preventDefault();
         window.open(`/${songInfo.artistUrl}`, '_blank');
       });
-      
+
       artistElement.appendChild(artistLink);
     } else if (songInfo.artist) {
       artistElement.textContent = songInfo.artist;
     }
-    
+
     if (songInfo.album && songInfo.album.trim() !== '') {
       if (songInfo.artist) {
         const separator = document.createTextNode(' — ');
         artistElement.appendChild(separator);
       }
-      
+
       if (songInfo.albumUrl) {
         const albumLink = document.createElement('a');
         albumLink.href = `/${songInfo.albumUrl}`;
@@ -3276,25 +3230,26 @@ class LyricsPlusRenderer {
         albumLink.style.cursor = 'pointer';
         albumLink.style.textDecoration = 'none';
         albumLink.style.color = 'inherit';
-        
+
         albumLink.addEventListener('click', (e) => {
           e.preventDefault();
           window.open(`/${songInfo.albumUrl}`, '_blank');
         });
-        
+
         artistElement.appendChild(albumLink);
       } else {
         artistElement.appendChild(document.createTextNode(songInfo.album));
       }
     }
-    
+
     artistElement.style.fontFamily = 'SF Pro Display, sans-serif';
-    
+
     songInfoContainer.appendChild(titleElement);
     songInfoContainer.appendChild(artistElement);
-    
+
     document.body.appendChild(songInfoContainer);
     this._positionSongInfoRelativeToArtwork(songInfoContainer);
+    this._applySongInfoMarquee(songInfoContainer);
     this._setupArtworkObservers(songInfoContainer);
   }
 
@@ -3338,7 +3293,7 @@ class LyricsPlusRenderer {
       songInfoContainer.style.textAlign = '';
       return;
     }
-    
+
     const rect = artworkEl.getBoundingClientRect();
 
     const leftX = rect.left;
@@ -3348,9 +3303,129 @@ class LyricsPlusRenderer {
     songInfoContainer.style.left = `${leftX}px`;
     songInfoContainer.style.top = `${topY}px`;
     songInfoContainer.style.transform = 'none';
-    songInfoContainer.style.maxWidth = `${Math.max(300, Math.floor(rect.width))}px`;
+    const width = Math.max(300, Math.floor(rect.width));
+    songInfoContainer.style.width = `${width}px`;
+    songInfoContainer.style.maxWidth = `${width}px`;
     songInfoContainer.style.textAlign = 'left';
     songInfoContainer.style.zIndex = '1000';
+  }
+
+  _applySongInfoMarquee(songInfoContainer) {
+    if (!songInfoContainer) return;
+    const titleElement = songInfoContainer.querySelector('#lyrics-song-title');
+    const artistElement = songInfoContainer.querySelector('#lyrics-song-artist');
+    if (titleElement) this._setupMarqueeForElement(titleElement);
+    if (artistElement) this._setupMarqueeForElement(artistElement);
+
+    const restartBoth = (e) => {
+      if (e?.target && e.target.closest('a')) return;
+      titleElement?._lyplusRestartMarquee?.();
+      artistElement?._lyplusRestartMarquee?.();
+    };
+
+    if (titleElement && !titleElement._lyplusSongInfoClickHandler) {
+      titleElement._lyplusSongInfoClickHandler = restartBoth;
+      titleElement.addEventListener('click', restartBoth);
+    }
+    if (artistElement && !artistElement._lyplusSongInfoClickHandler) {
+      artistElement._lyplusSongInfoClickHandler = restartBoth;
+      artistElement.addEventListener('click', restartBoth);
+    }
+
+    if (!songInfoContainer._lyplusSongInfoClickHandler) {
+      songInfoContainer._lyplusSongInfoClickHandler = restartBoth;
+      songInfoContainer.addEventListener('click', songInfoContainer._lyplusSongInfoClickHandler);
+    }
+  }
+
+  _setupMarqueeForElement(element) {
+    if (!element) return;
+
+    let track = element.querySelector('.lyrics-song-marquee-track');
+    let content = element.querySelector('.lyrics-song-marquee-content');
+    if (!track || !content) {
+      track = document.createElement('span');
+      track.className = 'lyrics-song-marquee-track';
+      content = document.createElement('span');
+      content.className = 'lyrics-song-marquee-content';
+      while (element.firstChild) {
+        content.appendChild(element.firstChild);
+      }
+      track.appendChild(content);
+      element.appendChild(track);
+    }
+
+    const restartMarquee = () => {
+      element.classList.remove('lyrics-song-marquee');
+      element.style.removeProperty('--lyrics-song-marquee-duration');
+      element.style.removeProperty('--lyrics-song-marquee-offset');
+      if (element._lyplusMarqueeStopTimer) {
+        clearTimeout(element._lyplusMarqueeStopTimer);
+        element._lyplusMarqueeStopTimer = null;
+      }
+      track.style.animation = 'none';
+      void track.offsetWidth;
+      track.style.removeProperty('animation');
+      track.style.animationPlayState = 'running';
+      const clone = track.querySelector('.lyrics-song-marquee-clone');
+      if (clone) clone.remove();
+      requestAnimationFrame(() => {
+        measureAndToggle();
+      });
+    };
+    element._lyplusRestartMarquee = restartMarquee;
+
+    if (!element._lyplusMarqueeClickHandler) {
+      element._lyplusMarqueeClickHandler = (e) => {
+        if (e.target && e.target.closest('a')) return;
+        restartMarquee();
+      };
+      element.addEventListener('click', element._lyplusMarqueeClickHandler);
+    }
+
+    const measureAndToggle = () => {
+      const overflow = element.scrollWidth > element.clientWidth + 1;
+      if (overflow) {
+        let clone = track.querySelector('.lyrics-song-marquee-clone');
+        if (!clone) {
+          clone = content.cloneNode(true);
+          clone.classList.add('lyrics-song-marquee-clone');
+          track.appendChild(clone);
+        }
+
+        const contentWidth = Math.max(1, content.scrollWidth);
+        const pxPerSecond = 40;
+        const durationSeconds = Math.min(900, Math.max(6, contentWidth / pxPerSecond));
+        element.classList.add('lyrics-song-marquee', 'lyrics-song-marquee-playing');
+        element.style.setProperty('--lyrics-song-marquee-duration', `${durationSeconds}s`);
+        element.style.setProperty('--lyrics-song-marquee-offset', `${contentWidth}px`);
+
+        if (element._lyplusMarqueeStopTimer) {
+          clearTimeout(element._lyplusMarqueeStopTimer);
+        }
+        element._lyplusMarqueeStopTimer = setTimeout(() => {
+          element.classList.remove('lyrics-song-marquee-playing');
+          track.style.animationPlayState = 'paused';
+        }, Math.ceil(durationSeconds * 1000) + 80);
+
+        track.style.animationPlayState = 'running';
+      } else {
+        element.classList.remove('lyrics-song-marquee', 'lyrics-song-marquee-playing');
+        element.style.removeProperty('--lyrics-song-marquee-duration');
+        element.style.removeProperty('--lyrics-song-marquee-offset');
+        if (element._lyplusMarqueeStopTimer) {
+          clearTimeout(element._lyplusMarqueeStopTimer);
+          element._lyplusMarqueeStopTimer = null;
+        }
+        const clone = track.querySelector('.lyrics-song-marquee-clone');
+        if (clone) clone.remove();
+        track.style.removeProperty('animation-play-state');
+      }
+    };
+
+    requestAnimationFrame(() => {
+      measureAndToggle();
+    });
   }
 
   /**
@@ -3359,14 +3434,12 @@ class LyricsPlusRenderer {
   _setupArtworkObservers(songInfoContainer) {
     const reposition = () => {
       this._positionSongInfoRelativeToArtwork(songInfoContainer);
+      this._applySongInfoMarquee(songInfoContainer);
     };
     this._artworkRepositionHandler = reposition;
 
     window.addEventListener('resize', reposition, { passive: true });
     window.addEventListener('scroll', reposition, { passive: true });
-    
-    // Removed continuous requestAnimationFrame loop to prevent lag during fullscreen transitions
-    // Use event-driven repositioning instead
 
     const playerPage = document.querySelector('ytmusic-player-page');
     if (playerPage) {
@@ -3382,15 +3455,9 @@ class LyricsPlusRenderer {
       });
     }
 
-    const container = this._getContainer();
-
     this._cleanupArtworkObservers = () => {
       window.removeEventListener('resize', reposition);
       window.removeEventListener('scroll', reposition);
-      if (animationFrameId) {
-        cancelAnimationFrame(animationFrameId);
-        animationFrameId = null;
-      }
       if (this._artworkMutationObserver) {
         this._artworkMutationObserver.disconnect();
         this._artworkMutationObserver = null;

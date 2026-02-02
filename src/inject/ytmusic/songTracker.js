@@ -1,277 +1,187 @@
-// inject/songTracker.js
+// inject/ytmusic/songTracker.js
 
-// Holds the current song information
-let LYPLUS_currentSong = {};
-let LYPLUS_timeUpdateInterval = null;
+(function () {
+    let currentSong = {};
+    let timeUpdateFrame = null;
+    let debounceTimer = null;
+    let playerInstance = null;
 
-// Initialize when the script is loaded
-(function() {
-    console.log('LYPLUS: DOM script injected successfully');
-    LYPLUS_setupMutationObserver();
-    LYPLUS_setupSeekListener();
-    // Check for initial song immediately (in case a song is already playing)
-    setTimeout(() => {
-        LYPLUS_checkForSongChange();
-    }, 500);
-})();
+    console.log('LYPLUS: Tracker injected.');
 
-// Initialize the observer to watch for changes in the player state
-function LYPLUS_setupMutationObserver() {
-    const titleElement = document.querySelector('.title.style-scope.ytmusic-player-bar');
-    const subtitleElement = document.querySelector('.subtitle.style-scope.ytmusic-player-bar');
-
-    if (titleElement || subtitleElement) {
-        const observer = new MutationObserver(LYPLUS_handleMutations);
-        const observerOptions = { characterData: true, childList: true, subtree: true };
-
-        if (titleElement) observer.observe(titleElement, observerOptions);
-        if (subtitleElement) observer.observe(subtitleElement, observerOptions);
+    function init() {
+        setupMutationObserver();
+        setupSeekListener();
     }
 
-    setInterval(LYPLUS_checkForSongChange, 2000);
-}
-
-function LYPLUS_setupSeekListener() {
-    // Remove existing listeners if any to avoid duplicates
-    window.removeEventListener('LYPLUS_SEEK_TO', LYPLUS_handleSeekEvent);
-    window.removeEventListener('message', LYPLUS_handlePostMessage);
-    
-    // Add both CustomEvent and postMessage listeners
-    window.addEventListener('LYPLUS_SEEK_TO', LYPLUS_handleSeekEvent, true);
-    window.addEventListener('message', LYPLUS_handlePostMessage, true);
-}
-
-function LYPLUS_handlePostMessage(event) {
-    // Only handle our own messages
-    if (!event.data || event.data.type !== 'LYPLUS_SEEK_TO') {
-        return;
+    function getPlayer() {
+        if (!playerInstance) {
+            playerInstance = document.getElementById("movie_player");
+        }
+        return playerInstance;
     }
-    
-    // Verify origin for security (optional but recommended)
-    // For same-origin, we can be more lenient
-    const time = event.data.time;
-    if (typeof time !== 'number') {
-        console.warn('LYPLUS: Invalid time in postMessage', event.data);
-        return;
-    }
-    
-    console.log('LYPLUS: Received LYPLUS_SEEK_TO via postMessage', time);
-    LYPLUS_performSeek(time);
-}
 
-function LYPLUS_handleSeekEvent(event) {
-    try {
-        // Safe access to event detail for Firefox compatibility
-        let seekTime;
-        try {
-            if (event.detail && typeof event.detail.time === 'number') {
-                seekTime = event.detail.time;
-            } else {
-                console.warn('LYPLUS: event.detail.time is not accessible or invalid');
-                return;
+    // --- Observers & Listeners ---
+
+    function setupMutationObserver() {
+        const contentBar = document.querySelector('ytmusic-player-bar');
+
+        if (contentBar) {
+            const observer = new MutationObserver(handleMutations);
+            observer.observe(contentBar, {
+                childList: true,
+                subtree: true,
+                characterData: true
+            });
+        } else {
+            setTimeout(setupMutationObserver, 1000);
+        }
+    }
+
+    function handleMutations() {
+        clearTimeout(debounceTimer);
+        debounceTimer = setTimeout(checkForSongChange, 500);
+    }
+
+    function setupSeekListener() {
+        window.addEventListener('message', (event) => {
+            if (!event.data || event.data.type !== 'LYPLUS_SEEK_TO') return;
+
+            const player = getPlayer();
+            if (player && typeof event.data.time === 'number') {
+                player.seekTo(event.data.time, true);
             }
-        } catch (e) {
-            // Firefox security context issue - event.detail access blocked
-            console.warn('LYPLUS: Cannot access event.detail (Firefox security restriction)', e);
-            return;
-        }
-        
-        console.log('LYPLUS: Received LYPLUS_SEEK_TO event', seekTime);
-        LYPLUS_performSeek(seekTime);
-    } catch (error) {
-        console.error('LYPLUS: Error handling seek event', error);
+        });
     }
-}
 
-function LYPLUS_performSeek(seekTime) {
-    try {
-        const player = LYPLUS_getPlayer();
-        if (!player) {
-            console.warn('LYPLUS: Player not found for seek operation');
-            return;
-        }
-        
-        if (typeof player.seekTo !== 'function') {
-            console.warn('LYPLUS: player.seekTo is not a function', player);
-            return;
-        }
-        
-        console.log('LYPLUS: Seeking player to', seekTime);
-        player.seekTo(seekTime, true);
-        console.log('LYPLUS: Seek command sent successfully');
-    } catch (error) {
-        console.error('LYPLUS: Error performing seek', error);
-    }
-}
+    function startTimeUpdater() {
+        stopTimeUpdater();
 
-function stopTimeUpdater() {
-    clearInterval(LYPLUS_timeUpdateInterval);
-    LYPLUS_timeUpdateInterval = null;
-}
-
-function startTimeUpdater() {
-    stopTimeUpdater();
-
-    LYPLUS_timeUpdateInterval = setInterval(() => {
-        const player = LYPLUS_getPlayer();
-        if (player) {
+        function loop() {
+            const player = getPlayer();
             try {
-                const currentTime = player.getCurrentTime();
-                window.postMessage({ type: 'LYPLUS_TIME_UPDATE', currentTime: currentTime }, '*');
+                const currentTime = player.getCurrentTime() + 0.11;
+                window.postMessage({
+                    type: 'LYPLUS_TIME_UPDATE',
+                    currentTime: currentTime
+                }, '*');
+                lastSentTime = currentTime;
             } catch (e) {
-                console.error("LYPLUS: Error getting current time.", e);
-                stopTimeUpdater();
             }
-        }
-    }, 16); //60FPS timing
-}
 
-// Callback for MutationObserver
-function LYPLUS_handleMutations(mutations) {
-    let songChanged = false;
-    mutations.forEach((mutation) => {
-        if (mutation.target.nodeType === Node.TEXT_NODE) {
-            const parent = mutation.target.parentNode;
-            if (parent && (parent.classList.contains('title') || parent.classList.contains('subtitle'))) {
-                songChanged = true;
-            }
-        } else if (mutation.target.classList && (mutation.target.classList.contains('title') || mutation.target.classList.contains('subtitle'))) {
-            songChanged = true;
+            timeUpdateFrame = requestAnimationFrame(loop);
         }
-    });
 
-    if (songChanged) {
-        LYPLUS_debounceCheckForSongChange();
+        timeUpdateFrame = requestAnimationFrame(loop);
     }
-}
 
-let LYPLUS_debounceTimer = null;
-function LYPLUS_debounceCheckForSongChange() {
-    clearTimeout(LYPLUS_debounceTimer);
-    LYPLUS_debounceTimer = setTimeout(LYPLUS_checkForSongChange, 500);
-}
-
-function LYPLUS_getPlayer() {
-    let player = document.getElementById("movie_player");
-    if (!player) {
-        player = document.querySelector('ytmusic-player');
-        if (player && !player.getCurrentTime) {
-            if (player.playerApi) player = player.playerApi;
-            else if (window.ytmusic && ytmusic.player) player = ytmusic.player;
+    function stopTimeUpdater() {
+        if (timeUpdateFrame) {
+            cancelAnimationFrame(timeUpdateFrame);
+            timeUpdateFrame = null;
         }
     }
-    return player;
-}
 
-function LYPLUS_checkForSongChange() {
-    const newSongInfo = LYPLUS_getSongInfo();
-    if (!newSongInfo || !newSongInfo.title.trim() || !newSongInfo.artist.trim()) {
-        return;
+    // --- Metadata Extraction ---
+
+    function getMetadataFromDOM() {
+        const titleEl = document.querySelector('.title.style-scope.ytmusic-player-bar');
+        const bylineEl = document.querySelector('.subtitle.style-scope.ytmusic-player-bar');
+
+        if (!titleEl || !bylineEl) return null;
+
+        const title = titleEl.textContent.trim();
+        const bylineText = bylineEl.textContent.trim();
+
+        // Get all links inside the subtitle
+        const allLinks = Array.from(bylineEl.querySelectorAll('a'));
+
+        let artistNames = [];
+        let albumName = "";
+
+        // Iterate through links to categorize them
+        allLinks.forEach(link => {
+            const href = link.getAttribute('href');
+            if (!href) return;
+
+            // CHECK FOR ARTIST:
+            // 1. "channel/" (Standard artists)
+            // 2. "browse/UC" (Standard artists with ID)
+            // 3. "artist_detail" (User Uploaded Audio)
+            const isArtist = href.includes('channel/') ||
+                href.includes('browse/UC') ||
+                href.includes('artist_detail');
+
+            if (isArtist) {
+                artistNames.push(link.textContent.trim());
+            } else {
+                // If it is a link, but NOT an artist, it is the Album/Release
+                if (!albumName) {
+                    albumName = link.textContent.trim();
+                }
+            }
+        });
+
+        // 1. Finalize Artist
+        let artist = "";
+        if (artistNames.length > 0) {
+            artist = artistNames.join(", "); // Handle multiple artists
+        } else {
+            // Fallback: If absolutely no links exist, split text by bullet
+            artist = bylineText.split('•')[0]?.trim() || "";
+        }
+
+        // 2. Finalize Album
+        let album = albumName;
+
+        return { title, artist, album, isVideo: album === "" };
     }
 
-    // Check if this is the first song (LYPLUS_currentSong is empty)
-    const isFirstSong = !LYPLUS_currentSong || !LYPLUS_currentSong.title;
-    
-    const hasChanged = isFirstSong || 
-                       ((newSongInfo.title !== LYPLUS_currentSong.title || 
-                         newSongInfo.artist !== LYPLUS_currentSong.artist || 
-                         Math.round(newSongInfo.duration) !== Math.round(LYPLUS_currentSong.duration)) && 
-                        newSongInfo.videoId !== LYPLUS_currentSong.videoId);
+    function checkForSongChange() {
+        const player = getPlayer();
+        const domInfo = getMetadataFromDOM();
 
-    if (hasChanged) {
-        LYPLUS_currentSong = newSongInfo;
-        
-        // Start sending high-frequency time updates for the new song
-        startTimeUpdater();
-        
-        window.postMessage({ type: 'LYPLUS_SONG_CHANGED', songInfo: LYPLUS_currentSong }, '*');
-        window.postMessage({ type: 'LYPLUS_updateFullScreenAnimatedBg' }, '*');
-    }
-}
+        if (!player || !domInfo) return;
 
-function LYPLUS_getSongInfo() {
-    const player = LYPLUS_getPlayer();
-    if (player) {
-        try {
-            if (!player.getDuration || typeof player.getDuration !== 'function' || player.getDuration() === 0) {
-                return null;
-            }
-            const videoData = player.getVideoData();
-            if (!videoData || !videoData.title || !videoData.author) {
-                return null;
-            }
-            const { video_id, title, author } = videoData;
-            let audioTrackData = null;
-            if (player.getAudioTrack && typeof player.getAudioTrack === 'function') {
-                audioTrackData = player.getAudioTrack();
-            }
-            const artistCurrent = LYPLUS_getArtistFromDOM() || author;
-            return {
-                title: title,
-                artist: artistCurrent,
-                album: LYPLUS_getAlbumFromDOM(),
-                duration: player.getDuration(),
-                videoId: video_id,
-                isVideo: LYPLUS_getAlbumFromDOM() === "",
-                subtitle: audioTrackData
+        let duration = 0;
+        let videoId = "";
+
+        if (player.getVideoData) {
+            const data = player.getVideoData();
+            videoId = data.video_id;
+        }
+
+        if (player.getDuration) {
+            duration = player.getDuration();
+        }
+
+        if (!duration || duration === 0) {
+            setTimeout(checkForSongChange, 250);
+            return;
+        }
+
+        if (!domInfo.title || !domInfo.artist) return;
+
+        const hasChanged = videoId !== currentSong.videoId ||
+            domInfo.title !== currentSong.title;
+
+        if (hasChanged) {
+            currentSong = {
+                title: domInfo.title,
+                artist: domInfo.artist,
+                album: domInfo.album,
+                duration: duration,
+                videoId: videoId,
+                isVideo: domInfo.isVideo
             };
-        } catch (error) {
-            console.error('LYPLUS: Error retrieving song info from player API', error);
+
+            startTimeUpdater();
+
+            window.postMessage({ type: 'LYPLUS_SONG_CHANGED', songInfo: currentSong }, '*');
+            window.postMessage({ type: 'LYPLUS_updateFullScreenAnimatedBg' }, '*');
         }
     }
-    return LYPLUS_getDOMSongInfo();
-}
 
-function LYPLUS_getAlbumFromDOM() {
-    const byline = document.querySelector('.byline.style-scope.ytmusic-player-bar');
-    if (!byline) return "";
-    const links = byline.querySelectorAll('a');
-    for (const link of links) {
-        const href = link.getAttribute('href');
-        if (href && href.startsWith("browse/")) {
-            return link.textContent.trim();
-        }
-    }
-    return "";
-}
+    // Start
+    init();
 
-function LYPLUS_getArtistFromDOM() {
-    const byline = document.querySelector('.byline.style-scope.ytmusic-player-bar');
-    if (!byline) return "";
-    let artists = [];
-    const links = byline.querySelectorAll('a');
-    for (const link of links) {
-        const href = link.getAttribute('href');
-        if (href && href.startsWith("channel/")) {
-            artists.push(link.textContent.trim());
-        }
-    }
-    if (artists.length === 0) return "";
-    if (artists.length === 1) return artists[0];
-    if (artists.length === 2) return artists.join(" & ");
-    return artists.slice(0, -1).join(", ") + ", & " + artists[artists.length - 1];
-}
-
-function LYPLUS_getDOMSongInfo() {
-    const titleElement = document.querySelector('.title.style-scope.ytmusic-player-bar');
-    const byline = document.querySelector('.byline.style-scope.ytmusic-player-bar');
-    const videoElement = document.querySelector('video');
-    const playerBar = document.querySelector('ytmusic-player-bar');
-
-    if (!titleElement || !byline || !videoElement || !videoElement.duration) {
-        return null;
-    }
-    
-    const artist = LYPLUS_getArtistFromDOM();
-    const album = LYPLUS_getAlbumFromDOM();
-    let videoId = new URLSearchParams(window.location.search).get('v') || playerBar?.getAttribute('video-id') || "";
-
-    return {
-        title: titleElement.textContent.trim(),
-        artist,
-        album,
-        duration: videoElement.duration,
-        isVideo: album === "",
-        videoId
-    };
-}
+})();

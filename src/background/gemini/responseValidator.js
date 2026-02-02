@@ -116,4 +116,3 @@ export class ResponseValidator {
     return errors;
   }
 }
-

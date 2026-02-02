@@ -21,4 +21,3 @@ if (pBrowser?.runtime?.onMessage) {
 } else {
   console.error('Service Worker: runtime messaging not available');
 }
-

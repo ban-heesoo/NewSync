@@ -15,7 +15,7 @@
 <body>
     <aside class="navigation-drawer">
         <header class="drawer-header">
-            <img src="../../icons/icon32.png" alt="NewSync" width="24" height="24" />
+            <img src="../../icons/icon128.png" alt="NewSync" width="48" height="48" />
             <h1>NewSync Settings</h1>
         </header>
         <nav class="drawer-nav">
@@ -86,6 +86,18 @@
                         <span class="switch-label">Use SponsorBlock API</span>
                     </label>
                     <p class="setting-description">Skip non-music sections like intros, outros, or sponsor segments.</p>
+                </div>
+            </div>
+
+            <div class="settings-category">
+                <h3 class="category-title">Apple Music Settings</h3>
+                <div class="setting-item">
+                    <label class="switch">
+                        <input type="checkbox" id="bypass-apple">
+                        <span class="slider"></span>
+                        <span class="switch-label">Prefer External Lyrics for Line-Synced Tracks</span>
+                    </label>
+                    <p class="setting-description">Use external lyrics when Apple Music only provides line-by-line synchronization.</p>
                 </div>
             </div>
 
@@ -280,7 +292,7 @@
                 <h3 class="category-title">Text Display</h3>
                 <div class="setting-item">
                     <div class="form-group">
-                        <label for="larger-text-mode">Larger Text: Pronunciation Or Lyrics</label>
+                        <label for="larger-text-mode">Larger Text: Pronunciation or Lyrics</label>
                         <div class="select-wrapper">
                             <select id="larger-text-mode">
                                 <option value="lyrics">Lyrics</option>
@@ -534,7 +546,7 @@
         <!-- About Section -->
         <section class="settings-card" id="about">
             <div class="about-header">
-                <img src="../../icons/icon128.png" alt="NewSync" width="24" height="24" />
+                <img src="../../icons/icon128.png" alt="NewSync" width="32" height="32" />
                 <div class="about-header-text">
                     <h2 class="card-title no-border">NewSync</h2>
                     <p class="version">Version unknown</p>
@@ -542,8 +554,8 @@
             </div>
             <div class="about-content">
                 <p class="about-description">
-                    NewSync is a feature-rich browser extension that brings synchronized lyrics to YouTube Music with an elegant Apple Music-inspired interface.
-                    Experience your favorite songs like never before with real-time lyrics display, smart translations, and beautiful visual effects.
+                    NewSync brings synchronized lyrics to YouTube Music with a refined, Apple Music-inspired experience.
+                    Enjoy lyrics, translations, and visual effects while you listen.
                     <br><br>
                     If you have feedback, suggestions, or encounter any issues, please reach out via GitHub or Discord using the links below. Your reports help us improve NewSync for everyone!
                 </p>
@@ -573,11 +585,30 @@
                         </a>
                     </div>
                 </div>
+
+                <div class="settings-category">
+                    <h3 class="category-title">Configuration Management</h3>
+                    <div class="setting-item">
+                        <p class="setting-description">Export your current settings to a JSON file, or import from a file to restore your configuration.</p>
+                        <div class="links-container" style="margin-top: 16px;">
+                            <button id="export-settings-button" class="btn btn-outlined">
+                                <span class="material-symbols-outlined">file_download</span>
+                                Export
+                            </button>
+                            <button id="import-settings-button" class="btn btn-outlined">
+                                <span class="material-symbols-outlined">file_upload</span>
+                                Import
+                            </button>
+                            <input type="file" id="import-settings-file" accept=".json" style="display: none;">
+                        </div>
+                        <p id="config-status" class="status-message"></p>
+                    </div>
+                </div>
             </div>
         </section>
 
         <footer class="content-footer">
-            <p>© 2025 NewSync. All rights belong to Kang Haerin and bi.</p>
+            <p>©2026 NewSync. Kang Haerin and bi.</p>
         </footer>
     </main>
     <script type="module" src="settingsManager.js"></script>
@@ -585,3 +616,5 @@
 </body>
 
 </html>
+
+

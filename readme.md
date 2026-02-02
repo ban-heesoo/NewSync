@@ -1,4 +1,4 @@
-# **NewSync**
+# NewSync
 
 <p align="center">
 <img src="https://hivicode.github.io/newsync/Cover.jpg" alt="Cover">
@@ -19,7 +19,7 @@
 
 **Extension for Synchronized Lyrics on YouTube Music**
 
-NewSync is a feature-rich browser extension that brings synchronized lyrics to YouTube Music with an elegant Apple Music-inspired interface. Experience your favorite songs like never before with real-time lyrics display, smart translations, and beautiful visual effects. Enjoy perfectly synchronized lyrics that follow your music with line-by-line and word-by-word highlighting, sleek minimal design with premium fonts and custom icons, and instant translation capabilities using Google Translate or Gemini AI.
+NewSync is a browser extension that brings synchronized lyrics to YouTube Music with an Apple Music-inspired interface.
 
 <p align="center">
     <b>Supported Browsers:</b>
@@ -74,7 +74,7 @@ NewSync is a feature-rich browser extension that brings synchronized lyrics to Y
 
 ### Install from Add-ons Stores
 
-For the safest and easiest experience, install NewSync directly from your browser's web store. This ensures you get automatic updates and a verified version of the extension.
+Safe, easy, and get auto updates. Install NewSync directly from your browser's web store.
 
 <p float="left">
 Microsoft Edge (Recommended):<br>

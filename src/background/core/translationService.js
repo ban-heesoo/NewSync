@@ -19,10 +19,10 @@ export class TranslationService {
 
   static async getOrFetch(songInfo, action, targetLang, forceReload = false) {
     const translatedKey = this.createCacheKey(songInfo, action, targetLang);
-    
-    const { lyrics: originalLyrics, version: originalVersion } = 
+
+    const { lyrics: originalLyrics, version: originalVersion } =
       await LyricsService.getOrFetch(songInfo, forceReload);
-    
+
     if (Utilities.isEmptyLyrics(originalLyrics)) {
       throw new Error('Original lyrics not found or empty');
     }
@@ -41,7 +41,8 @@ export class TranslationService {
       originalLyrics,
       action,
       actualTargetLang,
-      settings
+      settings,
+      songInfo
     );
 
     const finalTranslatedLyrics = { ...originalLyrics, data: translatedData };
@@ -50,7 +51,7 @@ export class TranslationService {
       translatedLyrics: finalTranslatedLyrics,
       originalVersion
     });
-    
+
     await translationsDB.set({
       key: translatedKey,
       translatedLyrics: finalTranslatedLyrics,
@@ -85,39 +86,61 @@ export class TranslationService {
     return null;
   }
 
-  static async performTranslation(originalLyrics, action, targetLang, settings) {
+  static async performTranslation(originalLyrics, action, targetLang, settings, songInfo = {}) {
     if (action === 'translate') {
-      return this.translate(originalLyrics, targetLang, settings);
+      return this.translate(originalLyrics, targetLang, settings, songInfo);
     } else if (action === 'romanize') {
-      return this.romanize(originalLyrics, settings);
+      return this.romanize(originalLyrics, settings, songInfo, targetLang);
     }
-    
+
     return originalLyrics.data;
   }
 
-  static async translate(originalLyrics, targetLang, settings) {
+  static async translate(originalLyrics, targetLang, settings, songInfo = {}) {
     const useGemini = settings.translationProvider === PROVIDERS.GEMINI && settings.geminiApiKey;
-    
-    if (useGemini) {
-      const textsToTranslate = originalLyrics.data.map(line => line.text);
-      const translatedTexts = await GeminiService.translate(textsToTranslate, targetLang, settings);
-      return originalLyrics.data.map((line, index) => ({
-        ...line,
-        translatedText: translatedTexts[index] || line.text
-      }));
-    } else {
-      const translationPromises = originalLyrics.data.map(line =>
-        GoogleService.translate(line.text, targetLang)
-      );
-      const translatedTexts = await Promise.all(translationPromises);
-      return originalLyrics.data.map((line, index) => ({
-        ...line,
-        translatedText: translatedTexts[index] || line.text
-      }));
+
+    const normalizeLang = (l) => l ? l.toLowerCase().split('-')[0].trim() : '';
+    const targetBase = normalizeLang(targetLang);
+
+    const linesToTranslate = [];
+    const indicesToTranslate = [];
+    const finalTranslations = new Array(originalLyrics.data.length).fill(null);
+
+    originalLyrics.data.forEach((line, index) => {
+      const embedded = line.translation;
+      if (embedded && embedded.text && normalizeLang(embedded.lang) === targetBase) {
+        finalTranslations[index] = embedded.text;
+      } else {
+        linesToTranslate.push(line.text);
+        indicesToTranslate.push(index);
+      }
+    });
+
+    if (linesToTranslate.length > 0) {
+      let fetchedTranslations;
+
+      if (useGemini) {
+        fetchedTranslations = await GeminiService.translate(linesToTranslate, targetLang, settings, songInfo);
+      } else {
+        const translationPromises = linesToTranslate.map(text =>
+          GoogleService.translate(text, targetLang)
+        );
+        fetchedTranslations = await Promise.all(translationPromises);
+      }
+
+      fetchedTranslations.forEach((trans, i) => {
+        const originalIndex = indicesToTranslate[i];
+        finalTranslations[originalIndex] = trans;
+      });
     }
+
+    return originalLyrics.data.map((line, index) => ({
+      ...line,
+      translatedText: finalTranslations[index] || line.text
+    }));
   }
 
-  static async romanize(originalLyrics, settings) {
+  static async romanize(originalLyrics, settings, songInfo = {}, targetLang) {
     // Check for prebuilt romanization
     const hasPrebuilt = originalLyrics.data.some(line =>
       line.romanizedText || (line.syllabus && line.syllabus.some(syl => syl.romanizedText))
@@ -125,58 +148,15 @@ export class TranslationService {
 
     if (hasPrebuilt) {
       console.log("Using prebuilt romanization");
-      return originalLyrics.data;
+      return originalLyrics.data.map(line => ({
+        text: line.romanizedText || line.text
+      }));
     }
 
     const useGemini = settings.romanizationProvider === PROVIDERS.GEMINI && settings.geminiApiKey;
-    
-    if (useGemini) {
-      return GeminiService.romanize(originalLyrics, settings);
-    }
-    
-    // Try Google first, with error handling and fallback to Gemini
-    let googleResult;
-    try {
-      googleResult = await GoogleService.romanize(originalLyrics);
-    } catch (error) {
-      console.error("Google romanization failed with error:", error);
-      // Fallback to Gemini if available
-      if (settings.geminiApiKey) {
-        console.warn("Google romanization failed, attempting Gemini fallback");
-        return GeminiService.romanize(originalLyrics, settings);
-      }
-      // If no Gemini, return original lyrics without romanization
-      return originalLyrics.data;
-    }
-    
-    // Check if Google actually succeeded (results should differ from input for non-Latin scripts)
-    const allResultsSameAsInput = originalLyrics.data.every((line, index) => {
-      const resultLine = googleResult[index];
-      if (!resultLine) return true;
-      
-      // For line-by-line: check if romanizedText is same as text
-      if (resultLine.romanizedText && resultLine.romanizedText.trim() === line.text.trim()) {
-        return true;
-      }
-      
-      // For word-by-word: check if all syllables have same romanizedText as text
-      if (resultLine.syllabus && line.syllabus) {
-        return resultLine.syllabus.every((syl, sylIndex) => {
-          const originalSyl = line.syllabus[sylIndex];
-          return !originalSyl || !syl.romanizedText || syl.romanizedText.trim() === originalSyl.text.trim();
-        });
-      }
-      
-      return false;
-    });
-    
-    // If all results are same as input and we have Gemini API key, try Gemini as fallback
-    if (allResultsSameAsInput && settings.geminiApiKey) {
-      console.warn("Google romanization appears to have failed (all results same as input), attempting Gemini fallback");
-      return GeminiService.romanize(originalLyrics, settings);
-    }
-    
-    return googleResult;
+
+    return useGemini
+      ? GeminiService.romanize(originalLyrics, settings, songInfo, targetLang)
+      : GoogleService.romanize(originalLyrics);
   }
 }
-

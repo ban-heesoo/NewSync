@@ -2,12 +2,7 @@
    STATE VARIABLES
    ================================================================= */
 
-let audioCtx = null;
-try {
-  audioCtx = new AudioContext();
-} catch (e) {
-  console.warn('Failed to create AudioContext:', e);
-}
+const audioCtx = new AudioContext();
 
 let currentFetchMediaId = null;
 let currentDisplayMode = 'none'; // User's intended display mode ('none', 'translate', 'romanize', 'both')
@@ -49,30 +44,14 @@ function combineLyricsData(baseLyrics, translation, romanization) {
     }
 
     if (romanizedLine) {
-      if (baseLyrics.type === "Word" && updatedLine.syllabus?.length > 0) {
-        // Handle Gemini format (chunk array)
-        if (romanizedLine.chunk?.length > 0) {
-          updatedLine.syllabus = updatedLine.syllabus.map((syllable, sylIndex) => {
-            const romanizedSyllable = romanizedLine.chunk[sylIndex];
-            return {
-              ...syllable,
-              romanizedText: romanizedSyllable?.text || syllable.text
-            };
-          });
-        }
-        // Handle Google format (romanizedText already in syllabus)
-        else if (romanizedLine.syllabus?.length > 0) {
-          updatedLine.syllabus = updatedLine.syllabus.map((syllable, sylIndex) => {
-            const romanizedSyllable = romanizedLine.syllabus[sylIndex];
-            return {
-              ...syllable,
-              romanizedText: romanizedSyllable?.romanizedText || syllable.text
-            };
-          });
-        }
-      }
-      else if (romanizedLine.romanizedText) {
-         updatedLine.romanizedText = romanizedLine.romanizedText;
+      if (baseLyrics.type === "Word" && romanizedLine.chunk?.length > 0 && updatedLine.syllabus?.length > 0) {
+        updatedLine.syllabus = updatedLine.syllabus.map((syllable, sylIndex) => {
+          const romanizedSyllable = romanizedLine.chunk[sylIndex];
+          return {
+            ...syllable,
+            romanizedText: romanizedSyllable?.text || syllable.text
+          };
+        });
       }
       else if (romanizedLine.text) {
          updatedLine.romanizedText = romanizedLine.text;
@@ -134,7 +113,11 @@ async function fetchAndDisplayLyrics(currentSong, isNewSong = false, forceReload
     // --- 2. Determine Effective Mode (User's Intent) ---
     let effectiveMode = currentDisplayMode;
     if (isNewSong) {
-      effectiveMode = 'none';
+      const { translationEnabled, romanizationEnabled } = currentSettings;
+      if (translationEnabled && romanizationEnabled) effectiveMode = 'both';
+      else if (translationEnabled) effectiveMode = 'translate';
+      else if (romanizationEnabled) effectiveMode = 'romanize';
+      else effectiveMode = 'none';
       currentDisplayMode = effectiveMode;
     }
 
@@ -221,7 +204,7 @@ async function fetchAndDisplayLyrics(currentSong, isNewSong = false, forceReload
     }
     
     // --- 7. Render Lyrics ---
-    lyricsObjectToDisplay.type = lyricsObjectToDisplay.type === "Line" ? "Line" : "Word";
+    lyricsObjectToDisplay.type = (lyricsObjectToDisplay.type === "None" ? "None" : (lyricsObjectToDisplay.type === "Line" ? "Line" : "Word"));
     lastFetchedLyrics = lyricsObjectToDisplay;
     if (LyricsPlusAPI.displayLyrics) {
       LyricsPlusAPI.displayLyrics(
@@ -232,7 +215,7 @@ async function fetchAndDisplayLyrics(currentSong, isNewSong = false, forceReload
         fetchAndDisplayLyrics,
         setCurrentDisplayModeAndRender,
         currentSettings.largerTextMode,
-         (audioCtx && audioCtx.outputLatency) || 0
+        audioCtx.outputLatency || 0
       );
     } else {
       console.error("displayLyrics is not available.");
@@ -275,18 +258,6 @@ function setCurrentDisplayModeAndRender(mode, songInfoForRefetch) {
 
 function convertWordLyricsToLine(lyrics) {
   if (lyrics.type !== "Word") return lyrics;
-
-  // Validate that lyrics.data exists and is an array
-  if (!lyrics.data || !Array.isArray(lyrics.data) || lyrics.data.length === 0) {
-    console.warn('convertWordLyricsToLine: lyrics.data is invalid or empty', lyrics);
-    // Return a valid Line-type lyrics object with empty data array
-    return {
-      type: "Line",
-      data: [],
-      metadata: lyrics.metadata || {},
-      ignoreSponsorblock: lyrics.ignoreSponsorblock
-    };
-  }
 
   const lines = lyrics.data.map(line => ({ ...line, syllables: [] }));
 

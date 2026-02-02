@@ -12,7 +12,7 @@ const defaultSettings = {
     autoHideLyrics: false,
     cacheStrategy: 'aggressive',
     fontSize: 16,
-    hideOffscreen: false,
+    hideOffscreen: true,
     blurInactive: false,
     dynamicPlayer: false,
     customCSS: '',
@@ -32,6 +32,7 @@ const defaultSettings = {
     overridePaletteColor: '',
     largerTextMode: 'lyrics', // 'lyrics' or 'romanization'
     customKpoeUrl: '',
+    appleMusicTTMLBypass: false
 };
 
 let currentSettings = { ...defaultSettings };

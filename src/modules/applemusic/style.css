@@ -1,0 +1,154 @@
+
+[data-testid="modal"] {
+    --lyrics-scroll-padding-top: 36%;
+}
+
+.lyrics__container.is-lyrics-off.svelte-fix90v.svelte-fix90v {
+    grid-template-columns: 32vw 40vw;
+    padding: 0 10vw;
+}
+
+body:has([data-testid="modal"]) main {
+        display: none; /* optimize shit, so lyrics changes not heavy*/
+    }
+
+[data-testid="modal"] #lyrics-plus-container {
+    position: relative;
+    display: block;
+    padding-top: calc(1em + 36vh);
+}
+
+[data-testid="modal"] #lyrics-plus-buttons-wrapper {
+    display: flex;
+    justify-content: flex-end;
+}
+
+[data-testid="modal"] #lyrics-plus-reload-button {
+    display: none;
+}
+
+#lyplus-patch-container {
+    opacity: 1;
+    width: 100%;
+    height: 100vh;
+    z-index: 1;
+    display: block;
+    position: relative;
+    grid-area: lyrics;
+    mix-blend-mode: plus-lighter;
+    mask-image: linear-gradient(to bottom, transparent 0%, black 26%, black 70%, transparent 100%);
+    -webkit-mask-image: linear-gradient(to bottom, transparent 0%, black 26%, black 70%, transparent 100%);
+    overflow: scroll;
+    scrollbar-width: none;
+
+    scroll-padding-top: 36%;
+    scroll-padding-block-start: 36%;
+    overflow-anchor: auto;
+    scrollbar-width: none;
+    will-change: scroll-position;
+    scroll-snap-type: y proximity;
+}
+
+#lyrics-plus-container::-webkit-scrollbar {
+    display: none;
+}
+
+
+#lyrics-plus-container .lyrics-line{
+    font-size: var(--lyrics-line-font-size);
+    line-height: var(--lyrics-line-line-height);
+}
+
+#lyrics-plus-container .lyrics-line:not(.lyrics-gap){
+    margin-bottom: 0.4em;
+}
+
+/* --- Hiding ONLY Native Lyrics Text --- */
+article[data-testid="lyrics-fullscreen-modal"] .lyrics__lyrics,
+.toggle-button.toggle-button--lyrics.lyrics-button,
+[data-testid="modal"] span.lyrics-source-provider  {
+    display: none !important;
+}
+
+/* --- Controls --- */
+#lyrics-plus-buttons-wrapper {
+    position: absolute;
+    bottom: 40px;
+    right: 0px;
+    z-index: 1000;
+    display: flex;
+    gap: 12px;
+}
+
+#lyrics-plus-buttons-wrapper button {
+    background: #ffffff14;
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    border-radius: 20%;
+    width: 40px;
+    height: 40px;
+    cursor: pointer;
+    backdrop-filter: blur(15px);
+    color: white;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: all 0.2s ease;
+}
+
+[data-testid="modal"] #lyrics-plus-translation-dropdown {
+    border-radius: 6px;
+    backdrop-filter: blur(60px) saturate(220%);
+    top: -7em;
+    left: 74.5%;
+    background-color: transparent;
+    border: 0px solid transparent;
+    box-shadow: 0 0 35px #00000059;
+}
+
+#lyrics-plus-translation-dropdown::before {
+    background-color: var(--systemStandardThickMaterialSover-default_IC);
+    content: "";
+    width: 100%;
+    height: 100%;
+    display: block;
+    position: absolute;
+    z-index: -1;
+    top: 0;
+    left: 0;
+    border-radius: inherit;
+    box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.2), 0 8px 40px var(--dialogShadowColor);
+}
+
+@supports (backdrop-filter: blur(10px)) {
+    #lyrics-plus-translation-dropdown::before {
+        background-color: var(--systemStandardThickMaterialSover);
+        backdrop-filter: blur(60px) saturate(210%);
+    }
+}
+
+@supports (backdrop-filter: blur(10px)) {
+    @media (prefers-color-scheme: dark) {
+        #lyrics-plus-translation-dropdown::before {
+            backdrop-filter: blur(60px) saturate(220%);
+        }
+    }
+}
+
+[data-testid="modal"] .dropdown-option:not(:first-of-type) {
+    border-top: 0.5px solid var(--labelDivider);
+}
+
+
+#lyrics-plus-container:not(.not-focused) .lyrics-line:has(~ .lyrics-line.lyrics-activest) .background-vocal-container,
+#lyrics-plus-container:not(.not-focused) .lyrics-line:has(~ .lyrics-plus-metadata.lyrics-activest) .background-vocal-container {
+    max-height: 10em;
+}
+
+#lyrics-plus-container:not(.not-focused) .lyrics-line:not(.lyrics-gap):has(~ .lyrics-line.lyrics-activest),
+#lyrics-plus-container:not(.not-focused) .lyrics-line:not(.lyrics-gap):has(~ .lyrics-plus-metadata.lyrics-activest) {
+    opacity: 0;
+    transition: opacity 0.3s ease 0.3s, transform 0.4s ease var(--lyrics-line-delay, 0ms), filter 0.3s ease;
+}
+#lyrics-plus-container:not(.not-focused) .lyrics-line:not(.lyrics-gap):has(~ .lyrics-line.prev-2) {
+    filter: none;
+}

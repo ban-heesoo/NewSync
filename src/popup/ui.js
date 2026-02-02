@@ -1,12 +1,12 @@
 document.addEventListener('DOMContentLoaded', () => {
     const pBrowser = (typeof browser !== "undefined") ? browser : chrome;
-    
+
     const versionElement = document.getElementById('version');
-    if (versionElement && pBrowser.runtime && pBrowser.runtime.getManifest) {
+    if (versionElement && pBrowser?.runtime?.getManifest) {
         const manifest = pBrowser.runtime.getManifest();
         versionElement.textContent = `v${manifest.version}`;
     }
-    
+
     const lyricsProviderSelect = document.getElementById('lyricsProvider');
     const wordByWordSwitchInput = document.getElementById('wordByWord');
     const lightweightSwitchInput = document.getElementById('lightweight');
@@ -14,18 +14,18 @@ document.addEventListener('DOMContentLoaded', () => {
     const sponsorBlockSwitchInput = document.getElementById('sponsorblock');
     const largerTextModeSelect = document.getElementById('largerTextMode');
     const dynamicPlayerSwitchInput = document.getElementById('dynamicPlayer');
-    
+
     const clearCacheButton = document.getElementById('clearCache');
     const refreshCacheButton = document.getElementById('refreshCache');
     const reloadExtensionButton = document.getElementById('reloadExtension');
     const cacheSizeElement = document.querySelector('.cache-size-value');
     const cacheCountElement = document.querySelector('.cache-count-value');
-    
+
     const status = document.getElementById('status');
-    
+
     const tabs = document.querySelectorAll('.tab');
     const tabContents = document.querySelectorAll('.tab-content');
-    
+
     tabs.forEach(tab => {
         tab.addEventListener('click', () => {
             tabs.forEach(t => t.classList.remove('active'));
@@ -35,9 +35,9 @@ document.addEventListener('DOMContentLoaded', () => {
             document.getElementById(targetContentId)?.classList.add('active');
         });
     });
-    
+
     let currentSettings = {};
-    
+
     const storageLocalGet = (keys) => {
         return new Promise((resolve, reject) => {
             if (typeof pBrowser === 'undefined' || !pBrowser.storage) {
@@ -60,13 +60,13 @@ document.addEventListener('DOMContentLoaded', () => {
             });
         });
     };
-    
+
     const storageLocalSet = (items) => {
         return new Promise((resolve, reject) => {
-             if (typeof pBrowser === 'undefined' || !pBrowser.storage) {
+            if (typeof pBrowser === 'undefined' || !pBrowser.storage) {
                 console.warn("pBrowser.storage not available. Using mock storage.");
                 let mockStorage = JSON.parse(localStorage.getItem('youly_mock_storage') || '{}');
-                mockStorage = {...mockStorage, ...items};
+                mockStorage = { ...mockStorage, ...items };
                 localStorage.setItem('youly_mock_storage', JSON.stringify(mockStorage));
                 resolve();
                 return;
@@ -80,7 +80,7 @@ document.addEventListener('DOMContentLoaded', () => {
             });
         });
     };
-    
+
     function loadSettingsUI() {
         lyricsProviderSelect.value = currentSettings.lyricsProvider;
         wordByWordSwitchInput.checked = currentSettings.wordByWord;
@@ -90,7 +90,7 @@ document.addEventListener('DOMContentLoaded', () => {
         largerTextModeSelect.value = currentSettings.largerTextMode || 'lyrics';
         dynamicPlayerSwitchInput.checked = currentSettings.dynamicPlayer || false;
     }
-    
+
     async function fetchAndLoadSettings() {
         try {
             const items = await storageLocalGet(defaultSettings);
@@ -102,7 +102,7 @@ document.addEventListener('DOMContentLoaded', () => {
             loadSettingsUI();
         }
     }
-    
+
     async function saveAndApplySettings() {
         const newSettings = {
             lyricsProvider: lyricsProviderSelect.value,
@@ -114,7 +114,7 @@ document.addEventListener('DOMContentLoaded', () => {
             dynamicPlayer: dynamicPlayerSwitchInput.checked,
         };
         currentSettings = { ...currentSettings, ...newSettings };
-        
+
         try {
             await storageLocalSet(currentSettings);
             showStatus('Settings saved! Reload YouTube pages for changes.');
@@ -124,24 +124,24 @@ document.addEventListener('DOMContentLoaded', () => {
             showStatus('Error saving settings.', true);
         }
     }
-    
+
     lyricsProviderSelect.addEventListener('change', saveAndApplySettings);
     largerTextModeSelect.addEventListener('change', saveAndApplySettings);
     [wordByWordSwitchInput, lightweightSwitchInput, lyEnabledSwitchInput, sponsorBlockSwitchInput, dynamicPlayerSwitchInput].forEach(input => {
         input.addEventListener('change', saveAndApplySettings);
     });
-    
+
     function showStatus(message, isError = false) {
         if (!status) return;
         status.textContent = message;
         status.style.backgroundColor = isError ? 'rgba(239, 68, 68, 0.9)' : 'rgba(62, 62, 65, 0.95)';
         status.classList.add('active');
-        
+
         setTimeout(() => {
             status.classList.remove('active');
         }, 3000);
     }
-    
+
     function notifyContentScripts(settings) {
         if (typeof pBrowser !== 'undefined' && pBrowser.tabs && pBrowser.tabs.query) {
             pBrowser.tabs.query({ url: "*://*.youtube.com/*" }, (tabs) => {
@@ -162,7 +162,7 @@ document.addEventListener('DOMContentLoaded', () => {
             console.warn("YouLy+: pBrowser.tabs.query not available. Skipping content script notification.");
         }
     }
-    
+
     async function updateCacheDisplay() {
         if (typeof pBrowser === 'undefined' || !pBrowser.runtime || !pBrowser.runtime.sendMessage) {
             console.warn("YouLy+: pBrowser.runtime.sendMessage not available for cache display.");
@@ -187,7 +187,7 @@ document.addEventListener('DOMContentLoaded', () => {
             console.error("YouLy+: Failed to send GET_CACHED_SIZE message:", error);
         }
     }
-    
+
     clearCacheButton.addEventListener('click', async () => {
         if (typeof pBrowser === 'undefined' || !pBrowser.runtime || !pBrowser.runtime.sendMessage) {
             showStatus('Cannot clear cache: Extension API not available.', true);
@@ -207,21 +207,21 @@ document.addEventListener('DOMContentLoaded', () => {
             console.error("YouLy+: Failed to send RESET_CACHE message:", error);
         }
     });
-    
+
     refreshCacheButton.addEventListener('click', () => {
         updateCacheDisplay();
         showStatus('Cache info refreshed.');
     });
-    
+
     reloadExtensionButton.addEventListener('click', async () => {
         if (typeof pBrowser === 'undefined' || !pBrowser.runtime || !pBrowser.runtime.reload) {
             showStatus('Cannot reload extension.', true);
             return;
         }
-        
+
         try {
             showStatus('Reloading extension...');
-            
+
             if (pBrowser.tabs && pBrowser.tabs.query) {
                 try {
                     const youtubeTabs = await new Promise((resolve, reject) => {
@@ -233,7 +233,7 @@ document.addEventListener('DOMContentLoaded', () => {
                             }
                         });
                     });
-                    
+
                     const reloadPromises = youtubeTabs.map(tab => {
                         return new Promise((resolve) => {
                             if (tab.id) {
@@ -243,9 +243,9 @@ document.addEventListener('DOMContentLoaded', () => {
                             }
                         });
                     });
-                    
+
                     await Promise.all(reloadPromises);
-                    
+
                     if (youtubeTabs.length > 0) {
                         showStatus(`Reloading ${youtubeTabs.length} tab(s)...`);
                     }
@@ -253,17 +253,17 @@ document.addEventListener('DOMContentLoaded', () => {
                     console.warn('YouLy+: Error reloading tabs:', tabError);
                 }
             }
-            
+
             setTimeout(() => {
                 pBrowser.runtime.reload();
             }, 300);
-            
+
         } catch (error) {
             console.error('Error reloading extension:', error);
             showStatus('Error reloading.', true);
         }
     });
-    
+
     fetchAndLoadSettings();
     updateCacheDisplay();
 });
