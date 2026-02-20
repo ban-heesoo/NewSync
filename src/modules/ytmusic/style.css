@@ -143,6 +143,31 @@ ytmusic-app #layout[player-ui-state="FULLSCREEN"] .ytmusic-browse-response {
         display: none !important;
     }
 
+    ytmusic-app-layout[player-fullscreened] > [slot="player-bar"] {
+        opacity: 1 !important;
+        visibility: visible !important;
+        pointer-events: auto !important;
+        transform: translateY(0) !important;
+        transition: opacity 0.2s ease, transform 0.2s ease;
+    }
+
+    ytmusic-app-layout[player-fullscreened]:not([show-fullscreen-controls]) ytmusic-player-bar > * {
+        opacity: 0 !important;
+        pointer-events: none !important;
+        transition: opacity 0.2s ease;
+    }
+
+    ytmusic-app-layout[player-fullscreened]:not([show-fullscreen-controls]) ytmusic-player-bar .progress-bar {
+        opacity: 1 !important;
+        pointer-events: auto !important;
+    }
+
+    ytmusic-app-layout[player-fullscreened]:has(ytmusic-player-bar .progress-bar:hover) ytmusic-player-bar > *,
+    ytmusic-app-layout[player-fullscreened][show-fullscreen-controls] ytmusic-player-bar > * {
+        opacity: 1 !important;
+        pointer-events: auto !important;
+    }
+
     ytmusic-app-layout[player-fullscreened][show-fullscreen-controls]>[slot="player-bar"] {
         width: 100%;
     }
