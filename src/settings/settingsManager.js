@@ -25,10 +25,12 @@ export function loadSettings(callback) {
         console.log("Items retrieved from storage:", items);
         currentSettings = { ...defaultSettings, ...items };
         console.log("Loaded settings:", currentSettings);
+        injectCustomCSS(currentSettings.customCSS);
         if (callback) callback(currentSettings);
     }).catch(error => {
         console.error("Error loading settings:", error);
         currentSettings = { ...defaultSettings };
+        injectCustomCSS(currentSettings.customCSS);
         if (callback) callback(currentSettings);
     });
 }
@@ -50,6 +52,9 @@ export function saveSettings() {
 export function updateSettings(newSettings) {
     currentSettings = { ...currentSettings, ...newSettings };
     console.log("Updated settings object:", currentSettings);
+    if (newSettings.customCSS !== undefined) {
+        injectCustomCSS(currentSettings.customCSS);
+    }
 }
 
 export function getSettings() {
@@ -75,26 +80,6 @@ export function updateCacheSize() {
     } else {
         console.warn("pBrowser.runtime.sendMessage is not available. Skipping cache size update.");
         document.getElementById('cache-size').textContent = `Cache info unavailable.`;
-    }
-}
-
-// Clear cache silently (without alert) - used for auto-clear after settings change
-export function clearCacheSilently() {
-    if (pBrowser && pBrowser.runtime && typeof pBrowser.runtime.sendMessage === 'function') {
-        pBrowser.runtime.sendMessage({ type: 'RESET_CACHE' }, (response) => {
-            if (pBrowser.runtime.lastError) {
-                console.error("Error resetting cache:", pBrowser.runtime.lastError.message);
-                return;
-            }
-            if (response && response.success) {
-                updateCacheSize();
-                console.log('Cache cleared automatically after settings change.');
-            } else {
-                console.error("Error resetting cache from response:", response ? response.error : "No response");
-            }
-        });
-    } else {
-        console.warn("pBrowser.runtime.sendMessage is not available. Skipping cache clear.");
     }
 }
 
@@ -191,55 +176,6 @@ export function deleteLocalLyrics(songId) {
     });
 }
 
-export function updateLocalLyrics(songId, songInfo, jsonLyrics) {
-    return new Promise((resolve, reject) => {
-        if (pBrowser && pBrowser.runtime && typeof pBrowser.runtime.sendMessage === 'function') {
-            pBrowser.runtime.sendMessage({
-                type: 'UPDATE_LOCAL_LYRICS',
-                songId,
-                songInfo,
-                jsonLyrics
-            }, (response) => {
-                if (pBrowser.runtime.lastError) {
-                    console.error("Error updating local lyrics:", pBrowser.runtime.lastError.message);
-                    return reject(pBrowser.runtime.lastError.message);
-                }
-                if (response && response.success) {
-                    resolve(response);
-                } else {
-                    console.error("Error updating local lyrics from response:", response ? response.error : "No response");
-                    reject(response ? response.error : 'Unknown error');
-                }
-            });
-        } else {
-            console.warn("pBrowser.runtime.sendMessage is not available. Skipping local lyrics update.");
-            reject('Local lyrics update feature is unavailable in this context.');
-        }
-    });
-}
-
-export function fetchLocalLyrics(songId) {
-    return new Promise((resolve, reject) => {
-        if (pBrowser && pBrowser.runtime && typeof pBrowser.runtime.sendMessage === 'function') {
-            pBrowser.runtime.sendMessage({ type: 'FETCH_LOCAL_LYRICS', songId }, (response) => {
-                if (pBrowser.runtime.lastError) {
-                    console.error("Error fetching local lyrics:", pBrowser.runtime.lastError.message);
-                    return reject(pBrowser.runtime.lastError.message);
-                }
-                if (response && response.success) {
-                    resolve(response);
-                } else {
-                    console.error("Error fetching local lyrics from response:", response ? response.error : "No response");
-                    reject(response ? response.error : 'Unknown error');
-                }
-            });
-        } else {
-            console.warn("pBrowser.runtime.sendMessage is not available. Skipping local lyrics fetch.");
-            reject('Local lyrics fetch feature is unavailable in this context.');
-        }
-    });
-}
-
 export function setupSettingsMessageListener(callback) {
     if (typeof window.addEventListener === 'function') {
         window.addEventListener('message', (event) => {
@@ -250,4 +186,28 @@ export function setupSettingsMessageListener(callback) {
             if (callback) callback(currentSettings);
         });
     }
+}
+
+// Listen for storage changes to keep settings in sync across contexts (e.g. background script)
+if (pBrowser && pBrowser.storage) {
+    pBrowser.storage.onChanged.addListener((changes, area) => {
+        if (area === 'local') {
+            const newSettings = {};
+            for (let key in changes) {
+                newSettings[key] = changes[key].newValue;
+            }
+            console.log("Settings updated via storage (background/shared):", newSettings);
+            updateSettings(newSettings);
+        }
+    });
+}
+
+function injectCustomCSS(customCSS) {
+    let styleTag = document.getElementById('lyrics-plus-custom-css');
+    if (!styleTag) {
+        styleTag = document.createElement('style');
+        styleTag.id = 'lyrics-plus-custom-css';
+        document.head.appendChild(styleTag);
+    }
+    styleTag.textContent = customCSS || '';
 }

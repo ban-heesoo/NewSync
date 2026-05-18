@@ -1,5 +1,6 @@
 document.addEventListener('DOMContentLoaded', () => {
     const pBrowser = (typeof browser !== "undefined") ? browser : chrome;
+    const RELOAD_MUSIC_TABS_AFTER_EXTENSION_RELOAD = 'reloadMusicTabsAfterExtensionReload';
 
     const versionElement = document.getElementById('version');
     if (versionElement && pBrowser?.runtime?.getManifest) {
@@ -81,8 +82,24 @@ document.addEventListener('DOMContentLoaded', () => {
         });
     };
 
+    const providerNameMap = {
+        'kpoe': 'Lyrics+ (KPoe)',
+        'customKpoe': 'Custom KPoe Server',
+        'lrclib': 'LRCLIB'
+    };
+
+    function updateCurrentProviderDisplay() {
+        const currentProvider = lyricsProviderSelect.value;
+        const displayName = providerNameMap[currentProvider] || currentProvider;
+        const displayElement = document.getElementById('currentProviderDisplay');
+        if (displayElement) {
+            displayElement.textContent = displayName;
+        }
+    }
+
     function loadSettingsUI() {
         lyricsProviderSelect.value = currentSettings.lyricsProvider;
+        updateCurrentProviderDisplay();
         wordByWordSwitchInput.checked = currentSettings.wordByWord;
         lightweightSwitchInput.checked = currentSettings.lightweight;
         lyEnabledSwitchInput.checked = currentSettings.isEnabled;
@@ -125,7 +142,10 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     }
 
-    lyricsProviderSelect.addEventListener('change', saveAndApplySettings);
+    lyricsProviderSelect.addEventListener('change', () => {
+        updateCurrentProviderDisplay();
+        saveAndApplySettings();
+    });
     largerTextModeSelect.addEventListener('change', saveAndApplySettings);
     [wordByWordSwitchInput, lightweightSwitchInput, lyEnabledSwitchInput, sponsorBlockSwitchInput, dynamicPlayerSwitchInput].forEach(input => {
         input.addEventListener('change', saveAndApplySettings);
@@ -220,48 +240,20 @@ document.addEventListener('DOMContentLoaded', () => {
         }
 
         try {
-            showStatus('Reloading extension...');
-
-            if (pBrowser.tabs && pBrowser.tabs.query) {
-                try {
-                    const youtubeTabs = await new Promise((resolve, reject) => {
-                        pBrowser.tabs.query({ url: ["*://*.youtube.com/*"] }, (tabs) => {
-                            if (pBrowser.runtime.lastError) {
-                                reject(pBrowser.runtime.lastError);
-                            } else {
-                                resolve(tabs);
-                            }
-                        });
-                    });
-
-                    const reloadPromises = youtubeTabs.map(tab => {
-                        return new Promise((resolve) => {
-                            if (tab.id) {
-                                pBrowser.tabs.reload(tab.id, () => resolve());
-                            } else {
-                                resolve();
-                            }
-                        });
-                    });
-
-                    await Promise.all(reloadPromises);
-
-                    if (youtubeTabs.length > 0) {
-                        showStatus(`Reloading ${youtubeTabs.length} tab(s)...`);
-                    }
-                } catch (tabError) {
-                    console.warn('YouLy+: Error reloading tabs:', tabError);
-                }
-            }
-
-            setTimeout(() => {
-                pBrowser.runtime.reload();
-            }, 300);
-
+            await storageLocalSet({
+                [RELOAD_MUSIC_TABS_AFTER_EXTENSION_RELOAD]: {
+                    createdAt: Date.now(),
+                },
+            });
+            showStatus('Reloading extension, then music tabs...');
         } catch (error) {
-            console.error('Error reloading extension:', error);
-            showStatus('Error reloading.', true);
+            console.error('YouLy+: Error scheduling music tabs reload:', error);
+            showStatus('Reloading extension only...');
         }
+
+        setTimeout(() => {
+            pBrowser.runtime.reload();
+        }, 150);
     });
 
     fetchAndLoadSettings();

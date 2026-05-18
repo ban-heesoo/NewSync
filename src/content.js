@@ -4,6 +4,28 @@ loadSettings(() => {
     }
 });
 
+// Listen for messages from background/settings
+window.__lyricsPlusBrowserApi = window.__lyricsPlusBrowserApi || (typeof browser !== 'undefined' ? browser : (typeof chrome !== 'undefined' ? chrome : null));
+const lyricsPlusBrowserApi = window.__lyricsPlusBrowserApi;
+if (lyricsPlusBrowserApi && lyricsPlusBrowserApi.runtime) {
+    lyricsPlusBrowserApi.runtime.onMessage.addListener((request, sender, sendResponse) => {
+        if (request.type === 'REFRESH_TRANSLATION') {
+            // Refresh lyrics display with new translation settings
+            if (typeof fetchAndDisplayLyrics === 'function') {
+                // Get current song from window (assuming it's stored globally)
+                if (window.currentSongInfo) {
+                    fetchAndDisplayLyrics(window.currentSongInfo, false);
+                    sendResponse({ success: true });
+                } else {
+                    sendResponse({ success: false, message: 'No current song info' });
+                }
+            } else {
+                sendResponse({ success: false, message: 'fetchAndDisplayLyrics not available' });
+            }
+        }
+    });
+}
+
 // Expose fetchAndDisplayLyrics and t globally for other modules to use
 window.LyricsPlusAPI = {
     fetchAndDisplayLyrics: fetchAndDisplayLyrics,
@@ -21,10 +43,11 @@ window.LyricsPlusAPI = {
 };
 
 function initializeLyricsPlus() {
+    // Start the watchdog, which handles the initial injection AND re-injects if deleted
+    startCssWatchdog();
+    
     // Inject the DOM script
-    injectPlatformCSS();
     injectDOMScript();
-    injectCssFile();
 
     // Listen for messages from the injected script
     window.addEventListener('message', function (event) {
@@ -36,7 +59,6 @@ function initializeLyricsPlus() {
             // Handle song info updates
             if (event.data.type === 'LYPLUS_SONG_CHANGED') {
                 const songInfo = event.data.songInfo;
-                const isNewSong = event.data.isNewSong; // Get the new song flag
                 console.log('Song changed (received in extension):', songInfo);
 
                 // Don't fetch lyrics if title or artist is empty
@@ -46,26 +68,71 @@ function initializeLyricsPlus() {
                 }
 
                 // Call the lyrics fetching function with the new song info and new song flag
-                fetchAndDisplayLyrics(songInfo, isNewSong);
+                fetchAndDisplayLyrics(songInfo, true);
             }
         }
     });
 }
 
+// --- CSS INJECTION & WATCHDOG ---
 
 function injectCssFile() {
+    if (document.querySelector('link[data-lyrics-plus-style]')) return;
+    
     const pBrowser = typeof browser !== 'undefined'
         ? browser
         : (typeof chrome !== 'undefined' ? chrome : null);
-    if (document.querySelector('link[data-lyrics-plus-style]')) return;
+        
     const lyricsElement = document.createElement('link');
     lyricsElement.rel = 'stylesheet';
     lyricsElement.type = 'text/css';
+    
     if (!pBrowser?.runtime?.getURL) {
         console.warn('LyricsPlus: runtime.getURL unavailable, skipping CSS inject');
         return;
     }
     lyricsElement.href = pBrowser.runtime.getURL('src/modules/lyrics/lyrics.css');
     lyricsElement.setAttribute('data-lyrics-plus-style', 'true');
-    document.head.appendChild(lyricsElement);
+    
+    if (document.body) {
+        document.body.insertBefore(lyricsElement, document.body.firstChild);
+    } else {
+        document.head.appendChild(lyricsElement);
+    }
+}
+
+function startCssWatchdog() {
+    const ensureStyles = () => {
+        injectPlatformCSS();
+        injectCssFile();
+        if (typeof injectCustomCSS === 'function') {
+            injectCustomCSS(currentSettings.customCSS);
+        }
+    };
+    
+    if (!document.body) {
+        setTimeout(startCssWatchdog, 100);
+        return;
+    }
+    
+    ensureStyles();
+
+    const cssObserver = new MutationObserver((mutations) => {
+        let missing = false;
+        
+        if (!document.querySelector('link[data-lyrics-plus-style]') || 
+            !document.querySelector('link[data-lyrics-plus-platform-style]')) {
+            missing = true;
+        }
+
+        if (missing) {
+            ensureStyles();
+            console.log('LYPLUS: CSS Watchdog restored missing stylesheets.');
+        }
+    });
+
+    cssObserver.observe(document.body, { 
+        childList: true, 
+        subtree: false
+    });
 }

@@ -1,19 +1,21 @@
 {
   "manifest_version": 3,
   "name": "NewSync",
-  "version": "2.5.7",
-  "description": "Enhanced lyrics feature for YouTube Music with line-by-line and word-by-word sync",
-  "permissions": ["activeTab", "storage", "scripting", "tabs", "management"],
-  "icons": {
-    "16": "icons/icon16.png",
-    "32": "icons/icon32.png",
-    "48": "icons/icon48.png",
-    "128": "icons/icon128.png"
-  },
+  "default_locale": "en",
+  "version": "2.5.8",
+  "description": "__MSG_extensionDescription__",
+  "permissions": [
+    "storage"
+  ],
   "host_permissions": [
     "*://*.music.youtube.com/*",
+    "*://*.tidal.com/*",
     "*://*.music.apple.com/*",
-    "*://*.tidal.com/*"
+    "https://api.deepl.com/*",
+    "https://api-free.deepl.com/*",
+    "https://translate.googleapis.com/*",
+    "https://generativelanguage.googleapis.com/*",
+    "https://openrouter.ai/api/*"
   ],
   "action": {
     "default_popup": "src/popup/ui.html",
@@ -24,19 +26,31 @@
       "128": "icons/icon128.png"
     }
   },
+  "icons": {
+    "16": "icons/icon16.png",
+    "32": "icons/icon32.png",
+    "48": "icons/icon48.png",
+    "128": "icons/icon128.png"
+  },
   "browser_specific_settings": {
     "gecko": {
-      "id": "@newsync-zen",
-      "strict_min_version": "58.0"
+      "id": "{00a6e1f0-4808-45e7-b66d-3a5aa6527a0e}",
+      "strict_min_version": "122.0",
+      "data_collection_permissions": {
+        "required": [
+          "none"
+        ]
+      }
     }
   },
   "content_scripts": [
     {
-      "matches": ["*://*.music.youtube.com/*"],
+      "matches": [
+        "*://*.music.youtube.com/*"
+      ],
       "js": [
         "src/lib/sponsorblock.js",
         "src/lib/polyfill.js",
-        "src/lib/md3e-progress.js",
         "src/lib/colorTunes.js",
         "src/localization.js",
         "src/modules/lyrics/settings.js",
@@ -49,7 +63,9 @@
       ]
     },
     {
-      "matches": ["*://*.music.apple.com/*"],
+      "matches": [
+        "*://*.music.apple.com/*"
+      ],
       "js": [
         "src/lib/polyfill.js",
         "src/localization.js",
@@ -62,7 +78,9 @@
       ]
     },
     {
-      "matches": ["*://*.tidal.com/*"],
+      "matches": [
+        "*://*.tidal.com/*"
+      ],
       "js": [
         "src/lib/polyfill.js",
         "src/localization.js",
@@ -86,15 +104,22 @@
         "src/inject/applemusic/songTracker.js",
         "src/assets/loading.gif"
       ],
-      "matches": ["*://*.music.youtube.com/*", "*://*.music.apple.com/*"]
+      "matches": [
+        "*://*.music.youtube.com/*",
+        "*://*.music.apple.com/*"
+      ]
     },
     {
       "resources": [
         "src/modules/lyrics/lyrics.css",
         "src/modules/tidal/style.css",
+        "src/lib/parser.js",
+        "src/inject/tidal/songTracker.js",
         "src/assets/loading.gif"
       ],
-      "matches": ["*://*.tidal.com/*"]
+      "matches": [
+        "*://*.tidal.com/*"
+      ]
     },
     {
       "resources": [
@@ -102,12 +127,16 @@
         "src/modules/applemusic/style.css",
         "src/assets/loading.gif"
       ],
-      "matches": ["*://*.music.apple.com/*"]
+      "matches": [
+        "*://*.music.apple.com/*"
+      ]
     }
   ],
   "background": {
     "service_worker": "src/background/lyricsHandler.js",
     "type": "module",
-    "scripts": ["src/background/lyricsHandler.js"]
+    "scripts": [
+      "src/background/lyricsHandler.js"
+    ]
   }
 }

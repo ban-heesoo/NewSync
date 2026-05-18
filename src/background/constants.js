@@ -8,18 +8,22 @@ export const CONFIG = {
     TRANSLATIONS: { name: "TranslationsDB", version: 2, store: "translations" },
     LOCAL: { name: "LocalLyricsDB", version: 2, store: "localLyrics" }
   },
-  
+
   CACHE_EXPIRY: {
-    aggressive: 24 * 60 * 60 * 1000, 
-    moderate: 12 * 60 * 60 * 1000 
+    aggressive: 24 * 60 * 60 * 1000,
+    moderate: 12 * 60 * 60 * 1000
   },
-  
+
   KPOE_SERVERS: [
-    "https://lyricsplus-seven.vercel.app",
-    "https://lyricsplus.prjktla.workers.dev",
-    "https://lyrics-plus-backend.vercel.app"
+    //plz dont stole lmao
+    "https://lyricsplus.prjktla.my.id", //youly's server
+    "https://lyricsplus.atomix.one/", //meow's mirror
+    "https://lyricsplus.binimum.org", //binimum's server
+    "https://lyricsplus.prjktla.workers.dev", //ibra's cf worker
+    "https://lyricsplus-seven.vercel.app", //jigen's mirror
+    "https://lyrics-plus-backend.vercel.app", //ibra's vercel
   ],
-  
+
   GEMINI: {
     MAX_RETRIES: 5,
     MIN_TEXT_SIMILARITY: 0.8
@@ -34,10 +38,13 @@ export const CONFIG = {
 export const PROVIDERS = {
   KPOE: 'kpoe',
   CUSTOM_KPOE: 'customKpoe',
+  UNISON: 'unison',
   LRCLIB: 'lrclib',
   LOCAL: 'local',
   GEMINI: 'gemini',
-  GOOGLE: 'google'
+  GOOGLE: 'google',
+  OPENROUTER: 'openrouter',
+  DEEPL: 'deepl'
 };
 
 export const MESSAGE_TYPES = {
@@ -50,5 +57,6 @@ export const MESSAGE_TYPES = {
   GET_LOCAL_LYRICS_LIST: 'GET_LOCAL_LYRICS_LIST',
   DELETE_LOCAL_LYRICS: 'DELETE_LOCAL_LYRICS',
   FETCH_LOCAL_LYRICS: 'FETCH_LOCAL_LYRICS',
-  UPDATE_LOCAL_LYRICS: 'UPDATE_LOCAL_LYRICS'
+  FETCH_IMAGE: 'FETCH_IMAGE',
+  BROADCAST_REFRESH_TRANSLATION: 'BROADCAST_REFRESH_TRANSLATION'
 };

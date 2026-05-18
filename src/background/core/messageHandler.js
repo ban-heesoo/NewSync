@@ -22,7 +22,7 @@ export class MessageHandler {
       [MESSAGE_TYPES.GET_LOCAL_LYRICS_LIST]: () => this.getLocalLyricsList(sendResponse),
       [MESSAGE_TYPES.DELETE_LOCAL_LYRICS]: () => this.deleteLocalLyrics(message, sendResponse),
       [MESSAGE_TYPES.FETCH_LOCAL_LYRICS]: () => this.fetchLocalLyrics(message, sendResponse),
-      [MESSAGE_TYPES.UPDATE_LOCAL_LYRICS]: () => this.updateLocalLyrics(message, sendResponse)
+      [MESSAGE_TYPES.FETCH_IMAGE]: () => this.fetchImage(message, sendResponse)
     };
 
     const handler = handlers[message.type];
@@ -41,13 +41,13 @@ export class MessageHandler {
   }
 
   static async fetchLyrics(message, sendResponse) {
-      try {
-        const { lyrics } = await LyricsService.getOrFetch(message.songInfo, message.forceReload);
-        sendResponse({ success: true, lyrics, metadata: message.songInfo });
-      } catch (error) {
-        console.error(`Failed to fetch lyrics for "${message.songInfo?.title}":`, error);
-        sendResponse({ success: false, error: error.message, metadata: message.songInfo });
-      }
+    try {
+      const { lyrics } = await LyricsService.getOrFetch(message.songInfo, message.forceReload);
+      sendResponse({ success: true, lyrics, metadata: message.songInfo });
+    } catch (error) {
+      console.error(`Failed to fetch lyrics for "${message.songInfo?.title}":`, error);
+      sendResponse({ success: false, error: error.message, metadata: message.songInfo });
+    }
   }
 
   static async translateLyrics(message, sendResponse) {
@@ -67,6 +67,12 @@ export class MessageHandler {
 
   static async fetchSponsorSegments(message, sendResponse) {
     try {
+      if (message.ignoreSponsorblock) {
+        console.log('SponsorBlock skipped: ignoreSponsorblock flag is set');
+        sendResponse({ success: true, segments: [] });
+        return;
+      }
+
       const segments = await SponsorBlockService.fetch(message.videoId);
       sendResponse({ success: true, segments });
     } catch (error) {
@@ -166,23 +172,21 @@ export class MessageHandler {
     }
   }
 
-  static async updateLocalLyrics(message, sendResponse) {
+  static async fetchImage(message, sendResponse) {
     try {
-      const existingLyrics = await localLyricsDB.get(message.songId);
-      if (!existingLyrics) {
-        sendResponse({ success: false, error: "Local lyrics not found" });
-        return;
-      }
-
-      await localLyricsDB.set({
-        songId: message.songId,
-        songInfo: message.songInfo,
-        lyrics: message.jsonLyrics,
-        timestamp: existingLyrics.timestamp || Date.now()
-      });
-      sendResponse({ success: true, message: "Local lyrics updated successfully" });
+      const response = await fetch(message.url);
+      if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`);
+      const blob = await response.blob();
+      const reader = new FileReader();
+      reader.onloadend = () => {
+        sendResponse({ success: true, dataUrl: reader.result });
+      };
+      reader.onerror = () => {
+        sendResponse({ success: false, error: "Failed to read blob" });
+      };
+      reader.readAsDataURL(blob);
     } catch (error) {
-      console.error("Error updating local lyrics:", error);
+      console.error("Error fetching image:", error);
       sendResponse({ success: false, error: error.message });
     }
   }

@@ -21,16 +21,6 @@
 
 NewSync is a browser extension that brings synchronized lyrics to YouTube Music with an Apple Music-inspired interface.
 
-<p align="center">
-    <b>Supported Browsers:</b>
-<br>
-<img  width="30px" src="https://cdn-icons-png.flaticon.com/128/6125/6125000.png" alt="Chrome">
-<img  width="30px" src="https://cdn-icons-png.flaticon.com/128/5968/5968890.png" alt="Edge">
-<img  width="30px" src="https://cdn-icons-png.flaticon.com/128/5968/5968827.png" alt="Firefox">
-<img  width="30px" src="https://raw.githubusercontent.com/zen-browser/.github/refs/heads/main/profile/logo-black.png" alt="Zen">
-<img  width="30px" src="https://upload.wikimedia.org/wikipedia/commons/thumb/e/e4/Vivaldi_web_browser_logo.svg/456px-Vivaldi_web_browser_logo.png" alt="Vivaldi">
-<img  width="30px" src="https://cdn-icons-png.flaticon.com/128/6124/6124994.png" alt="Opera">
-<img  width="30px" src="https://img.icons8.com/?size=48&id=cM42lftaD9Z3&format=png" alt="Brave">
 </p>
 
 ## Installation

@@ -14,10 +14,11 @@ export class SettingsManager {
 
   static async getLyricsSettings() {
     return this.get({
-      'lyricsProvider': PROVIDERS.KPOE,
-      'lyricsSourceOrder': 'apple,lyricsplus,musixmatch,spotify,musixmatch-word',
+      'lyricsProviderOrder': 'kpoe,unison,lrclib',
+      'lyricsSourceOrder': 'apple,lyricsplus,qq,musixmatch,musixmatch-word',
       'customKpoeUrl': '',
-      'cacheStrategy': 'aggressive'
+      'cacheStrategy': 'aggressive',
+      'preferUnisonVideo': false
     });
   }
 
@@ -33,7 +34,10 @@ export class SettingsManager {
       'overrideGeminiPrompt': false,
       'customGeminiPrompt': '',
       'overrideGeminiRomanizePrompt': false,
-      'customGeminiRomanizePrompt': ''
+      'customGeminiRomanizePrompt': '',
+      'openRouterApiKey': '',
+      'openRouterModel': 'google/gemini-2.0-flash-001',
+      'deeplApiKey': ''
     });
   }
 }

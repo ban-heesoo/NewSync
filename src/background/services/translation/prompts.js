@@ -425,40 +425,68 @@ Analyze the language(s) in the input, apply appropriate phonetic rules, preserve
 }
 
 export function createTranslationPrompt(settings = { overrideGeminiPrompt: false, customGeminiPrompt: '' }, texts, targetLang, songInfo = {}) {
+  // 1. Build Context & Metadata
   const songContext = (songInfo.title && songInfo.artist)
-    ? `\n# SONG CONTEXT\n- Title: ${songInfo.title}\n- Artist: ${songInfo.artist}\n`
-    : '';
+    ? `Song Metadata: Title="${songInfo.title}", Artist="${songInfo.artist}"`
+    : 'Song Metadata: None';
 
-  const translationRules = (settings.overrideGeminiPrompt && settings.customGeminiPrompt) ?
-    songContext + settings.customGeminiPrompt :
-    `You are an expert song lyric translator adhering to this guidelines. Your goal is to translate lyrics into ${targetLang} while strictly preserving the structure and formatting style of the original lines.
+  const sourceLangHint = songInfo.source_languages
+    ? `Source Languages Present: ${songInfo.source_languages.join(', ')}`
+    : 'Source Languages: Mixed/Unknown';
+
+  if (settings.overrideGeminiPrompt && settings.customGeminiPrompt) {
+    return songContext + '\n' + settings.customGeminiPrompt;
+  }
+
+  return `### ROLE
+You are an expert, highly precise song lyrics translator. Your task is to translate the provided JSON array of lines into ${targetLang}.
+
+### CONTEXT
 ${songContext}
-CRITICAL GUIDELINES:
+${sourceLangHint}
 
-1. PRESERVE ORIGINAL STRUCTURE & STYLE:
-   - **Mirror the Source:** If the original line uses parentheses (), uses all-caps, or is entirely lowercase (artist style), your translation MUST follow the same format.
-   - **Arabic/Non-Latin Source:** If the source script (e.g., Arabic, Kanji) has no casing, default to standard Sentence case (First letter capitalized, rest lowercase).
-   - **Punctuation:** Keep internal punctuation (commas, dashes) exactly where the rhythm dictates.
-   - **Line Endings:**
-     - IF the original line has NO punctuation at the end, do NOT add a period (.).
-     - IF the original line has expressive punctuation (! or ?), KEEP it.
-     - **NEVER** add a grammatical full stop (.) at the end of a line just because it is a sentence. Lyrics are poetry, not paragraphs.
+### STRICT RULES (Read Carefully)
+1. **Target Language Enforcement:**
+   - The FINAL output must be 100% intelligible in ${targetLang}.
+   - **CRITICAL:** Translate ALL foreign scripts (Cyrillic, Kanji, Hangul, Arabic, etc.). DO NOT leave them in the original script.
 
-2. UNTRANSLATABLE WORDS (Brand/City Names):
-   - Keep proper nouns, brand names, and specific city names in their original form unless a standard local version exists.
-   - Example: "Sippin' Diet Pepsi" -> "Minum Diet Pepsi" (Keep "Diet Pepsi").
+2. **The "Identity" Logic:**
+   - IF the line is *already* in ${targetLang} -> KEEP IT EXACTLY AS IS.
+   - IF the line is in *any other language* -> TRANSLATE it to ${targetLang}.
 
-3. TONE & CREATIVITY:
-   - **Convey the Vibe:** If the line is funny, translate it to be funny in ${targetLang}. If it's slang, use equivalent local slang.
-   - **Meaning over Literal:** Do not translate word-for-word. Translate the *message*.
-   - **Mixed Language:** If a line is already in ${targetLang}, return it unchanged.
+3. **DIRECTNESS & ANTI-HALLUCINATION (CRITICAL FOR ACCURACY):**
+   - Translate slang and idioms contextually (e.g., "Aku banyak yang mau" -> "Many people want me"), BUT DO NOT overcomplicate simple structures.
+   - **DO NOT invent words or verbs that are not there.** If the source says "[Subject] is [Adjective]", translate it exactly as "[Subject] is [Adjective]". 
+   - DO NOT add relational verbs like "you see me as", "you think I am", or "you treat me like" unless they explicitly exist in the original text.
 
-INPUT LYRICS:
+4. **Formatting:**
+   - Preserve repetition ("ma-ma", "la-la-la").
+   - Preserve punctuation, casing, and parentheses exactly from the source.
+
+### FEW-SHOT EXAMPLES
+
+Input: ["(Screaming)", "Я сошла с ума"]
+Target: English
+Output: ["(Screaming)", "I've lost my mind"]
+(Explanation: Parentheses kept. Cyrillic translated to English.)
+
+Input: ["Aku banyak yang mau", "Walau aku tampan, kau biasa saja"]
+Target: English
+Output: ["Many people want me", "Even though I'm handsome, you are just ordinary"]
+(Explanation: Slang is translated properly. Direct Subject-Adjective structure is kept WITHOUT hallucinating extra verbs like "see me as" or "think I am".)
+
+### TASK
+Input Lyrics:
 ${JSON.stringify(texts, null, 2)}
 
-OUTPUT REQUIREMENT:
-Respond with ONLY the JSON array of ${texts.length} translated strings. No Markdown, no explanation.`;
-
-  const prompt = translationRules;
-  return prompt;
+IMPORTANT OUTPUT FORMAT:
+Respond with ONLY a valid JSON object matching the exact structure below. Do not wrap it in Markdown code blocks (\`\`\`json). Just return the raw JSON string.
+{
+  "translated_lyrics": [
+    "translated line 1",
+    "translated line 2"
+  ],
+  "target_language": "${targetLang}",
+  "source_language": ["detected source language(s)"]
+}`;
 }

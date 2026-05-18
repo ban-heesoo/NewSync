@@ -3,22 +3,62 @@
 // ==================================================================================================
 
 import { state } from '../storage/state.js';
-import { lyricsDB, localLyricsDB } from '../storage/database.js';
+import { lyricsDB, localLyricsDB, translationsDB } from '../storage/database.js';
 import { SettingsManager } from '../storage/settings.js';
 import { CONFIG, PROVIDERS } from '../constants.js';
 import { DataParser } from '../utils/dataParser.js';
 import { Utilities } from '../utils/utilities.js';
 import { KPoeService } from '../services/kpoeService.js';
 import { LRCLibService } from '../services/lrclibService.js';
+import { UnisonService } from '../services/unisonService.js';
 import { YouTubeService } from '../services/youtubeService.js';
+import { parseAppleTTML } from '../../lib/parser.js';
 
 export class LyricsService {
   static createCacheKey(songInfo) {
     return `${songInfo.title} - ${songInfo.artist} - ${songInfo.album} - ${songInfo.duration}`;
   }
 
+  static async clearExpiredCache() {
+    try {
+      const settings = await SettingsManager.get({ cacheStrategy: 'aggressive' });
+
+      if (settings.cacheStrategy === 'none') {
+        const stats = await lyricsDB.estimateSize();
+        if (stats.count > 0) {
+          await Promise.all([lyricsDB.clear(), translationsDB.clear()]);
+          console.log('Cleared all cache as strategy is none.');
+        }
+        return;
+      }
+
+      const expirationTime = CONFIG.CACHE_EXPIRY[settings.cacheStrategy];
+      if (!expirationTime) return;
+
+      const [deletedLyrics, deletedTrans] = await Promise.all([
+        lyricsDB.deleteExpired(expirationTime),
+        translationsDB.deleteExpired(expirationTime)
+      ]);
+
+      if (deletedLyrics > 0 || deletedTrans > 0) {
+        console.log(`Cleared expired cache: ${deletedLyrics} lyrics, ${deletedTrans} translations.`);
+      }
+    } catch (error) {
+      console.error('Error clearing expired cache:', error);
+    }
+  }
+
   static async getOrFetch(songInfo, forceReload = false) {
     let embeddedFallback = null;
+
+    // Parse Apple Music TTML if provided
+    if (songInfo.appleMusicTTML && typeof songInfo.appleMusicTTML === 'string') {
+      try {
+        songInfo.lyricsJSON = parseAppleTTML(songInfo.appleMusicTTML);
+      } catch (error) {
+        console.error('Error parsing Apple Music TTML:', error);
+      }
+    }
 
     if (songInfo.lyricsJSON && songInfo.lyricsJSON.lyrics.length > 0) {
       const settings = await SettingsManager.get({ appleMusicTTMLBypass: false });
@@ -33,7 +73,7 @@ export class LyricsService {
         console.log('Using embedded lyrics (platform specific)');
         return embeddedResult;
       }
-      
+
       console.log('Apple Music TTML bypass active. Attempting to fetch external lyrics...');
       embeddedFallback = embeddedResult;
     }
@@ -95,10 +135,18 @@ export class LyricsService {
 
   static async checkLocalLyrics(songInfo) {
     const localLyricsList = await localLyricsDB.getAll();
-    const matched = localLyricsList.find(item =>
-      item.songInfo.title === songInfo.title &&
-      item.songInfo.artist === songInfo.artist
-    );
+    const matched = localLyricsList.find(item => {
+      if (item.songInfo.title !== songInfo.title || item.songInfo.artist !== songInfo.artist) {
+        return false;
+      }
+      if (item.songInfo.duration && songInfo.duration) {
+        return Math.abs(item.songInfo.duration - songInfo.duration) < 2;
+      }
+      if (!item.songInfo.duration) {
+        return true;
+      }
+      return false;
+    });
 
     if (matched) {
       const fetchedLocal = await localLyricsDB.get(matched.songId);
@@ -118,31 +166,47 @@ export class LyricsService {
     try {
       const settings = await SettingsManager.getLyricsSettings();
       const fetchOptions = settings.cacheStrategy === 'none' ? { cache: 'no-store' } : {};
+      const providers = this.getProviderOrder(settings, songInfo, settings.preferUnisonVideo);
 
-      const providers = this.getProviderOrder(settings);
+      const controllers = new Map(
+        providers.map(p => [p, new AbortController()])
+      );
 
-      let lyrics = null;
-      for (const provider of providers) {
-        lyrics = await this.fetchFromProvider(provider, songInfo, settings, fetchOptions, forceReload);
-        if (!Utilities.isEmptyLyrics(lyrics)) break;
+      let usedProvider = null;
+      const promises = providers.map((provider, index) =>
+        this.fetchFromProvider(provider, songInfo, settings, fetchOptions, forceReload, controllers.get(provider).signal)
+          .then(result => {
+            if (result && usedProvider === null) {
+              usedProvider = provider;
+            }
+            return result;
+          })
+          .catch(() => null)
+      );
+
+      const lyrics = await this.raceWithEarlyExit(promises, providers, controllers);
+
+      let finalLyrics = lyrics;
+
+      if (Utilities.isEmptyLyrics(finalLyrics) && songInfo.videoId && songInfo.subtitle) {
+        finalLyrics = await YouTubeService.fetchSubtitles(songInfo);
       }
 
-      // Fallback to YouTube subtitles
-      if (Utilities.isEmptyLyrics(lyrics) && songInfo.videoId && songInfo.subtitle) {
-        lyrics = await YouTubeService.fetchSubtitles(songInfo);
-      }
-
-      if (Utilities.isEmptyLyrics(lyrics)) {
+      if (Utilities.isEmptyLyrics(finalLyrics)) {
         throw new Error('No lyrics found from any provider');
       }
 
+      if (usedProvider === PROVIDERS.UNISON && songInfo.isVideo) {
+        finalLyrics.ignoreSponsorblock = true;
+      }
+
       const version = Date.now();
-      const result = { lyrics, version };
+      const result = { lyrics: finalLyrics, version };
 
       state.setCached(cacheKey, result);
 
       if (settings.cacheStrategy !== 'none') {
-        await lyricsDB.set({ key: cacheKey, lyrics, version, timestamp: Date.now(), duration: songInfo.duration });
+        await lyricsDB.set({ key: cacheKey, lyrics: finalLyrics, version, timestamp: Date.now(), duration: songInfo.duration });
       }
 
       return result;
@@ -152,36 +216,102 @@ export class LyricsService {
     }
   }
 
-  static getProviderOrder(settings) {
-    const allProviders = Object.values(PROVIDERS).filter(
-      p => p !== PROVIDERS.GOOGLE && p !== PROVIDERS.GEMINI
-    );
+  static raceWithEarlyExit(promises, providers, controllers) {
+    return new Promise((resolve) => {
+      const results = new Array(promises.length).fill(undefined);
+      const pending = new Set(promises.map((_, i) => i));
+      let won = false;
 
-    return [
-      settings.lyricsProvider,
-      ...allProviders.filter(p => p !== settings.lyricsProvider)
-    ];
+      const abortRemaining = () => {
+        for (const i of pending) {
+          controllers.get(providers[i])?.abort();
+        }
+      };
+
+      const tryResolve = () => {
+        if (won) return;
+
+        const bestIdx = results.findIndex(
+          (r, i) => !pending.has(i) && this.scoreLyrics(r) === 3
+        );
+
+        if (bestIdx !== -1) {
+          const blockedByEarlier = [...pending].some(i => i < bestIdx);
+          if (!blockedByEarlier) {
+            won = true;
+            abortRemaining();
+            return resolve(results[bestIdx]);
+          }
+        }
+
+        if (pending.size === 0) {
+          const best = results.reduce((b, r) =>
+            this.scoreLyrics(r) > this.scoreLyrics(b) ? r : b
+            , null);
+          resolve(best);
+        }
+      };
+
+      promises.forEach((p, i) => {
+        Promise.resolve(p).then(result => {
+          if (won) return;
+          results[i] = result;
+          pending.delete(i);
+          tryResolve();
+        });
+      });
+    });
   }
 
-  static async fetchFromProvider(provider, songInfo, settings, fetchOptions, forceReload) {
+  static scoreLyrics(lyrics) {
+    if (Utilities.isEmptyLyrics(lyrics)) return 0;
+    const type = (lyrics.type || '').toUpperCase();
+    if (type === 'WORD') return 3;
+    if (type === 'LINE') return 2;
+    return 1;
+  }
+
+  static getProviderOrder(settings, songInfo = null, preferUnisonVideo = false) {
+    const defaultOrder = ['kpoe', 'unison', 'lrclib'];
+
+    let providersList = (settings.lyricsProviderOrder || '').split(',').map(p => p.trim()).filter(Boolean);
+    if (!providersList.length) providersList = defaultOrder;
+
+    let validProviders = providersList.filter(p => [
+      PROVIDERS.KPOE, PROVIDERS.CUSTOM_KPOE, PROVIDERS.UNISON, PROVIDERS.LRCLIB
+    ].includes(p));
+
+    if (!settings.customKpoeUrl) {
+      validProviders = validProviders.filter(p => p !== PROVIDERS.CUSTOM_KPOE);
+    }
+
+    if (preferUnisonVideo && songInfo?.isVideo && validProviders.includes(PROVIDERS.UNISON)) {
+      const unisonIndex = validProviders.indexOf(PROVIDERS.UNISON);
+      if (unisonIndex > 0) {
+        validProviders.splice(unisonIndex, 1);
+        validProviders.unshift(PROVIDERS.UNISON);
+      }
+    }
+
+    return validProviders;
+  }
+
+  static async fetchFromProvider(provider, songInfo, settings, fetchOptions, forceReload, signal) {
+    const opts = { ...fetchOptions, signal };
     switch (provider) {
       case PROVIDERS.KPOE:
-        return KPoeService.fetch(songInfo, settings.lyricsSourceOrder, forceReload, fetchOptions);
+        return KPoeService.fetch(songInfo, settings.lyricsSourceOrder, forceReload, opts);
 
       case PROVIDERS.CUSTOM_KPOE:
-        if (settings.customKpoeUrl) {
-          return KPoeService.fetchCustom(
-            songInfo,
-            settings.customKpoeUrl,
-            settings.lyricsSourceOrder,
-            forceReload,
-            fetchOptions
-          );
-        }
-        return null;
+        if (settings.customKpoeUrl)
+          return KPoeService.fetchCustom(songInfo, settings.customKpoeUrl, settings.lyricsSourceOrder, forceReload, opts);
 
+        return null;
+      case PROVIDERS.UNISON:
+        return UnisonService.fetch(songInfo, opts);
+        
       case PROVIDERS.LRCLIB:
-        return LRCLibService.fetch(songInfo, fetchOptions);
+        return LRCLibService.fetch(songInfo, opts);
 
       case PROVIDERS.LOCAL:
         const localResult = await this.checkLocalLyrics(songInfo);

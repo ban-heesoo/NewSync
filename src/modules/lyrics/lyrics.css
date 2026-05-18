@@ -1,56 +1,15 @@
 /* ==========================================================================
-   LYRICS PLUS - BASE CONTAINER & LAYOUT
+   SF PRO DISPLAY FONT - ONLINE CDN
    ========================================================================== */
+@import url("https://fonts.cdnfonts.com/css/sf-pro-display");
 
 /* ==========================================================================
-   SF PRO FONT DECLARATIONS - ONLINE CDN
+   LYRICS PLUS - BASE CONTAINER & LAYOUT
    ========================================================================== */
-@import url('https://fonts.cdnfonts.com/css/sf-pro-display');
-
-@font-face {
-    font-family: 'SF Pro Display';
-    src: url('https://fonts.cdnfonts.com/s/59278/SFPRODISPLAYREGULAR.woff') format('woff');
-    font-weight: 400;
-    font-style: normal;
-    font-display: swap;
-}
-
-@font-face {
-    font-family: 'SF Pro Display';
-    src: url('https://fonts.cdnfonts.com/s/59278/SFPRODISPLAYREGULARITALIC.woff') format('woff');
-    font-weight: 400;
-    font-style: italic;
-    font-display: swap;
-}
-
-@font-face {
-    font-family: 'SF Pro Display';
-    src: url('https://fonts.cdnfonts.com/s/59278/SFPRODISPLAYLIGHT.woff') format('woff');
-    font-weight: 300;
-    font-style: normal;
-    font-display: swap;
-}
-
-@font-face {
-    font-family: 'SF Pro Display';
-    src: url('https://fonts.cdnfonts.com/s/59278/SFPRODISPLAYSEMIBOLD.woff') format('woff');
-    font-weight: 600;
-    font-style: normal;
-    font-display: swap;
-}
-
-@font-face {
-    font-family: 'SF Pro Display';
-    src: url('https://fonts.cdnfonts.com/s/59278/SFPRODISPLAYBOLD.woff') format('woff');
-    font-weight: 700;
-    font-style: normal;
-    font-display: swap;
-}
 
 /* --- Base Variables & Palette --- */
 #lyrics-plus-container {
     --lyplus-lyrics-pallete: #ffffff;
-    --lyplus-song-white-pallete: #ffffff85;
 
     --lyplus-padding-base: 1em;
     --lyplus-padding-line: 10px;
@@ -58,27 +17,26 @@
     --lyplus-border-radius-base: 0.6em;
     --lyplus-gap-dot-size: 0.4em;
     --lyplus-gap-dot-margin: 0.1em;
-    --lyplus-button-size: 36px;
+    --lyplus-button-size: 40px;
     --lyplus-button-gap: 10px;
-    --lyplus-button-border-radius: 20%;
+    --lyplus-button-border-radius: 12px;
     --lyplus-dropdown-min-width: 140px;
     --lyplus-dropdown-padding: 4px 0;
     --lyplus-dropdown-border-radius: 4px;
     --lyplus-dropdown-option-padding: 8px 12px;
 
     --lyplus-font-size-base: 25px;
-    --lyplus-font-size-base-grow: 24.5;
+    --lyplus-font-size-base-grow: 24;
     --lyplus-font-size-subtext: 0.6em;
-    --lyplus-font-size-metadata: 1.6em;
-    --lyplus-font-size-provider: 1.5em;
+    --lyplus-font-size-line: 1em;
+    --lyplus-font-size-metadata: 0.6em;
+    --lyplus-font-size-provider: 0.5em;
     --lyplus-font-size-status: 24px;
     --lyplus-font-size-button: 18px;
     --lyplus-font-size-dropdown-option: 13px;
 
     --lyplus-text-primary: var(--lyplus-lyrics-pallete);
-    --lyplus-text-secondary: #ffffff85;
-    --lyplus-text-tertiary: #ffffff7a;
-    --lyplus-text-inactive: #ffffff31;
+    --lyplus-text-secondary: #ffffff55;
     --lyplus-text-button: rgba(255, 255, 255, 0.87);
 
     --lyplus-blur-amount: 0.07em;
@@ -99,11 +57,27 @@
     padding-top: var(--lyplus-padding-base);
     box-sizing: border-box;
     color: var(--yt-spec-text-primary, var(--lyplus-text-primary));
-    font-family: 'SF Pro Display', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+    font-family:
+        var(--lyplus-font-family),
+        "SF Pro Display",
+        Roboto,
+        Noto Naskh Arabic UI,
+        Arial,
+        -apple-system,
+        BlinkMacSystemFont,
+        "Segoe UI",
+        Oxygen,
+        Ubuntu,
+        Cantarell,
+        "Open Sans",
+        "Helvetica Neue",
+        sans-serif;
     font-weight: bolder;
     direction: ltr;
     transform: translateZ(0);
     padding-top: calc(1em + var(--lyrics-scroll-padding-top));
+    font-size: var(--lyplus-font-size-base);
+    color-scheme: only light; /* tell browser that this only work on lightmode*/
 }
 
 #lyrics-plus-container.lyrics-plus-message {
@@ -145,11 +119,15 @@
     padding: var(--lyplus-padding-line);
     opacity: 0.8;
     color: var(--lyplus-text-secondary);
-    font-size: var(--lyplus-font-size-base);
+    font-size: var(--lyplus-font-size-line);
     cursor: pointer;
     transform-origin: left;
     transform: translateZ(1px);
-    transition: opacity 0.3s ease, transform 0.4s cubic-bezier(.41, 0, .12, .99) var(--lyrics-line-delay, 0ms), filter 0.3s ease;
+    transition:
+        opacity 0.3s ease,
+        transform 0.4s cubic-bezier(0.41, 0, 0.12, 0.99)
+            var(--lyrics-line-delay, 0ms),
+        filter 0.3s ease;
     will-change: transform, filter, opacity;
     content-visibility: auto;
     contain-intrinsic-size: auto;
@@ -162,27 +140,38 @@
 .lyrics-line.scroll-animate,
 .lyrics-plus-metadata.scroll-animate {
     animation-name: lyrics-scroll;
-    animation-duration: 400ms;
-    animation-timing-function: cubic-bezier(.41, 0, .12, .99);
+    animation-duration: var(--scroll-duration, 400ms);
+    animation-timing-function: cubic-bezier(0.41, 0, 0.12, 0.99);
     animation-fill-mode: both;
     animation-delay: var(--lyrics-line-delay, 0ms);
 }
+
 .lyrics-line:not(.scroll-animate),
 .lyrics-plus-metadata:not(.scroll-animate) {
     animation: none;
+}
+
+.lyrics-plus-metadata {
+    padding: 0 var(--lyplus-padding-line);
 }
 
 .line-by-line-mode .lyrics-line:not(.lyrics-gap) .main-vocal-container {
     color: transparent;
     background-clip: text;
     background-color: var(--lyplus-text-secondary);
-    transition: transform 0.7s ease, background-color 0.7s, color 0.7s;
+    transition:
+        transform 0.7s ease,
+        background-color 0.7s,
+        color 0.7s;
 }
 
 .line-by-line-mode .lyrics-line:not(.lyrics-gap).active .main-vocal-container {
     opacity: 1;
     background-color: var(--lyplus-text-primary, var(--lyplus-text-primary));
-    transition: transform 0.5s ease, background-color 0.18s, color 0.18s;
+    transition:
+        transform 0.5s ease,
+        background-color 0.18s,
+        color 0.18s;
 }
 
 /* --- Line States & Modifiers --- */
@@ -214,17 +203,21 @@
     }
 }
 
-#lyrics-plus-container.blur-inactive-enabled:not(.not-focused) .lyrics-line:not(.active):not(.lyrics-gap),
-#lyrics-plus-container.blur-inactive-enabled:not(.not-focused) .lyrics-plus-metadata:not(.lyrics-activest) {
+#lyrics-plus-container.blur-inactive-enabled:not(.not-focused)
+    .lyrics-line:not(.active):not(.lyrics-gap),
+#lyrics-plus-container.blur-inactive-enabled:not(.not-focused)
+    .lyrics-plus-metadata:not(.lyrics-activest) {
     filter: blur(var(--lyplus-blur-amount));
 }
 
-#lyrics-plus-container.blur-inactive-enabled:not(.not-focused) .lyrics-line.post-active-line:not(.lyrics-gap):not(.active),
-#lyrics-plus-container.blur-inactive-enabled:not(.not-focused) .lyrics-line.next-active-line:not(.lyrics-gap):not(.active),
-#lyrics-plus-container.blur-inactive-enabled:not(.not-focused) .lyrics-line.lyrics-activest:not(.active):not(.lyrics-gap) {
+#lyrics-plus-container.blur-inactive-enabled:not(.not-focused)
+    .lyrics-line.post-active-line:not(.lyrics-gap):not(.active),
+#lyrics-plus-container.blur-inactive-enabled:not(.not-focused)
+    .lyrics-line.next-active-line:not(.lyrics-gap):not(.active),
+#lyrics-plus-container.blur-inactive-enabled:not(.not-focused)
+    .lyrics-line.lyrics-activest:not(.active):not(.lyrics-gap) {
     filter: blur(var(--lyplus-blur-amount-near));
 }
-
 
 #lyrics-plus-container.hide-offscreen .lyrics-line.viewport-hidden * {
     visibility: hidden;
@@ -235,52 +228,74 @@
 }
 
 /* --- Directionality & Text Alignment --- */
-#lyrics-plus-container .lyrics-line.rtl-text.singer-left .lyrics-romanization-container,
-#lyrics-plus-container .lyrics-line.singer-left .lyrics-romanization-container.rtl-text {
+#lyrics-plus-container
+    .lyrics-line.rtl-text.singer-left
+    .lyrics-romanization-container,
+#lyrics-plus-container
+    .lyrics-line.singer-left
+    .lyrics-romanization-container.rtl-text {
     text-align: end;
 }
 
-#lyrics-plus-container .lyrics-line.rtl-text.singer-right .lyrics-romanization-container,
-#lyrics-plus-container .lyrics-line.singer-right .lyrics-romanization-container.rtl-text {
+#lyrics-plus-container
+    .lyrics-line.rtl-text.singer-right
+    .lyrics-romanization-container,
+#lyrics-plus-container
+    .lyrics-line.singer-right
+    .lyrics-romanization-container.rtl-text {
     text-align: start;
 }
+
 #lyrics-plus-container.dual-side-lyrics .lyrics-line:not(.rtl-text).singer-left,
-#lyrics-plus-container.dual-side-lyrics:not(.mixed-direction-lyrics) .lyrics-line.rtl-text.singer-right {
+#lyrics-plus-container.dual-side-lyrics:not(.mixed-direction-lyrics)
+    .lyrics-line.rtl-text.singer-right {
     padding-right: 20%;
 }
 
-#lyrics-plus-container.dual-side-lyrics .lyrics-line:not(.rtl-text).singer-right,
-#lyrics-plus-container.dual-side-lyrics:not(.mixed-direction-lyrics) .lyrics-line.rtl-text.singer-left {
+#lyrics-plus-container.dual-side-lyrics
+    .lyrics-line:not(.rtl-text).singer-right,
+#lyrics-plus-container.dual-side-lyrics:not(.mixed-direction-lyrics)
+    .lyrics-line.rtl-text.singer-left {
     padding-left: 20%;
 }
 
-#lyrics-plus-container.mixed-direction-lyrics.dual-side-lyrics .lyrics-line.rtl-text.singer-left {
+#lyrics-plus-container.mixed-direction-lyrics.dual-side-lyrics
+    .lyrics-line.rtl-text.singer-left {
     text-align: left;
     padding-right: 20%;
 }
 
-#lyrics-plus-container.mixed-direction-lyrics.dual-side-lyrics .lyrics-line.rtl-text.singer-right {
+#lyrics-plus-container.mixed-direction-lyrics.dual-side-lyrics
+    .lyrics-line.rtl-text.singer-right {
     text-align: right;
     padding-left: 20%;
 }
 
 .lyrics-line.singer-right:not(.rtl-text) .lyrics-line-container,
 .lyrics-line.rtl-text:not(.singer-right) .lyrics-line-container,
-#lyrics-plus-container.mixed-direction-lyrics.dual-side-lyrics .lyrics-line.rtl-text.singer-right .lyrics-line-container {
+#lyrics-plus-container.mixed-direction-lyrics.dual-side-lyrics
+    .lyrics-line.rtl-text.singer-right
+    .lyrics-line-container {
     transform-origin: right;
 }
 
-#lyrics-plus-container.mixed-direction-lyrics.dual-side-lyrics .lyrics-line.rtl-text.singer-left .lyrics-line-container {
+#lyrics-plus-container.mixed-direction-lyrics.dual-side-lyrics
+    .lyrics-line.rtl-text.singer-left
+    .lyrics-line-container {
     transform-origin: left;
 }
 
 .lyrics-line.singer-right:not(.rtl-text) .main-vocal-container,
 .lyrics-line.rtl-text:not(.singer-right) .main-vocal-container,
-#lyrics-plus-container.mixed-direction-lyrics.dual-side-lyrics .lyrics-line.rtl-text.singer-right .main-vocal-container {
+#lyrics-plus-container.mixed-direction-lyrics.dual-side-lyrics
+    .lyrics-line.rtl-text.singer-right
+    .main-vocal-container {
     transform-origin: 95% 50%;
 }
 
-#lyrics-plus-container.mixed-direction-lyrics.dual-side-lyrics .lyrics-line.rtl-text.singer-left .main-vocal-container,
+#lyrics-plus-container.mixed-direction-lyrics.dual-side-lyrics
+    .lyrics-line.rtl-text.singer-left
+    .main-vocal-container,
 .lyrics-line .main-vocal-container {
     transform-origin: 5% 50%;
 }
@@ -290,32 +305,58 @@
    ========================================================================== */
 
 /* --- Vocal Containers --- */
+.lyrics-line p {
+    margin: 0;
+}
+
 .lyrics-line:not(.lyrics-gap) .lyrics-line-container {
     overflow-wrap: break-word;
     transform-origin: left;
     transform: scale3d(0.93, 0.93, 0.95);
-    transition: transform 0.7s ease, background-color 0.7s, color 0.7s;
+    transition:
+        transform 0.7s ease,
+        background-color 0.7s,
+        color 0.7s;
 }
 
 .lyrics-line.active:not(.lyrics-gap) .lyrics-line-container {
     transform: scale3d(1.001, 1.001, 1);
     will-change: transform;
-    transition: transform 0.5s ease, background-color 0.18s, color 0.18s;
+    transition:
+        transform 0.5s ease,
+        background-color 0.18s,
+        color 0.18s;
 }
 
 .lyrics-line .background-vocal-container {
     max-height: 0;
-    padding-top: 0.2em;
     overflow: visible;
     opacity: 0;
     font-size: var(--lyplus-font-size-subtext);
-    transition: max-height .3s, opacity .6s, padding .6s;
+    transition:
+        max-height 0.3s,
+        opacity 0.6s,
+        padding 0.6s;
+}
+
+.lyrics-line .background-vocal-container.onTop .background-vocal-wrap {
+    padding-top: 0em;
+    padding-bottom: 0.26em;
+}
+
+.lyrics-line .background-vocal-container .background-vocal-wrap {
+    display: block;
+    padding-top: 0.26em;
+    padding-bottom: 0em;
 }
 
 .lyrics-line.active .background-vocal-container {
     max-height: 4em;
     opacity: 1;
-    transition: max-height .6s, opacity .6s, padding .6s;
+    transition:
+        max-height 0.6s,
+        opacity 0.6s,
+        padding 0.6s;
     will-change: max-height, opacity, padding;
 }
 
@@ -336,14 +377,18 @@
     font-size: var(--lyplus-font-size-metadata);
     font-weight: normal;
     opacity: 0.75;
+    padding: 0 var(--lyplus-padding-line);
 }
 
-#lyrics-plus-container.blur-inactive-enabled:not(.not-focused).plain-text-mode .lyrics-plus-metadata:not(.lyrics-activest){
+#lyrics-plus-container.blur-inactive-enabled:not(.not-focused).plain-text-mode
+    .lyrics-plus-metadata:not(.lyrics-activest) {
     filter: none;
 }
+
 #lyrics-plus-container.plain-text-mode span.lyrics-song-writters {
     opacity: 0.75;
 }
+
 #lyrics-plus-container.plain-text-mode span.lyrics-source-provider {
     opacity: 0.65;
 }
@@ -363,7 +408,10 @@
     font-feature-settings: "liga" 0;
     background-clip: text;
     -webkit-background-clip: text;
-    transition: color 0.7s, background-color 0.7s, transform 0.7s ease;
+    transition:
+        color 0.7s,
+        background-color 0.7s,
+        transform 0.7s ease;
 }
 
 /* --- Syllable States (Finished, Highlight, etc.) --- */
@@ -386,27 +434,63 @@
 
 .lyrics-line.active:not(.lyrics-gap) .lyrics-syllable {
     transform: translateY(0.001%) translateZ(1px);
-    transition: transform 1s ease, background-color 0.5s, color 0.5s;
+    transition:
+        transform 1s ease,
+        background-color 0.5s,
+        color 0.5s;
     will-change: transform, background;
 }
 
 .lyrics-line.active:not(.lyrics-gap) .lyrics-syllable.highlight,
 .lyrics-line.active:not(.lyrics-gap) .lyrics-syllable.pre-highlight {
     background-repeat: no-repeat;
-    background-image: linear-gradient(90deg, #ffffff00 0%, var(--lyplus-text-primary, #fff) 50%, #0000 100%), linear-gradient(90deg, var(--lyplus-text-primary, #fff) 100%, #0000 100%);
-    background-size: 0.5em 100%, 0% 100%;
-    background-position: -0.5em 0%, -0.25em 0%;
+    background-image:
+        linear-gradient(
+            90deg,
+            #ffffff00 0%,
+            var(--lyplus-text-primary, #fff) 50%,
+            #0000 100%
+        ),
+        linear-gradient(
+            90deg,
+            var(--lyplus-text-primary, #fff) 100%,
+            #0000 100%
+        );
+    background-size:
+        0.5em 100%,
+        0% 100%;
+    background-position:
+        -0.5em 0%,
+        -0.25em 0%;
 }
 
 .lyrics-line.active:not(.lyrics-gap) .lyrics-syllable.highlight.rtl-text,
 .lyrics-line.active:not(.lyrics-gap) .lyrics-syllable.pre-highlight.rtl-text {
     direction: rtl;
-    background-image: linear-gradient(-90deg, var(--lyplus-text-primary, #fff) 0%, #0000 100%), linear-gradient(-90deg, var(--lyplus-text-primary, #fff) 100%, #0000 100%);
-    background-position: calc(100% + 0.5em) 0%, right;
+    background-image:
+        linear-gradient(
+            -90deg,
+            var(--lyplus-text-primary, #fff) 0%,
+            #0000 100%
+        ),
+        linear-gradient(
+            -90deg,
+            var(--lyplus-text-primary, #fff) 100%,
+            #0000 100%
+        );
+    background-position:
+        calc(100% + 0.5em) 0%,
+        right;
 }
 
-#lyrics-plus-container:not(.lightweight-mode) .lyrics-line.active:not(.lyrics-gap) .lyrics-word:not(.growable) .lyrics-syllable.highlight,
-#lyrics-plus-container:not(.lightweight-mode) .lyrics-word.growable .lyrics-syllable.cleanup span.char {
+#lyrics-plus-container:not(.lightweight-mode)
+    .lyrics-line.active:not(.lyrics-gap)
+    .lyrics-word:not(.growable)
+    .lyrics-syllable.highlight,
+#lyrics-plus-container:not(.lightweight-mode)
+    .lyrics-word.growable
+    .lyrics-syllable.cleanup
+    span.char {
     transform: translateY(-3.5%) translateZ(1px);
 }
 
@@ -442,6 +526,10 @@
     -ms-user-select: none;
 }
 
+.lyrics-syllable.transliteration.hidden {
+    display: none;
+}
+
 .lyrics-word:has(.transliteration) .lyrics-syllable:not(.transliteration) {
     line-height: 1.5em;
 }
@@ -460,7 +548,10 @@
     font-feature-settings: "liga" 0;
     background-clip: text;
     -webkit-background-clip: text;
-    transition: color 0.7s, background-color 0.7s, transform 0.7s ease;
+    transition:
+        color 0.7s,
+        background-color 0.7s,
+        transform 0.7s ease;
 }
 
 .lyrics-line .lyrics-syllable.finished span.char {
@@ -469,30 +560,71 @@
 }
 
 .lyrics-line.active .lyrics-syllable span.char {
-    background-image: linear-gradient(90deg, #ffffff00 0%, var(--lyplus-text-primary, #fff) 50%, #0000 100%), linear-gradient(90deg, var(--lyplus-text-primary, #fff) 100%, #0000 100%);
+    background-image:
+        linear-gradient(
+            90deg,
+            #ffffff00 0%,
+            var(--lyplus-text-primary, #fff) 50%,
+            #0000 100%
+        ),
+        linear-gradient(
+            90deg,
+            var(--lyplus-text-primary, #fff) 100%,
+            #0000 100%
+        );
     background-clip: text;
     -webkit-background-clip: text;
-    background-size: 0.5em 100%, 0% 100%;
-    background-position: -0.5em 0%, -0.25em 0%;
+    background-size:
+        0.5em 100%,
+        0% 100%;
+    background-position:
+        -0.5em 0%,
+        -0.25em 0%;
     background-repeat: no-repeat;
     transform-origin: 50% 80%;
-    transform: matrix3d(1, 0, 0, 0,
-            0, 1, 0, 0,
-            0, 0, 1, 0,
-            0, 0, 0, 1);
-    transition: transform 0.7s ease, color 0.18s;
+    transform: matrix3d(1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1);
+    transition:
+        transform 0.7s ease,
+        color 0.18s;
     will-change: background, transform;
 }
 
 .lyrics-line.active .lyrics-syllable span.char.highlight {
-    background-image: linear-gradient(-90deg, var(--lyplus-text-primary, #fff) 0%, #0000 100%), linear-gradient(-90deg, var(--lyplus-text-primary, #fff) 100%, #0000 100%);
-    background-position: calc(100% + 0.5em) 0%, calc(100% + 0.25em) 0%;
+    background-image:
+        linear-gradient(
+            -90deg,
+            var(--lyplus-text-primary, #fff) 0%,
+            #0000 100%
+        ),
+        linear-gradient(
+            -90deg,
+            var(--lyplus-text-primary, #fff) 100%,
+            #0000 100%
+        );
+    background-position:
+        calc(100% + 0.5em) 0%,
+        calc(100% + 0.25em) 0%;
 }
 
 .lyrics-line.active .lyrics-syllable.pre-highlight span.char {
-    background-image: linear-gradient(90deg, #ffffff00 0%, var(--lyplus-text-primary, #fff) 50%, #0000 100%), linear-gradient(90deg, var(--lyplus-text-primary, #fff) 100%, #0000 100%);
-    background-size: 0.5em 100%, 0% 100%;
-    background-position: -0.5em 0%, -0.25em 0%;
+    background-image:
+        linear-gradient(
+            90deg,
+            #ffffff00 0%,
+            var(--lyplus-text-primary, #fff) 50%,
+            #0000 100%
+        ),
+        linear-gradient(
+            90deg,
+            var(--lyplus-text-primary, #fff) 100%,
+            #0000 100%
+        );
+    background-size:
+        0.5em 100%,
+        0% 100%;
+    background-position:
+        -0.5em 0%,
+        -0.25em 0%;
 }
 
 .lyrics-line.lyrics-gap {
@@ -502,14 +634,22 @@
     opacity: 0;
     box-sizing: content-box;
     background-clip: unset;
-    transition: padding .3s .5s, height .3s .5s, opacity .2s .5s, transform .3s var(--lyrics-line-delay, 0ms);
+    transition:
+        padding 0.3s 0.5s,
+        height 0.3s 0.5s,
+        opacity 0.2s 0.5s,
+        transform 0.3s var(--lyrics-line-delay, 0ms);
 }
 
 .lyrics-line.lyrics-gap.active {
     height: 1em;
     padding: var(--lyplus-padding-gap);
     opacity: 1;
-    transition: padding .3s, height .3s, opacity .2s .3s, transform .3s;
+    transition:
+        padding 0.3s,
+        height 0.3s,
+        opacity 0.2s 0.3s,
+        transform 0.3s;
     will-change: height, opacity, padding;
 }
 
@@ -521,6 +661,7 @@
     animation: gap-ended 0.8s ease;
     transform: translateY(-25%) scale(0) translateZ(0);
 }
+
 .lyrics-line.lyrics-gap:not(.active) .main-vocal-container .lyrics-word {
     animation-play-state: paused;
 }
@@ -553,7 +694,6 @@
     animation: none !important;
 }
 
-
 /* ==========================================================================
    METADATA & STATUS MESSAGES
    ========================================================================== */
@@ -565,7 +705,11 @@
     box-sizing: border-box;
     font-weight: normal;
     transform: translateY(var(--lyrics-scroll-offset, 0px)) translateZ(1px);
-    transition: opacity 0.3s ease, transform 0.6s cubic-bezier(0.23, 1, 0.32, 1) var(--lyrics-line-delay, 0ms), filter 0.3s ease;
+    transition:
+        opacity 0.3s ease,
+        transform 0.6s cubic-bezier(0.23, 1, 0.32, 1)
+            var(--lyrics-line-delay, 0ms),
+        filter 0.3s ease;
     transition-delay: var(--lyrics-line-delay, 0ms);
 }
 
@@ -573,7 +717,7 @@ span.lyrics-song-writters {
     display: block;
     margin-top: var(--lyplus-padding-base);
     font-size: var(--lyplus-font-size-metadata);
-    color: var(--lyplus-text-tertiary);
+    opacity: 0.45;
 }
 
 span.lyrics-source-provider {
@@ -581,14 +725,15 @@ span.lyrics-source-provider {
     height: 150%;
     margin-bottom: var(--lyplus-padding-base);
     font-size: var(--lyplus-font-size-provider);
-    color: var(--lyplus-text-inactive);
+    opacity: 0.25;
 }
 
 .lyrics-plus-empty {
     display: block;
     height: 100vh;
     transform: translateY(var(--lyrics-scroll-offset, 0px)) translateZ(1px);
-    transition: transform 0.6s cubic-bezier(0.23, 1, 0.32, 1) var(--lyrics-line-delay, 0ms);
+    transition: transform 0.6s cubic-bezier(0.23, 1, 0.32, 1)
+        var(--lyrics-line-delay, 0ms);
     transition-delay: var(--lyrics-line-delay, 0ms);
 }
 
@@ -602,7 +747,6 @@ span.lyrics-source-provider {
     transform: none !important;
 }
 
-#lyrics-plus-container .text-loading,
 #lyrics-plus-container .text-not-found {
     display: block;
     position: absolute;
@@ -615,33 +759,50 @@ span.lyrics-source-provider {
     transition: opacity 0.3s ease;
 }
 
+#lyrics-plus-container .loading-container {
+    position: absolute;
+    top: 30%;
+    width: 100%;
+    text-align: center;
+    font-size: var(--lyplus-font-size-button);
+    letter-spacing: 1px;
+    text-shadow: 0 2px 10px rgba(255, 255, 255, 0.2);
+    transition: opacity 0.3s ease;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex-direction: column-reverse;
+    opacity: 0.7;
+}
+
+#lyrics-plus-container .loading-loop-m3,
+#lyrics-plus-buttons-wrapper .loading-loop-m3 {
+    mask-image: url(../../assets/loading.gif);
+    position: relative;
+    display: block;
+    height: 80px;
+    width: 80px;
+    margin: 10px;
+    mask-size: contain;
+    background-color: var(
+        --yt-spec-text-primary,
+        var(--lyplus-text-primary, #fff)
+    );
+    animation: fadeInUp 0.5s ease;
+    mask-repeat: no-repeat;
+    mask-position: center;
+}
+
+#lyrics-plus-buttons-wrapper .loading-loop-m3 {
+    width: 30px;
+    height: 30px;
+    margin: 0;
+    animation: none;
+}
+
 #lyrics-plus-container .text-not-found {
     opacity: 0.7;
     animation: fadeInUp 0.6s ease-out;
-}
-
-#lyrics-plus-container .text-loading {
-    opacity: 0.8;
-    animation: pulse 1.5s ease-in-out infinite;
-    display: inline-flex;
-    align-items: baseline;
-    justify-content: center;
-    min-width: 12ch;
-    margin: 0 auto;
-}
-
-#lyrics-plus-container .text-loading:after {
-    content: "...";
-    display: inline-block;
-    width: 0;
-    overflow: hidden;
-    vertical-align: bottom;
-    text-overflow: clip;
-    margin-left: 0.1em;
-    mask-image: linear-gradient(to right, #FFF 100%, transparent 100%);
-    mask-size: 100% 100%;
-    mask-repeat: no-repeat;
-    animation: ellipsis 3s ease-in-out infinite;
 }
 
 /* ==========================================================================
@@ -660,135 +821,58 @@ span.lyrics-source-provider {
     gap: 10px;
 }
 
+/* Match NewSync positioning on regular player view */
+ytmusic-app-layout:has(#lyrics-plus-container[style*="display: block"])
+    #lyrics-plus-buttons-wrapper {
+    position: fixed;
+    bottom: 85px;
+    right: 72px;
+    width: min-content;
+    z-index: 2;
+}
 
-ytmusic-tab-renderer:has(#lyrics-plus-container:has(.text-loading)) #lyrics-plus-buttons-wrapper,
-ytmusic-tab-renderer:has(#lyrics-plus-container:has(.text-not-found)) #lyrics-plus-buttons-wrapper,
-ytmusic-tab-renderer:has(#lyrics-plus-container.lyrics-plus-message:not(:has(.lyrics-line))) #lyrics-plus-buttons-wrapper {
-    display: none !important;
-    opacity: 0 !important;
-    pointer-events: none !important;
+ytmusic-app-layout:has(
+        #lyrics-plus-container[style*="display: block"]
+    )[is-mweb-modernization-enabled]
+    #lyrics-plus-buttons-wrapper {
+    bottom: 12px;
+    right: 12px !important;
+    z-index: 999999999999999;
 }
 
 #lyrics-plus-translate-button,
 #lyrics-plus-reload-button {
-    width: 40px;
-    height: 40px;
     display: flex;
     align-items: center;
     justify-content: center;
-    cursor: pointer;
-    font-size: 18px;
-    color: rgba(255, 255, 255, 0.87);
-    background-color: rgba(255, 255, 255, 0.08);
-    border-radius: 50%;
-    transition: background-color 0.2s ease-in-out, transform 0.1s ease;
-    position: relative;
+    width: 40px;
+    height: 40px;
     border: none;
-    box-shadow: none;
-    backdrop-filter: blur(6px);
+    border-radius: 12px;
+    color: rgba(255, 255, 255, 0.9);
+    fill: rgba(255, 255, 255, 0.9);
+    background-color: rgba(255, 255, 255, 0.08);
+    backdrop-filter: blur(16px);
+    -webkit-backdrop-filter: blur(16px);
+    box-shadow: 0 8px 32px 0 rgba(0, 0, 0, 0.15);
+    font-size: 18px;
+    cursor: pointer;
+    transition: all 0.3s ease;
 }
 
 #lyrics-plus-translate-button:hover,
 #lyrics-plus-reload-button:hover {
-    background-color: rgba(255, 255, 255, 0.16);
-    transform: scale(1.1);
-}
-
-#lyrics-plus-translate-button {
-    font-size: 16px;
-    font-weight: normal;
-    line-height: 1;
-    width: 40px;
-    height: 40px;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    border-radius: 12px;
-    background: rgba(255, 255, 255, 0.08);
-    box-shadow: 0 8px 32px 0 rgba(0,0,0,0.15);
-    backdrop-filter: blur(16px);
-    -webkit-backdrop-filter: blur(16px);
-    color: rgba(255, 255, 255, 0.9);
-    transition: all 0.3s ease;
-    writing-mode: horizontal-tb;
-    direction: ltr;
-    text-orientation: mixed;
-}
-
-#lyrics-plus-translate-button:hover {
-    background: rgba(255, 255, 255, 0.15);
-    box-shadow: 0 12px 40px 0 rgba(0,0,0,0.25);
+    background-color: rgba(255, 255, 255, 0.15);
+    box-shadow: 0 12px 40px 0 rgba(0, 0, 0, 0.25);
     color: #fff;
     transform: translateY(-2px);
 }
 
-#lyrics-plus-translate-button:active {
-    background: rgba(255, 255, 255, 0.05);
-    color: rgba(255, 255, 255, 0.7);
-    transform: translateY(0);
-}
-
-#lyrics-plus-reload-button {
-    font-size: 16px;
-    font-weight: normal;
-    line-height: 1;
-    width: 40px;
-    height: 40px;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    border-radius: 12px;
-    background: rgba(255, 255, 255, 0.08);
-    box-shadow: 0 8px 32px 0 rgba(0,0,0,0.15);
-    backdrop-filter: blur(16px);
-    -webkit-backdrop-filter: blur(16px);
-    color: rgba(255, 255, 255, 0.9);
-    transition: all 0.3s ease;
-}
-
-#lyrics-plus-reload-button:hover {
-    background: rgba(255, 255, 255, 0.15);
-    box-shadow: 0 12px 40px 0 rgba(0,0,0,0.25);
-    color: #fff;
-    transform: translateY(-2px);
-}
-
+#lyrics-plus-translate-button:active,
 #lyrics-plus-reload-button:active {
-    background: rgba(255, 255, 255, 0.05);
+    background-color: rgba(255, 255, 255, 0.05);
     color: rgba(255, 255, 255, 0.7);
     transform: translateY(0);
-}
-
-ytmusic-player-page[player-fullscreened] #lyrics-plus-translate-button,
-ytmusic-player-page[player-fullscreened] #lyrics-plus-reload-button {
-    background: rgba(30, 30, 30, 0.38) !important;
-    border-radius: 12px !important;
-    box-shadow: 0 12px 40px rgba(0, 0, 0, 0.6) !important;
-    backdrop-filter: blur(28px) !important;
-    -webkit-backdrop-filter: blur(28px) !important;
-    color: rgba(255, 255, 255, 0.9) !important;
-    border: none !important;
-    transition: all 0.3s ease !important;
-}
-
-ytmusic-player-page[player-fullscreened] #lyrics-plus-translate-button:hover,
-ytmusic-player-page[player-fullscreened] #lyrics-plus-reload-button:hover {
-    background-color: rgba(255, 255, 255, 0.25) !important;
-    transform: scale(1.15) !important;
-    box-shadow: 0 12px 40px rgba(0, 0, 0, 0.6) !important;
-    border-color: rgba(255, 255, 255, 0.5) !important;
-}
-
-ytmusic-player-page[player-fullscreened] #lyrics-plus-translate-button:active,
-ytmusic-player-page[player-fullscreened] #lyrics-plus-reload-button:active {
-    transform: scale(0.95) !important;
-}
-
-#lyrics-plus-translate-button svg {
-    width: 1.5em;
-    height: 1.5em;
-    vertical-align: middle;
-    color: inherit;
 }
 
 /* --- Dropdown Menu --- */
@@ -807,7 +891,7 @@ ytmusic-player-page[player-fullscreened] #lyrics-plus-reload-button:active {
     min-width: 180px;
     overflow: hidden;
     padding: 0;
-    font-family: -apple-system, BlinkMacSystemFont, 'SF Pro', Helvetica, Arial, sans-serif;
+    font-family: -apple-system, BlinkMacSystemFont, "SF Pro", Helvetica, Arial, sans-serif;
     color: rgba(255, 255, 255, 0.95);
     will-change: transform;
 }
@@ -818,7 +902,7 @@ ytmusic-player-page[player-fullscreened] #lyrics-plus-reload-button:active {
     gap: 10px;
     padding: 10px 12px;
     color: rgba(255, 255, 255, 0.95);
-    font: 400 13px/1.23 -apple-system, BlinkMacSystemFont, 'SF Pro', Helvetica, Arial, sans-serif;
+    font: 400 13px/1.23 -apple-system, BlinkMacSystemFont, "SF Pro", Helvetica, Arial, sans-serif;
     cursor: pointer;
     text-align: left;
     white-space: nowrap;
@@ -918,20 +1002,42 @@ ytmusic-player-page[player-fullscreened] #lyrics-plus-reload-button:active {
 
 #lyrics-song-title.lyrics-song-marquee,
 #lyrics-song-artist.lyrics-song-marquee {
-    -webkit-mask-image: linear-gradient(90deg, #000 0, #000 calc(100% - 12px), transparent 100%);
-    mask-image: linear-gradient(90deg, #000 0, #000 calc(100% - 12px), transparent 100%);
+    -webkit-mask-image: linear-gradient(
+        90deg,
+        #000 0,
+        #000 calc(100% - 12px),
+        transparent 100%
+    );
+    mask-image: linear-gradient(
+        90deg,
+        #000 0,
+        #000 calc(100% - 12px),
+        transparent 100%
+    );
 }
 
 #lyrics-song-title.lyrics-song-marquee-playing,
 #lyrics-song-artist.lyrics-song-marquee-playing {
-    -webkit-mask-image: linear-gradient(90deg, transparent 0, #000 12px, #000 calc(100% - 12px), transparent 100%);
-    mask-image: linear-gradient(90deg, transparent 0, #000 12px, #000 calc(100% - 12px), transparent 100%);
+    -webkit-mask-image: linear-gradient(
+        90deg,
+        transparent 0,
+        #000 12px,
+        #000 calc(100% - 12px),
+        transparent 100%
+    );
+    mask-image: linear-gradient(
+        90deg,
+        transparent 0,
+        #000 12px,
+        #000 calc(100% - 12px),
+        transparent 100%
+    );
 }
 
 .lyrics-song-info,
 #lyrics-song-title,
 #lyrics-song-artist {
-    font-family: 'SF Pro Display' !important;
+    font-family: "SF Pro Display" !important;
 }
 
 #lyrics-song-title {
@@ -958,7 +1064,6 @@ ytmusic-player-page[player-fullscreened] #lyrics-plus-reload-button:active {
     mask-image: none;
 }
 
-
 #lyrics-song-title .lyrics-song-marquee-content,
 #lyrics-song-artist .lyrics-song-marquee-content {
     display: inline-block;
@@ -980,7 +1085,8 @@ ytmusic-player-page[player-fullscreened] #lyrics-plus-reload-button:active {
 
 #lyrics-song-title.lyrics-song-marquee-playing .lyrics-song-marquee-track,
 #lyrics-song-artist.lyrics-song-marquee-playing .lyrics-song-marquee-track {
-    animation: lyrics-song-marquee var(--lyrics-song-marquee-duration, 12s) linear 1;
+    animation: lyrics-song-marquee
+        var(--lyrics-song-marquee-duration, 12s) linear 1;
     animation-fill-mode: both;
 }
 
@@ -988,8 +1094,11 @@ ytmusic-player-page[player-fullscreened] #lyrics-plus-reload-button:active {
     0% {
         transform: translateX(0);
     }
+
     100% {
-        transform: translateX(calc(-1 * var(--lyrics-song-marquee-offset, 0px) - 2rem));
+        transform: translateX(
+            calc(-1 * var(--lyrics-song-marquee-offset, 0px) - 2rem)
+        );
     }
 }
 
@@ -1033,7 +1142,6 @@ ytmusic-player-page[player-fullscreened] body .lyrics-song-info {
     display: block !important;
 }
 
-
 /* --- Translated/Romanized Text --- */
 .lyrics-translation-container,
 .lyrics-romanization-container {
@@ -1046,7 +1154,9 @@ ytmusic-player-page[player-fullscreened] body .lyrics-song-info {
     -webkit-user-select: none;
     -moz-user-select: none;
     -ms-user-select: none;
-    transition: opacity 0.3s ease, color 0.3s;
+    transition:
+        opacity 0.3s ease,
+        color 0.3s;
 }
 
 .lyrics-romanization-container {
@@ -1055,6 +1165,85 @@ ytmusic-player-page[player-fullscreened] body .lyrics-song-info {
 
 .lyrics-romanization-container.rtl-text {
     direction: rtl !important;
+}
+
+/* --- Translation container: break out of parent RTL direction ---
+   Four cases based on parent line direction and translation text direction:
+   A) LTR line  + LTR translation  → left-align,  direction: ltr  (default)
+   B) RTL line  + LTR translation  → right-align, direction: ltr
+   C) LTR line  + RTL translation  → right-align, direction: rtl  (.rtl-text on container)
+   D) RTL line  + RTL translation  → right-align, direction: rtl
+   JS adds .rtl-text to the container when translatedText contains RTL chars. */
+
+/* Case A: LTR translation under LTR line (default) */
+.lyrics-translation-container {
+    direction: ltr;
+    unicode-bidi: plaintext;
+    text-align: start;
+}
+
+/* Case B: LTR translation under RTL line */
+.lyrics-line.rtl-text .lyrics-translation-container:not(.rtl-text) {
+    direction: ltr;
+    unicode-bidi: plaintext;
+    text-align: end;
+}
+
+.lyrics-line.rtl-text.singer-right
+    .lyrics-translation-container:not(.rtl-text) {
+    text-align: start;
+}
+
+/* Case C: RTL translation under LTR line ("flipped" — e.g. Arabic is the translation) */
+.lyrics-line:not(.rtl-text) .lyrics-translation-container.rtl-text {
+    direction: rtl;
+    unicode-bidi: embed;
+    text-align: start;
+}
+
+/* Case D: RTL translation under RTL line */
+.lyrics-line.rtl-text .lyrics-translation-container.rtl-text {
+    direction: rtl;
+    unicode-bidi: embed;
+    text-align: start;
+}
+
+/* LTR singer-right: line is right-aligned, LTR translation follows */
+.lyrics-line.singer-right:not(.rtl-text)
+    .lyrics-translation-container:not(.rtl-text) {
+    text-align: end;
+}
+
+/* --- Romanization alignment for dual-direction / dual-side mode ---  */
+
+/* mixed-direction + dual-side: RTL singer-right text is explicitly
+   right-aligned, so romanization (always LTR) must mirror that. */
+#lyrics-plus-container.mixed-direction-lyrics.dual-side-lyrics
+    .lyrics-line.rtl-text.singer-right
+    .lyrics-romanization-container {
+    text-align: end;
+}
+
+/* mixed-direction + dual-side: RTL singer-left text is left-aligned */
+#lyrics-plus-container.mixed-direction-lyrics.dual-side-lyrics
+    .lyrics-line.rtl-text.singer-left
+    .lyrics-romanization-container {
+    text-align: start;
+}
+
+/* Non-mixed dual-side: RTL singer-right is pushed right via padding-left;
+   romanization stays left-aligned so it tracks under the Arabic glyphs. */
+#lyrics-plus-container.dual-side-lyrics:not(.mixed-direction-lyrics)
+    .lyrics-line.rtl-text.singer-right
+    .lyrics-romanization-container {
+    text-align: start;
+}
+
+/* Non-mixed dual-side: RTL singer-left is pushed left via padding-right */
+#lyrics-plus-container.dual-side-lyrics:not(.mixed-direction-lyrics)
+    .lyrics-line.rtl-text.singer-left
+    .lyrics-romanization-container {
+    text-align: end;
 }
 
 .lyrics-romanization-container .lyrics-syllable {
@@ -1069,6 +1258,12 @@ ytmusic-player-page[player-fullscreened] body .lyrics-song-info {
    ENHANCED BACKGROUND & DYNAMIC PLAYER LAYOUT
    ========================================================================== */
 
+@property --webgl-post-process-tick {
+    syntax: "<number>";
+    inherits: false;
+    initial-value: 0;
+}
+
 .lyplus-blur-container {
     display: none;
     position: fixed;
@@ -1082,6 +1277,8 @@ ytmusic-player-page[player-fullscreened] body .lyrics-song-info {
     pointer-events: none;
     content-visibility: auto;
     contain-intrinsic-size: 100% 100%;
+    --webgl-post-process: brightness(0.5) saturate(3) contrast(0.95);
+    --webgl-post-process-tick: 0;
 }
 
 .lyplus-blur-background {
@@ -1103,21 +1300,23 @@ ytmusic-player-page[player-fullscreened] body .lyrics-song-info {
     width: 100%;
     height: 100%;
     opacity: 1;
-    background: linear-gradient(180deg, rgba(0, 0, 0, 0.8) 0%, rgba(0, 0, 0, 0.6) 50%, rgba(0, 0, 0, 0.8) 100%);
+    background: linear-gradient(
+        180deg,
+        rgba(0, 0, 0, 0.8) 0%,
+        rgba(0, 0, 0, 0.6) 50%,
+        rgba(0, 0, 0, 0.8) 100%
+    );
 }
 
 .lyplus-blur-container::after {
-    content: '';
+    content: "";
     position: absolute;
     top: 0;
     left: 0;
     z-index: 29;
     width: 100%;
     height: 100%;
-    backdrop-filter: brightness(0.47) saturate(1.7) contrast(1.3);
-}
-#layout.dynamic-player[player-ui-state="PLAYER_PAGE_OPEN"] .lyplus-blur-container::after {
-    backdrop-filter: brightness(0.47) saturate(1.7) contrast(1.3);
+    background-color: #50505027;
 }
 
 canvas#lyplus-webgl-canvas {
@@ -1137,73 +1336,121 @@ canvas#lyplus-webgl-canvas {
 
 @keyframes wipe {
     from {
-        background-size: 0.75em 100%, 0% 100%;
-        background-position: -0.375em 0%, left;
+        background-size:
+            0.75em 100%,
+            0% 100%;
+        background-position:
+            -0.375em 0%,
+            left;
     }
 
     to {
-        background-size: 0.75em 100%, 100% 100%;
-        background-position: calc(100% + 0.375em) 0%, left;
+        background-size:
+            0.75em 100%,
+            100% 100%;
+        background-position:
+            calc(100% + 0.375em) 0%,
+            left;
     }
 }
 
 @keyframes start-wipe {
     0% {
-        background-size: 0.75em 100%, 0% 100%;
-        background-position: -0.75em 0%, -0.375em 0%;
+        background-size:
+            0.75em 100%,
+            0% 100%;
+        background-position:
+            -0.75em 0%,
+            -0.375em 0%;
     }
 
     100% {
-        background-size: 0.75em 100%, 100% 100%;
-        background-position: calc(100% + 0.375em) 0%, left;
+        background-size:
+            0.75em 100%,
+            100% 100%;
+        background-position:
+            calc(100% + 0.375em) 0%,
+            left;
     }
 }
 
 @keyframes wipe-rtl {
     from {
-        background-size: 0.75em 100%, 0% 100%;
-        background-position: calc(100% + 0.375em) 0%, calc(100% + 0.36em);
+        background-size:
+            0.75em 100%,
+            0% 100%;
+        background-position:
+            calc(100% + 0.375em) 0%,
+            calc(100% + 0.36em);
     }
 
     to {
-        background-size: 0.75em 100%, 100% 100%;
-        background-position: -0.75em 0%, right;
+        background-size:
+            0.75em 100%,
+            100% 100%;
+        background-position:
+            -0.75em 0%,
+            right;
     }
 }
 
 @keyframes start-wipe-rtl {
     0% {
-        background-size: 0.75em 100%, 0% 100%;
-        background-position: calc(100% + 0.75em) 0%, calc(100% + 0.5em);
+        background-size:
+            0.75em 100%,
+            0% 100%;
+        background-position:
+            calc(100% + 0.75em) 0%,
+            calc(100% + 0.5em);
     }
 
     100% {
-        background-size: 0.75em 100%, 100% 100%;
-        background-position: -0.75em 0%, right;
+        background-size:
+            0.75em 100%,
+            100% 100%;
+        background-position:
+            -0.75em 0%,
+            right;
     }
 }
 
 @keyframes pre-wipe-universal {
     from {
-        background-size: 0.75em 100%, 0% 100%;
-        background-position: -0.75em 0%, left;
+        background-size:
+            0.75em 100%,
+            0% 100%;
+        background-position:
+            -0.75em 0%,
+            left;
     }
 
     to {
-        background-size: 0.75em 100%, 0% 100%;
-        background-position: -0.375em 0%, left;
+        background-size:
+            0.75em 100%,
+            0% 100%;
+        background-position:
+            -0.375em 0%,
+            left;
     }
 }
 
 @keyframes pre-wipe-universal-rtl {
     from {
-        background-size: 0.75em 100%, 0% 100%;
-        background-position: calc(100% + 0.75em) 0%, right;
+        background-size:
+            0.75em 100%,
+            0% 100%;
+        background-position:
+            calc(100% + 0.75em) 0%,
+            right;
     }
 
     to {
-        background-size: 0.75em 100%, 0% 100%;
-        background-position: calc(100% + 0.375em) 0%, right;
+        background-size:
+            0.75em 100%,
+            0% 100%;
+        background-position:
+            calc(100% + 0.375em) 0%,
+            right;
     }
 }
 
@@ -1242,7 +1489,6 @@ canvas#lyplus-webgl-canvas {
 }
 
 @keyframes pulse {
-
     0%,
     100% {
         opacity: 0.5;
@@ -1275,14 +1521,14 @@ canvas#lyplus-webgl-canvas {
     }
 
     60% {
-        width: 0.9em;
+        width: 0.8em;
         opacity: 1;
         mask-position: 10% 0%;
     }
 
     80%,
     82% {
-        width: 0.9em;
+        width: 0.8em;
         opacity: 0;
     }
 
@@ -1294,13 +1540,21 @@ canvas#lyplus-webgl-canvas {
 
 @keyframes pre-wipe-char {
     from {
-        background-size: 0.75em 100%, 0% 100%;
-        background-position: -0.75em 0%, left;
+        background-size:
+            0.75em 100%,
+            0% 100%;
+        background-position:
+            -0.75em 0%,
+            left;
     }
 
     to {
-        background-size: 0.75em 100%, 0% 100%;
-        background-position: -0.375em 0%, left;
+        background-size:
+            0.75em 100%,
+            0% 100%;
+        background-position:
+            -0.375em 0%,
+            left;
     }
 }
 
@@ -1312,8 +1566,34 @@ canvas#lyplus-webgl-canvas {
 
     25%,
     30% {
-        transform: matrix3d(calc(var(--max-scale) * calc(var(--lyplus-font-size-base-grow) / 25)), 0, 0, 0, 0, calc(var(--max-scale) * calc(var(--lyplus-font-size-base-grow) / 25)), 0, 0, 0, 0, 1, 0, calc(var(--char-offset-x) * calc(var(--lyplus-font-size-base-grow) / 25)), var(--translate-y-peak, -2%), 0, 1);
-        filter: drop-shadow(0 0 0.1em rgba(255, 255, 255, var(--shadow-intensity)));
+        transform: matrix3d(
+            calc(
+                var(--max-scale) * calc(var(--lyplus-font-size-base-grow) / 25)
+            ),
+            0,
+            0,
+            0,
+            0,
+            calc(
+                var(--max-scale) * calc(var(--lyplus-font-size-base-grow) / 25)
+            ),
+            0,
+            0,
+            0,
+            0,
+            1,
+            0,
+            calc(
+                var(--char-offset-x) *
+                    calc(var(--lyplus-font-size-base-grow) / 25)
+            ),
+            var(--translate-y-peak, -2%),
+            0,
+            1
+        );
+        filter: drop-shadow(
+            0 0 0.1em rgba(255, 255, 255, var(--shadow-intensity))
+        );
     }
 
     100% {
@@ -1322,7 +1602,6 @@ canvas#lyplus-webgl-canvas {
 }
 
 @keyframes grow-static {
-
     0%,
     100% {
         transform: scale3d(1.01, 1.01, 1.1) translateY(-0.05%);
@@ -1331,7 +1610,7 @@ canvas#lyplus-webgl-canvas {
 
     30%,
     40% {
-        transform: scale3d(1.10, 1.10, 1.1) translateY(-0.05%);
+        transform: scale3d(1.1, 1.1, 1.1) translateY(-0.05%);
         text-shadow: 0 0 0.3em rgba(255, 255, 255, 0.5);
     }
 }
@@ -1350,9 +1629,9 @@ canvas#lyplus-webgl-canvas {
     ytmusic-player-page[player-fullscreened] #lyrics-plus-buttons-wrapper {
         display: flex !important;
         position: fixed !important;
-        bottom: 100px !important;
+        bottom: 150px !important;
         right: 35px !important;
-        z-index: 2 !important;
+        z-index: 1002 !important;
         width: auto !important;
         margin: 0 !important;
         top: auto !important;
@@ -1363,22 +1642,35 @@ canvas#lyplus-webgl-canvas {
         transition: opacity 0.2s;
     }
 
-    ytmusic-player-page[video-mode][player-fullscreened] #lyrics-plus-buttons-wrapper {
-        top: 20px !important;
-        right: 20px !important;
-        bottom: auto !important;
+    ytmusic-player-page[video-mode][player-fullscreened]
+        #lyrics-plus-buttons-wrapper {
+        top: auto !important;
+        right: 35px !important;
+        bottom: 150px !important;
     }
 
     ytmusic-player-page[player-fullscreened]:hover #lyrics-plus-buttons-wrapper,
     ytmusic-player-page[player-fullscreened] #lyrics-plus-buttons-wrapper:hover,
-    ytmusic-player-page[player-fullscreened] #lyrics-plus-buttons-wrapper:has(#lyrics-plus-translation-dropdown:not(.hidden)) {
+    ytmusic-player-page[player-fullscreened]
+        #lyrics-plus-buttons-wrapper:has(
+            #lyrics-plus-translation-dropdown:not(.hidden)
+        ) {
         opacity: 1;
         pointer-events: auto;
     }
 
-    ytmusic-player-page[player-fullscreened]:has(#lyrics-plus-container:has(.text-loading)) #lyrics-plus-buttons-wrapper,
-    ytmusic-player-page[player-fullscreened]:has(#lyrics-plus-container:has(.text-not-found)) #lyrics-plus-buttons-wrapper,
-    ytmusic-player-page[player-fullscreened]:has(#lyrics-plus-container.lyrics-plus-message:not(:has(.lyrics-line))) #lyrics-plus-buttons-wrapper {
+    ytmusic-player-page[player-fullscreened]:has(
+            #lyrics-plus-container:has(.text-loading)
+        )
+        #lyrics-plus-buttons-wrapper,
+    ytmusic-player-page[player-fullscreened]:has(
+            #lyrics-plus-container:has(.text-not-found)
+        )
+        #lyrics-plus-buttons-wrapper,
+    ytmusic-player-page[player-fullscreened]:has(
+            #lyrics-plus-container.lyrics-plus-message:not(:has(.lyrics-line))
+        )
+        #lyrics-plus-buttons-wrapper {
         display: none !important;
         opacity: 0 !important;
         pointer-events: none !important;
@@ -1391,10 +1683,22 @@ canvas#lyplus-webgl-canvas {
         transition: opacity 0.2s;
     }
 
-    ytmusic-player-page[player-fullscreened] #lyrics-plus-buttons-wrapper:hover #lyrics-plus-translate-button,
-    ytmusic-player-page[player-fullscreened] #lyrics-plus-buttons-wrapper:hover #lyrics-plus-reload-button,
-    ytmusic-player-page[player-fullscreened] #lyrics-plus-buttons-wrapper:has(#lyrics-plus-translation-dropdown:not(.hidden)) #lyrics-plus-translate-button,
-    ytmusic-player-page[player-fullscreened] #lyrics-plus-buttons-wrapper:has(#lyrics-plus-translation-dropdown:not(.hidden)) #lyrics-plus-reload-button {
+    ytmusic-player-page[player-fullscreened]
+        #lyrics-plus-buttons-wrapper:hover
+        #lyrics-plus-translate-button,
+    ytmusic-player-page[player-fullscreened]
+        #lyrics-plus-buttons-wrapper:hover
+        #lyrics-plus-reload-button,
+    ytmusic-player-page[player-fullscreened]
+        #lyrics-plus-buttons-wrapper:has(
+            #lyrics-plus-translation-dropdown:not(.hidden)
+        )
+        #lyrics-plus-translate-button,
+    ytmusic-player-page[player-fullscreened]
+        #lyrics-plus-buttons-wrapper:has(
+            #lyrics-plus-translation-dropdown:not(.hidden)
+        )
+        #lyrics-plus-reload-button {
         opacity: 1;
         pointer-events: auto;
     }
@@ -1416,200 +1720,130 @@ canvas#lyplus-webgl-canvas {
         transform: translateY(-50%) !important;
     }
 
-    ytmusic-player-page[player-fullscreened] #lyrics-plus-buttons-wrapper:hover #lyrics-plus-translation-dropdown,
-    ytmusic-player-page[player-fullscreened] #lyrics-plus-translation-dropdown:not(.hidden) {
+    ytmusic-player-page[player-fullscreened]
+        #lyrics-plus-buttons-wrapper:hover
+        #lyrics-plus-translation-dropdown,
+    ytmusic-player-page[player-fullscreened]
+        #lyrics-plus-translation-dropdown:not(.hidden) {
         opacity: 1;
         pointer-events: auto;
     }
 }
 
-/* ==========================================================================
-   SF PRO FONT DECLARATIONS - ONLINE CDN
-   ========================================================================== */
-   @import url('https://fonts.cdnfonts.com/css/sf-pro-display');
+/* Hard override: keep translation controls above seekbar in fullscreen */
+@media (min-width: 615px) {
+    ytmusic-app-layout[player-fullscreened] #lyrics-plus-buttons-wrapper,
+    ytmusic-app-layout[player-fullscreened]
+        ytmusic-player-page
+        #lyrics-plus-buttons-wrapper,
+    ytmusic-app-layout[player-fullscreened]
+        ytmusic-player-page[player-fullscreened]
+        #lyrics-plus-buttons-wrapper {
+        top: auto !important;
+        bottom: 100px !important;
+        right: 50px !important;
+        z-index: 2147483647 !important;
+        opacity: 0 !important;
+        pointer-events: auto !important;
+        transition: opacity 0.2s ease !important;
+    }
 
-   /* Fallback font declarations using CDN */
-   @font-face {
-       font-family: 'SF Pro Display';
-       src: url('https://fonts.cdnfonts.com/s/59278/SFPRODISPLAYREGULAR.woff') format('woff');
-       font-weight: 400;
-       font-style: normal;
-       font-display: swap;
-   }
-   
-   @font-face {
-       font-family: 'SF Pro Display';
-       src: url('https://fonts.cdnfonts.com/s/59278/SFPRODISPLAYREGULARITALIC.woff') format('woff');
-       font-weight: 400;
-       font-style: italic;
-       font-display: swap;
-   }
-   
-   @font-face {
-       font-family: 'SF Pro Display';
-       src: url('https://fonts.cdnfonts.com/s/59278/SFPRODISPLAYLIGHT.woff') format('woff');
-       font-weight: 300;
-       font-style: normal;
-       font-display: swap;
-   }
-   
-   @font-face {
-       font-family: 'SF Pro Display';
-       src: url('https://fonts.cdnfonts.com/s/59278/SFPRODISPLAYSEMIBOLD.woff') format('woff');
-       font-weight: 600;
-       font-style: normal;
-       font-display: swap;
-   }
-   
-   @font-face {
-       font-family: 'SF Pro Display';
-       src: url('https://fonts.cdnfonts.com/s/59278/SFPRODISPLAYBOLD.woff') format('woff');
-       font-weight: 700;
-       font-style: normal;
-       font-display: swap;
-   }
-   
-   /* Legacy SF Pro font for backward compatibility */
-   @font-face {
-       font-family: 'SF Pro Display';
-       src: url('https://fonts.cdnfonts.com/s/59278/SFPRODISPLAYREGULAR.woff') format('woff');
-       font-weight: 400;
-       font-style: normal;
-       font-display: swap;
-   }
-   
-/* ==========================================================================
-   YOUTUBE MUSIC GLOBAL FONT APPLICATION
-   ========================================================================== */
+    ytmusic-app-layout[player-fullscreened]
+        ytmusic-player-page[video-mode]
+        #lyrics-plus-buttons-wrapper {
+        top: auto !important;
+        bottom: 100px !important;
+        right: 50px !important;
+    }
 
-/* Apply SF Pro Display to all YouTube Music elements */
-ytmusic-app,
-ytmusic-app *,
-#layout,
-#layout *,
-ytmusic-player-page,
-ytmusic-player-page *,
-ytmusic-player,
-ytmusic-player *,
-ytmusic-nav-bar,
-ytmusic-nav-bar *,
-ytmusic-mini-guide,
-ytmusic-mini-guide *,
-ytmusic-guide-entry,
-ytmusic-guide-entry *,
-ytmusic-player-bar,
-ytmusic-player-bar *,
-ytmusic-player-page[player-ui-state="MINIPLAYER"] *,
-ytmusic-player-page[player-ui-state="PLAYER_PAGE_OPEN"] *,
-ytmusic-player-page[player-ui-state="FULLSCREEN"] * ,
-/* Specific elements that need font override */
-ytmusic-nav-bar,
-ytmusic-mini-guide,
-ytmusic-guide-entry,
-ytmusic-player-bar,
-ytmusic-player-page,
-ytmusic-player,
-ytmusic-app-layout,
-ytmusic-app-layout * ,
-/* Player controls and buttons */
-ytmusic-player-bar *,
-ytmusic-player-page *,
-ytmusic-player *,
-ytmusic-nav-bar *,
-ytmusic-mini-guide *,
-ytmusic-guide-entry * ,
-/* Text elements and labels */
-ytmusic-nav-bar yt-formatted-string,
-ytmusic-mini-guide yt-formatted-string,
-ytmusic-guide-entry yt-formatted-string,
-ytmusic-player-bar yt-formatted-string,
-ytmusic-player-page yt-formatted-string,
-ytmusic-player yt-formatted-string,
-ytmusic-app yt-formatted-string ,
-/* Buttons and interactive elements */
-ytmusic-nav-bar yt-button,
-ytmusic-mini-guide yt-button,
-ytmusic-guide-entry yt-button,
-ytmusic-player-bar yt-button,
-ytmusic-player-page yt-button,
-ytmusic-player yt-button,
-ytmusic-app yt-button ,
-/* Input fields and search */
-ytmusic-search-box,
-ytmusic-search-box *,
-ytmusic-search-box input,
-ytmusic-search-box yt-formatted-string,
-/* Menu items and dropdowns */
-ytmusic-menu-renderer,
-ytmusic-menu-renderer *,
-ytmusic-menu-renderer yt-formatted-string,
-/* Tab headers and navigation */
-ytmusic-tab-renderer,
-ytmusic-tab-renderer *,
-ytmusic-tab-renderer yt-formatted-string,
-/* Song titles and artist names */
-ytmusic-player-queue-item,
-ytmusic-player-queue-item *,
-ytmusic-player-queue-item yt-formatted-string,
-ytmusic-player-queue-item .song-title,
-ytmusic-player-queue-item .byline,
-/* Time displays and progress bars */
-ytmusic-player-bar .time-info,
-ytmusic-player-bar .progress-bar,
-ytmusic-player-bar yt-formatted-string,
-/* Volume controls and settings */
-ytmusic-volume-slider,
-ytmusic-volume-slider *,
-ytmusic-volume-slider yt-formatted-string,
-/* Playlist and library items */
-ytmusic-responsive-list-item-renderer,
-ytmusic-responsive-list-item-renderer *,
-ytmusic-responsive-list-item-renderer yt-formatted-string,
-/* Album and playlist titles */
-ytmusic-shelf-renderer,
-ytmusic-shelf-renderer *,
-ytmusic-shelf-renderer yt-formatted-string,
-/* Settings and preferences */
-ytmusic-settings-page,
-ytmusic-settings-page *,
-ytmusic-settings-page yt-formatted-string,
-/* Notifications and messages */
-ytmusic-message-renderer,
-ytmusic-message-renderer *,
-ytmusic-message-renderer yt-formatted-string,
-/* Tooltips and overlays */
-ytmusic-tooltip-renderer,
-ytmusic-tooltip-renderer *,
-ytmusic-tooltip-renderer yt-formatted-string,
-/* Modal dialogs and popups */
-ytmusic-dialog,
-ytmusic-dialog *,
-ytmusic-dialog yt-formatted-string,
-/* Force font application to all text elements */
-ytmusic-app *,
-#layout *,
-ytmusic-player-page *,
-ytmusic-player *,
-ytmusic-nav-bar *,
-ytmusic-mini-guide *,
-ytmusic-guide-entry *,
-ytmusic-player-bar *,
-ytmusic-app, ytmusic-app *,
-#lyrics-plus-container, #lyrics-plus-container *, 
-.lyrics-plus-integrated, .lyrics-plus-integrated *,
-.lyrics-line, .lyrics-line *,
-.main-vocal-container, .main-vocal-container *,
-.backup-vocal-container, .backup-vocal-container *,
-/* Ultra-specific override for lyrics text elements */
-ytmusic-app ytmusic-app-layout ytmusic-player-page ytmusic-tab-renderer #lyrics-plus-container .lyrics-plus-integrated .lyrics-line,
-ytmusic-app ytmusic-app-layout ytmusic-player-page ytmusic-tab-renderer #lyrics-plus-container .lyrics-plus-integrated .lyrics-line *,
-ytmusic-app ytmusic-app-layout ytmusic-player-page ytmusic-tab-renderer #lyrics-plus-container .lyrics-plus-integrated .lyrics-line .main-vocal-container,
-ytmusic-app ytmusic-app-layout ytmusic-player-page ytmusic-tab-renderer #lyrics-plus-container .lyrics-plus-integrated .lyrics-line .main-vocal-container *,
-ytmusic-app ytmusic-app-layout ytmusic-player-page ytmusic-tab-renderer #lyrics-plus-container .lyrics-plus-integrated .lyrics-line .backup-vocal-container,
-ytmusic-app ytmusic-app-layout ytmusic-player-page ytmusic-tab-renderer #lyrics-plus-container .lyrics-plus-integrated .lyrics-line .backup-vocal-container *,
-ytmusic-app ytmusic-app-layout ytmusic-player-page ytmusic-tab-renderer #lyrics-plus-container .lyrics-plus-integrated .lyrics-line .lyrics-word,
-ytmusic-app ytmusic-app-layout ytmusic-player-page ytmusic-tab-renderer #lyrics-plus-container .lyrics-plus-integrated .lyrics-line .lyrics-syllable,
-ytmusic-app ytmusic-app-layout ytmusic-player-page ytmusic-tab-renderer #lyrics-plus-container .lyrics-plus-integrated .lyrics-line .lyrics-syllable span,
-ytmusic-app ytmusic-app-layout ytmusic-player-page ytmusic-tab-renderer #lyrics-plus-container .lyrics-plus-integrated .lyrics-line .lyrics-syllable span.char {
-    font-family: 'SF Pro Display', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif !important;
+    ytmusic-app-layout[player-fullscreened]
+        #lyrics-plus-buttons-wrapper:hover,
+    ytmusic-app-layout[player-fullscreened]
+        ytmusic-player-page[player-fullscreened]
+        #lyrics-plus-buttons-wrapper:hover,
+    ytmusic-app-layout[player-fullscreened]
+        #lyrics-plus-buttons-wrapper:has(
+            #lyrics-plus-translation-dropdown:not(.hidden)
+        ),
+    ytmusic-app-layout[player-fullscreened]
+        ytmusic-player-page[player-fullscreened]
+        #lyrics-plus-buttons-wrapper:has(
+            #lyrics-plus-translation-dropdown:not(.hidden)
+        ) {
+        opacity: 1 !important;
+        pointer-events: auto !important;
+    }
+
+    ytmusic-app-layout[player-fullscreened] #lyrics-plus-translate-button,
+    ytmusic-app-layout[player-fullscreened] #lyrics-plus-reload-button {
+        opacity: 0 !important;
+        pointer-events: none !important;
+    }
+
+    ytmusic-app-layout[player-fullscreened]
+        #lyrics-plus-buttons-wrapper:hover
+        #lyrics-plus-translate-button,
+    ytmusic-app-layout[player-fullscreened]
+        #lyrics-plus-buttons-wrapper:hover
+        #lyrics-plus-reload-button,
+    ytmusic-app-layout[player-fullscreened]
+        ytmusic-player-page[player-fullscreened]
+        #lyrics-plus-buttons-wrapper:hover
+        #lyrics-plus-translate-button,
+    ytmusic-app-layout[player-fullscreened]
+        ytmusic-player-page[player-fullscreened]
+        #lyrics-plus-buttons-wrapper:hover
+        #lyrics-plus-reload-button,
+    ytmusic-app-layout[player-fullscreened]
+        #lyrics-plus-buttons-wrapper:has(
+            #lyrics-plus-translation-dropdown:not(.hidden)
+        )
+        #lyrics-plus-translate-button,
+    ytmusic-app-layout[player-fullscreened]
+        #lyrics-plus-buttons-wrapper:has(
+            #lyrics-plus-translation-dropdown:not(.hidden)
+        )
+        #lyrics-plus-reload-button,
+    ytmusic-app-layout[player-fullscreened]
+        ytmusic-player-page[player-fullscreened]
+        #lyrics-plus-buttons-wrapper:has(
+            #lyrics-plus-translation-dropdown:not(.hidden)
+        )
+        #lyrics-plus-translate-button,
+    ytmusic-app-layout[player-fullscreened]
+        ytmusic-player-page[player-fullscreened]
+        #lyrics-plus-buttons-wrapper:has(
+            #lyrics-plus-translation-dropdown:not(.hidden)
+        )
+        #lyrics-plus-reload-button {
+        opacity: 1 !important;
+        pointer-events: auto !important;
+    }
+
+    ytmusic-app-layout[player-fullscreened] #lyrics-plus-translation-dropdown,
+    ytmusic-app-layout[player-fullscreened]
+        ytmusic-player-page[player-fullscreened]
+        #lyrics-plus-translation-dropdown {
+        top: 50% !important;
+        bottom: auto !important;
+        right: calc(100% + 12px) !important;
+        left: auto !important;
+        transform: translateY(-50%) !important;
+    }
+
+    ytmusic-app-layout[player-fullscreened]
+        #lyrics-plus-buttons-wrapper:hover
+        #lyrics-plus-translation-dropdown,
+    ytmusic-app-layout[player-fullscreened]
+        #lyrics-plus-translation-dropdown:not(.hidden),
+    ytmusic-app-layout[player-fullscreened]
+        ytmusic-player-page[player-fullscreened]
+        #lyrics-plus-buttons-wrapper:hover
+        #lyrics-plus-translation-dropdown,
+    ytmusic-app-layout[player-fullscreened]
+        ytmusic-player-page[player-fullscreened]
+        #lyrics-plus-translation-dropdown:not(.hidden) {
+        opacity: 1 !important;
+        pointer-events: auto !important;
+    }
 }

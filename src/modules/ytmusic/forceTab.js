@@ -1,93 +1,169 @@
 (async function () {
   async function waitForDOMReady() {
-    if (document.readyState === 'complete' || document.readyState === 'interactive') return;
-    await new Promise((resolve) => document.addEventListener('DOMContentLoaded', resolve, { once: true }));
+    if (
+      document.readyState === "complete" ||
+      document.readyState === "interactive"
+    )
+      return;
+    await new Promise((resolve) =>
+      document.addEventListener("DOMContentLoaded", resolve, { once: true }),
+    );
   }
 
   await waitForDOMReady();
 
-  let tabContainerObserver = null;
   let middleTabObserver = null;
+  let tabContainerObserver = null;
   let sidePanelObserver = null;
   let currentMiddleTab = null;
   let isUpdating = false;
 
   const SELECTORS = {
-    TAB_CONTAINER: 'ytmusic-player-page .tab-header-container, #tabs-content, tp-yt-paper-tabs',
-    TAB: 'tp-yt-paper-tab.tab-header, tp-yt-paper-tab',
-    SIDE_PANEL: '#side-panel',
-    LYRICS: '.lyrics-plus-integrated',
-    SCROLL_CONTAINER: '#tab-renderer',
-    VIDEO: 'video'
+    TAB_CONTAINER:
+      "ytmusic-player-page .tab-header-container, #tabs-content, tp-yt-paper-tabs",
+    TAB: "tp-yt-paper-tab",
+    SIDE_PANEL: "#side-panel",
+    LYRICS: ".lyrics-plus-integrated",
+    SCROLL_CONTAINER: "#tab-renderer",
+    VIDEO: "video",
+    APP_LAYOUT: "ytmusic-app-layout",
   };
 
-  function ensureTabEnabled(tab) {
+  function forceActivateMiddleTab(tab) {
     if (!tab || isUpdating) return;
 
-    const needsUpdate = 
-      tab.hasAttribute('disabled') ||
-      tab.getAttribute('aria-disabled') === 'true' ||
-      tab.style.pointerEvents !== 'auto';
+    // Check if lyrics are currently being shown
+    const lyricsElement = document.querySelector(SELECTORS.LYRICS);
+    const lyricsVisible =
+      lyricsElement && lyricsElement.style.display === "block";
+
+    // Only fix: keep tab enabled (clickable) always,
+    // but only force iron-selected when lyrics are actually visible
+    const needsUpdate =
+      tab.hasAttribute("disabled") ||
+      tab.getAttribute("tabindex") !== "0" ||
+      tab.style.pointerEvents !== "auto" ||
+      (lyricsVisible && tab.getAttribute("aria-selected") !== "true") ||
+      (lyricsVisible && !tab.classList.contains("iron-selected"));
 
     if (!needsUpdate) return;
 
     isUpdating = true;
+    if (middleTabObserver) middleTabObserver.disconnect();
+
     requestAnimationFrame(() => {
-      tab.removeAttribute('disabled');
-      tab.setAttribute('aria-disabled', 'false');
-      tab.style.pointerEvents = 'auto';
-      
-      setTimeout(() => { isUpdating = false; }, 50);
+      // Always keep the tab enabled so it's clickable
+      tab.removeAttribute("disabled");
+      tab.setAttribute("aria-disabled", "false");
+      tab.setAttribute("tabindex", "0");
+      tab.style.pointerEvents = "auto";
+
+      // Only mark as selected when lyrics are actually showing
+      if (lyricsVisible) {
+        tab.setAttribute("aria-selected", "true");
+        tab.classList.add("iron-selected");
+      }
+
+      setTimeout(() => {
+        isUpdating = false;
+        if (middleTabObserver && currentMiddleTab === tab) {
+          middleTabObserver.observe(tab, {
+            attributes: true,
+            attributeFilter: ["class", "aria-selected", "disabled"],
+          });
+        }
+      }, 50);
     });
   }
 
   function handleTabInteraction(clickedIndex, middleIndex) {
     const lyricsElement = document.querySelector(SELECTORS.LYRICS);
+    const sidePanel = document.querySelector(SELECTORS.SIDE_PANEL);
+
     if (!lyricsElement) return;
 
     const shouldShow = clickedIndex === middleIndex;
-    
-    if (shouldShow && lyricsElement.style.display === 'block') return;
-    if (!shouldShow && lyricsElement.style.display === 'none') return;
-
-    lyricsElement.style.display = shouldShow ? 'block' : 'none';
 
     if (shouldShow) {
-      const scrollContainer = document.querySelector(SELECTORS.SCROLL_CONTAINER);
+      lyricsElement.style.display = "block";
+
+      // Visually mark the Lyrics tab as selected
+      if (currentMiddleTab) {
+        currentMiddleTab.setAttribute("aria-selected", "true");
+        currentMiddleTab.classList.add("iron-selected");
+      }
+
+      if (sidePanel) {
+        if (getComputedStyle(sidePanel).display === "none") {
+          sidePanel.style.display = "flex";
+        }
+        if (sidePanel.hasAttribute("inert")) sidePanel.removeAttribute("inert");
+        if (sidePanel.hasAttribute("hidden"))
+          sidePanel.removeAttribute("hidden");
+      }
+
+      const scrollContainer = document.querySelector(
+        SELECTORS.SCROLL_CONTAINER,
+      );
       if (scrollContainer) scrollContainer.scrollTop = 0;
-      
+
       const videoElement = document.querySelector(SELECTORS.VIDEO);
-      if (videoElement && typeof window.scrollActiveLine === 'function') {
-        try { window.scrollActiveLine(videoElement.currentTime, true); } catch (e) {}
+      if (videoElement && typeof window.scrollActiveLine === "function") {
+        try {
+          window.scrollActiveLine(videoElement.currentTime, true);
+        } catch (e) {}
+      }
+    } else {
+      lyricsElement.style.display = "none";
+
+      // Remove selected state from the Lyrics tab when switching away
+      if (currentMiddleTab) {
+        currentMiddleTab.setAttribute("aria-selected", "false");
+        currentMiddleTab.classList.remove("iron-selected");
       }
     }
   }
 
   function attachTouchLogic(tab, index, middleIndex) {
-    if (tab.dataset.forceTabEnhanced === 'true') return;
+    if (tab.dataset.forceTabEnhanced === "true") return;
 
     const MOVE_THRESHOLD = 10;
-    let startX = 0, startY = 0;
+    let startX = 0,
+      startY = 0;
 
-    tab.addEventListener('touchstart', (e) => {
-      const t = e.touches[0];
-      startX = t.clientX;
-      startY = t.clientY;
-    }, { passive: true });
+    tab.addEventListener(
+      "touchstart",
+      (e) => {
+        const t = e.touches[0];
+        startX = t.clientX;
+        startY = t.clientY;
+      },
+      { passive: true },
+    );
 
-    tab.addEventListener('touchend', (e) => {
-      const t = e.changedTouches[0];
-      if (Math.abs(t.clientX - startX) < MOVE_THRESHOLD &&
-          Math.abs(t.clientY - startY) < MOVE_THRESHOLD) {
+    tab.addEventListener(
+      "touchend",
+      (e) => {
+        const t = e.changedTouches[0];
+        if (
+          Math.abs(t.clientX - startX) < MOVE_THRESHOLD &&
+          Math.abs(t.clientY - startY) < MOVE_THRESHOLD
+        ) {
+          handleTabInteraction(index, middleIndex);
+        }
+      },
+      { passive: true },
+    );
+
+    tab.addEventListener(
+      "click",
+      () => {
         handleTabInteraction(index, middleIndex);
-      }
-    }, { passive: true });
+      },
+      { passive: true },
+    );
 
-    tab.addEventListener('click', () => {
-      handleTabInteraction(index, middleIndex);
-    }, { passive: true });
-
-    tab.dataset.forceTabEnhanced = 'true';
+    tab.dataset.forceTabEnhanced = "true";
   }
 
   function processTabs(container) {
@@ -97,19 +173,19 @@
     const middleIndex = Math.floor(tabs.length / 2);
     const middleTab = tabs[middleIndex];
 
-    ensureTabEnabled(middleTab);
+    forceActivateMiddleTab(middleTab);
 
     if (currentMiddleTab !== middleTab) {
       if (middleTabObserver) middleTabObserver.disconnect();
-      
+
       currentMiddleTab = middleTab;
       middleTabObserver = new MutationObserver(() => {
-         if (!isUpdating) ensureTabEnabled(middleTab);
+        if (!isUpdating) forceActivateMiddleTab(middleTab);
       });
-      
-      middleTabObserver.observe(middleTab, { 
-        attributes: true, 
-        attributeFilter: ['class', 'aria-selected', 'disabled'] 
+
+      middleTabObserver.observe(middleTab, {
+        attributes: true,
+        attributeFilter: ["class", "aria-selected", "disabled"],
       });
     }
 
@@ -120,20 +196,53 @@
 
   function initSidePanelObserver() {
     const sidePanel = document.querySelector(SELECTORS.SIDE_PANEL);
-    if (!sidePanel || sidePanelObserver) return;
+    if (!sidePanel) return;
+
+    if (sidePanelObserver) sidePanelObserver.disconnect();
 
     const ensureActive = () => {
-      if (sidePanel.hasAttribute('inert')) sidePanel.removeAttribute('inert');
+      const lyricsElement = document.querySelector(SELECTORS.LYRICS);
+      if (lyricsElement && lyricsElement.style.display === "block") {
+        if (sidePanel.hasAttribute("inert")) sidePanel.removeAttribute("inert");
+        if (sidePanel.hasAttribute("hidden"))
+          sidePanel.removeAttribute("hidden");
+        if (getComputedStyle(sidePanel).display === "none")
+          sidePanel.style.display = "flex";
+      }
     };
+
     ensureActive();
 
     sidePanelObserver = new MutationObserver((mutations) => {
-      if (mutations.some(m => m.attributeName === 'inert')) ensureActive();
+      if (mutations.some((m) => m.type === "attributes")) ensureActive();
     });
-    sidePanelObserver.observe(sidePanel, { attributes: true, attributeFilter: ['inert'] });
+
+    sidePanelObserver.observe(sidePanel, {
+      attributes: true,
+      attributeFilter: ["inert", "hidden", "style"],
+    });
   }
 
-  const mainObserver = new MutationObserver(() => {
+  const mainObserver = new MutationObserver((mutations) => {
+    let shouldUpdate = false;
+    for (const m of mutations) {
+      if (
+        m.target &&
+        (m.target.id === "tabs-content" ||
+          m.target.classList?.contains("tab-header-container") ||
+          m.target.tagName === "TP-YT-PAPER-TABS")
+      ) {
+        shouldUpdate = true;
+        break;
+      }
+      if (m.addedNodes.length > 0) {
+        shouldUpdate = true;
+        break;
+      }
+    }
+
+    if (!shouldUpdate) return;
+
     const tabContainer = document.querySelector(SELECTORS.TAB_CONTAINER);
 
     if (tabContainer) {
@@ -143,113 +252,27 @@
         tabContainerObserver = new MutationObserver(() => {
           processTabs(tabContainer);
         });
-        tabContainerObserver.observe(tabContainer, { childList: true, subtree: false });
+        tabContainerObserver.observe(tabContainer, {
+          childList: true,
+          subtree: false,
+        });
       }
     }
 
     initSidePanelObserver();
   });
 
-  mainObserver.observe(document.body, { childList: true, subtree: true });
+  const appRoot = document.querySelector(SELECTORS.APP_LAYOUT) || document.body;
+  mainObserver.observe(appRoot, { childList: true, subtree: true });
 
-  // Fullscreen auto-redirect to Lyrics tab
-  let tabChangeObserver = null;
-
-  function autoRedirectToLyricsInFullscreen() {
-    const playerPage = document.querySelector('ytmusic-player-page');
-    if (!playerPage || !playerPage.hasAttribute('player-fullscreened')) return;
-
-    const tabs = document.querySelectorAll(
-      'tp-yt-paper-tab.tab-header.style-scope.ytmusic-player-page'
-    );
-    if (tabs.length < 2) return;
-
-    const activeTab = document.querySelector(
-      'tp-yt-paper-tab.tab-header.style-scope.ytmusic-player-page.iron-selected'
-    );
-    if (!activeTab) return;
-
-    const allTabs = Array.from(activeTab.parentElement.children);
-    const activeIndex = allTabs.indexOf(activeTab);
-    let lyricsTabIndex = -1;
-
-    allTabs.forEach((tab, index) => {
-      const tabText = tab.textContent.trim().toLowerCase();
-      if (tabText.includes('lyrics') || tabText.includes('lirik')) {
-        lyricsTabIndex = index;
-      }
-    });
-
-    if (activeIndex !== lyricsTabIndex && lyricsTabIndex !== -1) {
-      allTabs[lyricsTabIndex].click();
-    }
-  }
-
-  function setupTabChangeObserver() {
-    if (tabChangeObserver) {
-      tabChangeObserver.disconnect();
-    }
-
-    const tabs = document.querySelectorAll(
-      'tp-yt-paper-tab.tab-header.style-scope.ytmusic-player-page'
-    );
-    if (tabs.length === 0) return;
-
-    tabChangeObserver = new MutationObserver(() => {
-      const playerPage = document.querySelector('ytmusic-player-page');
-      if (playerPage && playerPage.hasAttribute('player-fullscreened')) {
-        requestAnimationFrame(() => {
-          autoRedirectToLyricsInFullscreen();
-        });
-      }
-    });
-
-    tabs.forEach((tab) => {
-      tabChangeObserver.observe(tab, {
-        attributes: true,
-        attributeFilter: ['aria-selected', 'class'],
-      });
-    });
-  }
-
-  function setupFullscreenObserver() {
-    const playerPage = document.querySelector('ytmusic-player-page');
-    if (!playerPage) {
-      setTimeout(setupFullscreenObserver, 100);
-      return;
-    }
-
-    const fullscreenObserver = new MutationObserver((mutations) => {
-      mutations.forEach((mutation) => {
-        if (mutation.type === 'attributes' && mutation.attributeName === 'player-fullscreened') {
-          const isFullscreen = mutation.target.hasAttribute('player-fullscreened');
-          if (isFullscreen) {
-            requestAnimationFrame(() => {
-              autoRedirectToLyricsInFullscreen();
-              setupTabChangeObserver();
-            });
-          } else if (tabChangeObserver) {
-            tabChangeObserver.disconnect();
-            tabChangeObserver = null;
-          }
-        }
-      });
-    });
-
-    fullscreenObserver.observe(playerPage, {
-      attributes: true,
-      attributeFilter: ['player-fullscreened'],
-    });
-  }
-
-  setupFullscreenObserver();
-
-  window.addEventListener('beforeunload', () => {
-    mainObserver.disconnect();
-    if (tabContainerObserver) tabContainerObserver.disconnect();
-    if (middleTabObserver) middleTabObserver.disconnect();
-    if (sidePanelObserver) sidePanelObserver.disconnect();
-    if (tabChangeObserver) tabChangeObserver.disconnect();
-  }, { once: true });
-
+  window.addEventListener(
+    "beforeunload",
+    () => {
+      mainObserver.disconnect();
+      if (tabContainerObserver) tabContainerObserver.disconnect();
+      if (middleTabObserver) middleTabObserver.disconnect();
+      if (sidePanelObserver) sidePanelObserver.disconnect();
+    },
+    { once: true },
+  );
 })();
