@@ -29,13 +29,37 @@
     APP_LAYOUT: "ytmusic-app-layout",
   };
 
+  function isLyricsVisible() {
+    const lyricsElement = document.querySelector(SELECTORS.LYRICS);
+    return (
+      lyricsElement &&
+      lyricsElement.style.display === "block" &&
+      getComputedStyle(lyricsElement).display !== "none"
+    );
+  }
+
+  function setLyricsTabSelected(tab, selected) {
+    if (!tab) return;
+
+    tab.setAttribute("aria-selected", selected ? "true" : "false");
+    tab.classList.toggle("iron-selected", selected);
+
+    if (selected) {
+      tab.setAttribute("selected", "");
+    } else {
+      tab.removeAttribute("selected");
+    }
+  }
+
+  function cleanupLyricsTabSelection() {
+    if (isLyricsVisible()) return;
+    setLyricsTabSelected(currentMiddleTab, false);
+  }
+
   function forceActivateMiddleTab(tab) {
     if (!tab || isUpdating) return;
 
-    // Check if lyrics are currently being shown
-    const lyricsElement = document.querySelector(SELECTORS.LYRICS);
-    const lyricsVisible =
-      lyricsElement && lyricsElement.style.display === "block";
+    const lyricsVisible = isLyricsVisible();
 
     // Only fix: keep tab enabled (clickable) always,
     // but only force iron-selected when lyrics are actually visible
@@ -43,6 +67,10 @@
       tab.hasAttribute("disabled") ||
       tab.getAttribute("tabindex") !== "0" ||
       tab.style.pointerEvents !== "auto" ||
+      (!lyricsVisible &&
+        (tab.getAttribute("aria-selected") === "true" ||
+          tab.hasAttribute("selected") ||
+          tab.classList.contains("iron-selected"))) ||
       (lyricsVisible && tab.getAttribute("aria-selected") !== "true") ||
       (lyricsVisible && !tab.classList.contains("iron-selected"));
 
@@ -59,10 +87,7 @@
       tab.style.pointerEvents = "auto";
 
       // Only mark as selected when lyrics are actually showing
-      if (lyricsVisible) {
-        tab.setAttribute("aria-selected", "true");
-        tab.classList.add("iron-selected");
-      }
+      setLyricsTabSelected(tab, lyricsVisible);
 
       setTimeout(() => {
         isUpdating = false;
@@ -88,10 +113,7 @@
       lyricsElement.style.display = "block";
 
       // Visually mark the Lyrics tab as selected
-      if (currentMiddleTab) {
-        currentMiddleTab.setAttribute("aria-selected", "true");
-        currentMiddleTab.classList.add("iron-selected");
-      }
+      setLyricsTabSelected(currentMiddleTab, true);
 
       if (sidePanel) {
         if (getComputedStyle(sidePanel).display === "none") {
@@ -117,10 +139,10 @@
       lyricsElement.style.display = "none";
 
       // Remove selected state from the Lyrics tab when switching away
-      if (currentMiddleTab) {
-        currentMiddleTab.setAttribute("aria-selected", "false");
-        currentMiddleTab.classList.remove("iron-selected");
-      }
+      cleanupLyricsTabSelection();
+      requestAnimationFrame(cleanupLyricsTabSelection);
+      setTimeout(cleanupLyricsTabSelection, 50);
+      setTimeout(cleanupLyricsTabSelection, 150);
     }
   }
 
