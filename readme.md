@@ -62,7 +62,7 @@ NewSync is a browser extension that brings synchronized lyrics to YouTube Music 
 </details>
 
 
-### Install from Add-ons Stores
+### Install from Add-ons Stores (not yet updated, wait)
 
 Safe, easy, and get auto updates. Install NewSync directly from your browser's web store.
 
