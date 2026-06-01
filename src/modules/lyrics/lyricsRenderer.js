@@ -1051,6 +1051,7 @@ class LyricsPlusRenderer {
             !isBg &&
             !currentSettings.lightweight &&
             !this._isRTL(groupText) &&
+            !this._isCJK(groupText) &&
             groupText.trim().length <= 7 &&
             groupDuration >= 1000;
 
