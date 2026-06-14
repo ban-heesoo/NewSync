@@ -155,11 +155,7 @@ ytmusic-app-layout[is-mweb-modernization-enabled]
 /* Show buttons only when lyrics are visible */
 ytmusic-tab-renderer:has(#lyrics-plus-container[style*="display: block"])
     #lyrics-plus-buttons-wrapper,
-ytmusic-tab-renderer:has(#lyrics-plus-container)
-    #lyrics-plus-buttons-wrapper,
 ytmusic-app-layout:has(#lyrics-plus-container[style*="display: block"])
-    #lyrics-plus-buttons-wrapper,
-ytmusic-app-layout:has(#lyrics-plus-container)
     #lyrics-plus-buttons-wrapper {
     display: flex;
 }
