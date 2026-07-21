@@ -160,6 +160,10 @@ ytmusic-app-layout:has(#lyrics-plus-container[style*="display: block"])
     display: flex;
 }
 
+ytmusic-app-layout[player-ui-state="MINIPLAYER"] #lyrics-plus-buttons-wrapper {
+    display: none !important;
+}
+
 /* --- Dynamic Player UI Integration --- */
 
 /* Show blur background when player page is open or in fullscreen */

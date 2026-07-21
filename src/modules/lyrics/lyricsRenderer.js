@@ -1770,7 +1770,7 @@ class LyricsPlusRenderer {
 
     if (this.cachedLyricsLines.length > 0) {
       const currentTime =
-        (this._getCurrentPlayerTime() - this.offsetLatency) * 1000;
+        (this._getCurrentPlayerTime() - this.offsetLatency) * 1000 + (this.currentSettings.lyricOffset || 0);
       let activeIndex = this._getLineIndexAtTime(currentTime);
       if (activeIndex === -1) activeIndex = 0;
 
@@ -2042,7 +2042,7 @@ class LyricsPlusRenderer {
     if (!this.uiConfig.disableNativeTick) {
       const sync = () => {
         const currentTime =
-          (this._getCurrentPlayerTime() - this.offsetLatency) * 1000;
+          (this._getCurrentPlayerTime() - this.offsetLatency) * 1000 + (this.currentSettings.lyricOffset || 0);
         if (currentTime !== this.lastTime) {
           const isForceScroll = Math.abs(currentTime - this.lastTime) > 1000;
           this._updateLyricsHighlight(
@@ -2074,7 +2074,7 @@ class LyricsPlusRenderer {
    * @param {number} currentTime - The current video time in seconds.
    */
   updateCurrentTick(currentTime) {
-    currentTime = currentTime * 1000;
+    currentTime = currentTime * 1000 + (this.currentSettings.lyricOffset || 0);
     const isForceScroll = Math.abs(currentTime - this.lastTime) > 1000;
     this._updateLyricsHighlight(
       currentTime - this.offsetLatency,

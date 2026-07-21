@@ -188,31 +188,45 @@
     tab.dataset.forceTabEnhanced = "true";
   }
 
+  function findLyricsTabIndex(tabs) {
+    const lyricsKeywords = [
+      "lyrics", "lirik", "letras", "paroles", "testo", "songtexte", "liedtext",
+      "tekst", "sözler", "слова", "歌詞", "歌词", "가사", "sanat", "lời bài hát", "เนื้อเพลง"
+    ];
+    for (let i = 0; i < tabs.length; i++) {
+      const text = tabs[i].textContent.trim().toLowerCase();
+      if (lyricsKeywords.some((keyword) => text.includes(keyword))) {
+        return i;
+      }
+    }
+    return Math.floor(tabs.length / 3);
+  }
+
   function processTabs(container) {
     const tabs = Array.from(container.querySelectorAll(SELECTORS.TAB));
     if (tabs.length < 3) return;
 
-    const middleIndex = Math.floor(tabs.length / 3);
-    const middleTab = tabs[middleIndex];
+    const lyricsIndex = findLyricsTabIndex(tabs);
+    const lyricsTab = tabs[lyricsIndex];
 
-    forceActivateMiddleTab(middleTab);
+    forceActivateMiddleTab(lyricsTab);
 
-    if (currentMiddleTab !== middleTab) {
+    if (currentMiddleTab !== lyricsTab) {
       if (middleTabObserver) middleTabObserver.disconnect();
 
-      currentMiddleTab = middleTab;
+      currentMiddleTab = lyricsTab;
       middleTabObserver = new MutationObserver(() => {
-        if (!isUpdating) forceActivateMiddleTab(middleTab);
+        if (!isUpdating) forceActivateMiddleTab(lyricsTab);
       });
 
-      middleTabObserver.observe(middleTab, {
+      middleTabObserver.observe(lyricsTab, {
         attributes: true,
         attributeFilter: ["class", "aria-selected", "disabled"],
       });
     }
 
     tabs.forEach((tab, index) => {
-      attachTouchLogic(tab, index, middleIndex);
+      attachTouchLogic(tab, index, lyricsIndex);
     });
   }
 

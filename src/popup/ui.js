@@ -151,6 +151,7 @@ document.addEventListener('DOMContentLoaded', () => {
         input.addEventListener('change', saveAndApplySettings);
     });
 
+
     function showStatus(message, isError = false) {
         if (!status) return;
         status.textContent = message;
