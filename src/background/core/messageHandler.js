@@ -10,6 +10,10 @@ import { TranslationService } from './translationService.js';
 import { SponsorBlockService } from '../services/sponsorblockService.js';
 import { DataParser } from '../utils/dataParser.js';
 
+const pBrowser = typeof browser !== 'undefined'
+  ? browser
+  : (typeof chrome !== 'undefined' ? chrome : null);
+
 export class MessageHandler {
   static handle(message, sender, sendResponse) {
     const handlers = {
@@ -86,7 +90,8 @@ export class MessageHandler {
       state.clear();
       await Promise.all([
         lyricsDB.clear(),
-        translationsDB.clear()
+        translationsDB.clear(),
+        this.clearArtCache()
       ]);
       sendResponse({ success: true, message: "Cache reset successfully" });
     } catch (error) {
@@ -95,22 +100,68 @@ export class MessageHandler {
     }
   }
 
+  static clearArtCache() {
+    return new Promise((resolve) => {
+      if (!pBrowser?.storage?.local?.get || !pBrowser?.storage?.local?.remove) {
+        resolve();
+        return;
+      }
+      pBrowser.storage.local.get(null, (all) => {
+        if (!all) {
+          resolve();
+          return;
+        }
+        const keysToRemove = Object.keys(all).filter(key => key.startsWith("bls_"));
+        if (keysToRemove.length > 0) {
+          pBrowser.storage.local.remove(keysToRemove, () => resolve());
+        } else {
+          resolve();
+        }
+      });
+    });
+  }
+
   static async getCacheSize(sendResponse) {
     try {
-      const [lyricsStats, translationsStats] = await Promise.all([
+      const [lyricsStats, translationsStats, artStats] = await Promise.all([
         lyricsDB.estimateSize(),
-        translationsDB.estimateSize()
+        translationsDB.estimateSize(),
+        this.getArtCacheStats()
       ]);
 
       sendResponse({
         success: true,
         sizeKB: lyricsStats.sizeKB + translationsStats.sizeKB,
-        cacheCount: lyricsStats.count + translationsStats.count
+        cacheCount: lyricsStats.count + translationsStats.count,
+        artSizeKB: artStats.sizeKB,
+        artCacheCount: artStats.count
       });
     } catch (error) {
       console.error("Get cache size error:", error);
       sendResponse({ success: false, error: error.message });
     }
+  }
+
+  static getArtCacheStats() {
+    return new Promise((resolve) => {
+      if (!pBrowser?.storage?.local?.get) {
+        resolve({ count: 0, sizeKB: 0 });
+        return;
+      }
+      pBrowser.storage.local.get(null, (all) => {
+        let count = 0;
+        let sizeBytes = 0;
+        if (all) {
+          for (const [key, value] of Object.entries(all)) {
+            if (key.startsWith("bls_")) {
+              count += 1;
+              sizeBytes += key.length + JSON.stringify(value).length;
+            }
+          }
+        }
+        resolve({ count, sizeKB: sizeBytes / 1024 });
+      });
+    });
   }
 
   static async uploadLocalLyrics(message, sendResponse) {

@@ -107,12 +107,19 @@
             </div>
 
             <div class="settings-group">
-                <h2>Dynamic Background</h2>
-                <p>Animated backgrounds based on album art.</p>
+                <h2>Dynamic Background & Media</h2>
+                <p>Animated backgrounds and album art.</p>
                 <div class="container">
                     <span>Enable on Player Page</span>
                     <label>
                         <input type="checkbox" id="dynamicPlayer" />
+                        <span class="checkmark"></span>
+                    </label>
+                </div>
+                <div class="container">
+                    <span>Animated Album Art</span>
+                    <label>
+                        <input type="checkbox" id="animatedAlbumArt" />
                         <span class="checkmark"></span>
                     </label>
                 </div>
@@ -125,14 +132,19 @@
                 <p>Manage cached lyrics and storage.</p>
                 <div class="text-group">
                     <p>
-                        <span class="text-group__title">Cache Size</span>
+                        <span class="text-group__title">Lyrics Cache Size</span>
                         <span class="dots"></span>
                         <span class="cache-size-value">0.00 MB</span>
                     </p>
                     <p>
-                        <span class="text-group__title">Cached Items</span>
+                        <span class="text-group__title">Cached Lyrics Items</span>
                         <span class="dots"></span>
                         <span class="cache-count-value">0</span>
+                    </p>
+                    <p>
+                        <span class="text-group__title">Cached Animated Art Items</span>
+                        <span class="dots"></span>
+                        <span class="art-cache-count-value">0</span>
                     </p>
                 </div>
                 <div class="container container--small">

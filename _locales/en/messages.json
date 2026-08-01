@@ -600,6 +600,14 @@
     "message": "Applies animated album backgrounds when the player is expanded. This setting has no effect in fullscreen mode, where dynamic background is always enabled.",
     "description": "Description"
   },
+  "settingAnimatedAlbumArt": {
+    "message": "Animated Album Art",
+    "description": "Toggle label"
+  },
+  "descAnimatedAlbumArt": {
+    "message": "Replaces the static album art thumbnail with an animated version when available. Disable to always use the static image.",
+    "description": "Description"
+  },
   "settingAudioBeatSync": {
     "message": "Audio-based Beat Pulse for Dynamic Background",
     "description": "Toggle label"

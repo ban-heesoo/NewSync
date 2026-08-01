@@ -579,6 +579,14 @@
     "message": "Menerapkan latar belakang album beranimasi saat pemutar diperluas. Pengaturan ini tidak berpengaruh dalam mode layar penuh, di mana latar belakang dinamis selalu diaktifkan.",
     "description": "Description"
   },
+  "settingAnimatedAlbumArt": {
+    "message": "Album Art Beranimasi",
+    "description": "Toggle label"
+  },
+  "descAnimatedAlbumArt": {
+    "message": "Menggantikan gambar mini album art statis dengan versi beranimasi jika tersedia. Nonaktifkan untuk selalu menggunakan gambar statis.",
+    "description": "Description"
+  },
   "settingAudioBeatSync": {
     "message": "Denyut Latar Dinamis Berbasis Audio",
     "description": "Toggle label"

@@ -175,6 +175,8 @@ async function fetchBaseLyrics(currentSong, isNewSong, forceReload, fetchId) {
   }
 
   LyricsPlusAPI.cleanupLyrics();
+  lastBaseLyrics = null;
+  lastKnownSongInfo = null;
   lastTranslationResponse = null;
   lastRomanizationResponse = null;
 

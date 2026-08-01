@@ -15,12 +15,15 @@ document.addEventListener('DOMContentLoaded', () => {
     const sponsorBlockSwitchInput = document.getElementById('sponsorblock');
     const largerTextModeSelect = document.getElementById('largerTextMode');
     const dynamicPlayerSwitchInput = document.getElementById('dynamicPlayer');
+    const animatedAlbumArtSwitchInput = document.getElementById('animatedAlbumArt');
 
     const clearCacheButton = document.getElementById('clearCache');
     const refreshCacheButton = document.getElementById('refreshCache');
     const reloadExtensionButton = document.getElementById('reloadExtension');
     const cacheSizeElement = document.querySelector('.cache-size-value');
     const cacheCountElement = document.querySelector('.cache-count-value');
+    const artCacheSizeElement = document.querySelector('.art-cache-size-value');
+    const artCacheCountElement = document.querySelector('.art-cache-count-value');
 
     const status = document.getElementById('status');
 
@@ -106,6 +109,9 @@ document.addEventListener('DOMContentLoaded', () => {
         sponsorBlockSwitchInput.checked = currentSettings.useSponsorBlock;
         largerTextModeSelect.value = currentSettings.largerTextMode || 'lyrics';
         dynamicPlayerSwitchInput.checked = currentSettings.dynamicPlayer || false;
+        if (animatedAlbumArtSwitchInput) {
+            animatedAlbumArtSwitchInput.checked = currentSettings.animatedAlbumArt !== false;
+        }
     }
 
     async function fetchAndLoadSettings() {
@@ -129,6 +135,7 @@ document.addEventListener('DOMContentLoaded', () => {
             useSponsorBlock: sponsorBlockSwitchInput.checked,
             largerTextMode: largerTextModeSelect.value,
             dynamicPlayer: dynamicPlayerSwitchInput.checked,
+            animatedAlbumArt: animatedAlbumArtSwitchInput ? animatedAlbumArtSwitchInput.checked : true,
         };
         currentSettings = { ...currentSettings, ...newSettings };
 
@@ -147,8 +154,8 @@ document.addEventListener('DOMContentLoaded', () => {
         saveAndApplySettings();
     });
     largerTextModeSelect.addEventListener('change', saveAndApplySettings);
-    [wordByWordSwitchInput, lightweightSwitchInput, lyEnabledSwitchInput, sponsorBlockSwitchInput, dynamicPlayerSwitchInput].forEach(input => {
-        input.addEventListener('change', saveAndApplySettings);
+    [wordByWordSwitchInput, lightweightSwitchInput, lyEnabledSwitchInput, sponsorBlockSwitchInput, dynamicPlayerSwitchInput, animatedAlbumArtSwitchInput].forEach(input => {
+        if (input) input.addEventListener('change', saveAndApplySettings);
     });
 
 
@@ -184,48 +191,153 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     }
 
+    async function openIndexedDB(dbName, storeName) {
+        return new Promise((resolve) => {
+            const request = indexedDB.open(dbName);
+            request.onsuccess = (event) => {
+                const db = event.target.result;
+                if (!db.objectStoreNames.contains(storeName)) {
+                    db.close();
+                    resolve({ count: 0, sizeKB: 0 });
+                    return;
+                }
+                const tx = db.transaction([storeName], "readonly");
+                const store = tx.objectStore(storeName);
+                const getAll = store.getAll();
+                getAll.onsuccess = () => {
+                    const items = getAll.result || [];
+                    const bytes = items.reduce((acc, item) => acc + new TextEncoder().encode(JSON.stringify(item)).length, 0);
+                    db.close();
+                    resolve({ count: items.length, sizeKB: bytes / 1024 });
+                };
+                getAll.onerror = () => {
+                    db.close();
+                    resolve({ count: 0, sizeKB: 0 });
+                };
+            };
+            request.onerror = () => resolve({ count: 0, sizeKB: 0 });
+        });
+    }
+
     async function updateCacheDisplay() {
-        if (typeof pBrowser === 'undefined' || !pBrowser.runtime || !pBrowser.runtime.sendMessage) {
-            console.warn("YouLy+: pBrowser.runtime.sendMessage not available for cache display.");
-            cacheSizeElement.textContent = 'N/A';
-            cacheCountElement.textContent = 'N/A';
-            return;
-        }
-        try {
-            const response = await pBrowser.runtime.sendMessage({ type: 'GET_CACHED_SIZE' });
-            if (response && response.success) {
-                const sizeMB = (response.sizeKB / 1024).toFixed(2);
-                cacheSizeElement.textContent = `${sizeMB} MB`;
-                cacheCountElement.textContent = response.cacheCount.toString();
-            } else {
-                cacheSizeElement.textContent = 'N/A';
-                cacheCountElement.textContent = 'N/A';
-                console.error("YouLy+: Error getting cache size:", response ? response.error : "No response");
+        let sizeKB = 0;
+        let cacheCount = 0;
+        let artSizeKB = 0;
+        let artCacheCount = 0;
+        let fetched = false;
+
+        if (typeof pBrowser !== 'undefined' && pBrowser.runtime && pBrowser.runtime.sendMessage) {
+            try {
+                const response = await pBrowser.runtime.sendMessage({ type: 'GET_CACHED_SIZE' });
+                if (response && response.success) {
+                    sizeKB = response.sizeKB || 0;
+                    cacheCount = response.cacheCount || 0;
+                    artSizeKB = response.artSizeKB || 0;
+                    artCacheCount = response.artCacheCount || 0;
+                    fetched = true;
+                }
+            } catch (error) {
+                console.warn("YouLy+: GET_CACHED_SIZE message fallback:", error);
             }
-        } catch (error) {
-            cacheSizeElement.textContent = 'Error';
-            cacheCountElement.textContent = 'Error';
-            console.error("YouLy+: Failed to send GET_CACHED_SIZE message:", error);
         }
+
+        if (!fetched) {
+            try {
+                const [lyricsStats, translationsStats] = await Promise.all([
+                    openIndexedDB("LyricsCacheDB", "lyrics"),
+                    openIndexedDB("TranslationsCacheDB", "translations")
+                ]);
+                sizeKB = lyricsStats.sizeKB + translationsStats.sizeKB;
+                cacheCount = lyricsStats.count + translationsStats.count;
+                fetched = true;
+            } catch (e) {
+                console.error("YouLy+: IndexedDB direct read error:", e);
+            }
+        }
+
+        // Always check storage.local for animated album art cache (bls_ keys)
+        if (typeof pBrowser !== 'undefined' && pBrowser.storage && pBrowser.storage.local) {
+            try {
+                const all = await new Promise((resolve) => pBrowser.storage.local.get(null, resolve));
+                if (all) {
+                    let localArtCount = 0;
+                    let localArtBytes = 0;
+                    for (const [key, value] of Object.entries(all)) {
+                        if (key.startsWith("bls_")) {
+                            localArtCount += 1;
+                            localArtBytes += key.length + JSON.stringify(value).length;
+                        }
+                    }
+                    if (localArtCount > 0 || !fetched) {
+                        artCacheCount = localArtCount;
+                        artSizeKB = localArtBytes / 1024;
+                    }
+                }
+            } catch (e) {
+                console.error("YouLy+: Direct storage.local read error:", e);
+            }
+        }
+
+        const lSizeMB = (sizeKB / 1024).toFixed(2);
+
+        if (cacheSizeElement) cacheSizeElement.textContent = `${lSizeMB} MB`;
+        if (cacheCountElement) cacheCountElement.textContent = cacheCount.toString();
+        if (artCacheCountElement) artCacheCountElement.textContent = artCacheCount.toString();
     }
 
     clearCacheButton.addEventListener('click', async () => {
-        if (typeof pBrowser === 'undefined' || !pBrowser.runtime || !pBrowser.runtime.sendMessage) {
-            showStatus('Cannot clear cache: Extension API not available.', true);
-            return;
-        }
-        try {
-            const response = await pBrowser.runtime.sendMessage({ type: 'RESET_CACHE' });
-            if (response && response.success) {
-                showStatus('Cache cleared successfully!');
-                updateCacheDisplay();
-            } else {
-                showStatus('Failed to clear cache.', true);
-                console.error("YouLy+: Error resetting cache:", response ? response.error : "No response");
+        let success = false;
+        if (typeof pBrowser !== 'undefined' && pBrowser.runtime && pBrowser.runtime.sendMessage) {
+            try {
+                const response = await pBrowser.runtime.sendMessage({ type: 'RESET_CACHE' });
+                if (response && response.success) {
+                    success = true;
+                }
+            } catch (error) {
+                console.warn("YouLy+: RESET_CACHE message error, executing fallback:", error);
             }
-        } catch (error) {
-            showStatus('Error communicating to clear cache.', true);
-            console.error("YouLy+: Failed to send RESET_CACHE message:", error);
+        }
+
+        // Direct clear fallback for IndexedDB & Chrome Storage
+        try {
+            const clearDB = (dbName, storeName) => new Promise((resolve) => {
+                const req = indexedDB.open(dbName);
+                req.onsuccess = (e) => {
+                    const db = e.target.result;
+                    if (db.objectStoreNames.contains(storeName)) {
+                        const tx = db.transaction([storeName], "readwrite");
+                        tx.objectStore(storeName).clear();
+                        tx.oncomplete = () => { db.close(); resolve(); };
+                        tx.onerror = () => { db.close(); resolve(); };
+                    } else { db.close(); resolve(); }
+                };
+                req.onerror = () => resolve();
+            });
+
+            await Promise.all([
+                clearDB("LyricsCacheDB", "lyrics"),
+                clearDB("TranslationsCacheDB", "translations")
+            ]);
+
+            if (typeof pBrowser !== 'undefined' && pBrowser.storage && pBrowser.storage.local) {
+                const all = await new Promise((resolve) => pBrowser.storage.local.get(null, resolve));
+                if (all) {
+                    const keysToRemove = Object.keys(all).filter(key => key.startsWith("bls_"));
+                    if (keysToRemove.length > 0) {
+                        await new Promise((resolve) => pBrowser.storage.local.remove(keysToRemove, resolve));
+                    }
+                }
+            }
+            success = true;
+        } catch (e) {
+            console.error("YouLy+: Direct cache clear error:", e);
+        }
+
+        if (success) {
+            showStatus('Cache cleared successfully!');
+            updateCacheDisplay();
+        } else {
+            showStatus('Failed to clear cache.', true);
         }
     });
 

@@ -15,9 +15,10 @@ export const CONFIG = {
   },
 
   KPOE_SERVERS: [
-    //plz dont stole lmao
-    "https://lyricsplus.prjktla.my.id", //youly's server
+    "https://lyricsplus.prjktla.my.id", //youly's main server
     "https://lyricsplus.binimum.org", //binimum's server
+    "https://lyricsplus.atomix.one", //atomix mirror
+    "https://lyricsplus-seven.vercel.app", //vercel mirror
     "https://lyricsplus.prjktla.workers.dev", //ibra's cf worker
   ],
 
@@ -36,6 +37,7 @@ export const PROVIDERS = {
   KPOE: 'kpoe',
   CUSTOM_KPOE: 'customKpoe',
   UNISON: 'unison',
+  BINILYRICS: 'binilyrics',
   LRCLIB: 'lrclib',
   LOCAL: 'local',
   GEMINI: 'gemini',

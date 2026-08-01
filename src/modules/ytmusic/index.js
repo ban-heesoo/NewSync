@@ -242,5 +242,8 @@ window.addEventListener('message', (event) => {
 
     if (event.data.type === 'LYPLUS_SONG_CHANGED' && event.data.songInfo?.duration) {
         refreshSongInfoIfNeeded(true);
+        if (window.AnimatedArtManager && typeof window.AnimatedArtManager.handleSongChange === 'function') {
+            window.AnimatedArtManager.handleSongChange(event.data.songInfo);
+        }
     }
 });

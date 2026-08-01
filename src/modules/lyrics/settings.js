@@ -4,7 +4,7 @@ const pBrowser = typeof browser !== 'undefined'
 
 const defaultSettings = {
     lyricsProvider: 'kpoe',
-    lyricsProviderOrder: 'kpoe,unison,lrclib',
+    lyricsProviderOrder: 'kpoe,unison,binilyrics,lrclib',
     lyricsSourceOrder: 'apple,lyricsplus,qq,musixmatch,musixmatch-word',
     wordByWord: true,
     lightweight: false,
@@ -35,6 +35,7 @@ const defaultSettings = {
     largerTextMode: 'lyrics', // 'lyrics' or 'romanization'
     hidePhoneticDup: false,
     bkgOverlap: true,
+    animatedAlbumArt: true,
     customKpoeUrl: '',
     appleMusicTTMLBypass: false,
     openRouterApiKey: '',

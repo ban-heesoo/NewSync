@@ -11,6 +11,7 @@ import { Utilities } from '../utils/utilities.js';
 import { KPoeService } from '../services/kpoeService.js';
 import { LRCLibService } from '../services/lrclibService.js';
 import { UnisonService } from '../services/unisonService.js';
+import { BiniLyricsService } from '../services/biniLyricsService.js';
 import { YouTubeService } from '../services/youtubeService.js';
 import { parseAppleTTML } from '../../lib/parser.js';
 
@@ -272,13 +273,13 @@ export class LyricsService {
   }
 
   static getProviderOrder(settings, songInfo = null, preferUnisonVideo = false) {
-    const defaultOrder = ['kpoe', 'unison', 'lrclib'];
+    const defaultOrder = ['kpoe', 'unison', 'binilyrics', 'lrclib'];
 
     let providersList = (settings.lyricsProviderOrder || '').split(',').map(p => p.trim()).filter(Boolean);
     if (!providersList.length) providersList = defaultOrder;
 
     let validProviders = providersList.filter(p => [
-      PROVIDERS.KPOE, PROVIDERS.CUSTOM_KPOE, PROVIDERS.UNISON, PROVIDERS.LRCLIB
+      PROVIDERS.KPOE, PROVIDERS.CUSTOM_KPOE, PROVIDERS.UNISON, PROVIDERS.BINILYRICS, PROVIDERS.LRCLIB
     ].includes(p));
 
     if (!settings.customKpoeUrl) {
@@ -310,6 +311,9 @@ export class LyricsService {
       case PROVIDERS.UNISON:
         return UnisonService.fetch(songInfo, opts);
         
+      case PROVIDERS.BINILYRICS:
+        return BiniLyricsService.fetch(songInfo, opts);
+
       case PROVIDERS.LRCLIB:
         return LRCLibService.fetch(songInfo, opts);
 

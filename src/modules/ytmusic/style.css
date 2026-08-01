@@ -1364,3 +1364,29 @@ ytmusic-player-bar ytmusic-menu-renderer [aria-label="Action menu"] svg {
     background: rgb(255 255 255 / 10%) !important;
     border-radius: 50% !important;
 }
+
+/* ==========================================================================
+   ANIMATED ALBUM ART STYLES
+   ========================================================================== */
+
+#bls-video {
+    position: absolute !important;
+    inset: 0 !important;
+    width: 100% !important;
+    height: 100% !important;
+    object-fit: cover !important;
+    z-index: 2 !important;
+    pointer-events: none !important;
+    border-radius: inherit !important;
+}
+
+/* Ensure player thumbnail containers clip video overflow cleanly without background bleed */
+#thumbnail,
+ytmusic-player-page #thumbnail,
+ytmusic-player-page #song-image,
+ytmusic-player-page .image,
+.thumbnail-view.ytmusic-player-page {
+    overflow: hidden !important;
+    border-radius: var(--ytmusic-thumbnail-border-radius, inherit) !important;
+}
+
