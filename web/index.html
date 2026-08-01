@@ -1,0 +1,173 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>NewSync - Privacy & Info</title>
+    <link href="https://fonts.cdnfonts.com/css/sf-pro-display" rel="stylesheet">
+    <style>
+        :root {
+            --bg: #000000;
+            --surface: rgba(255, 255, 255, 0.07);
+            --surface-border: rgba(255, 255, 255, 0.1);
+            --accent: #fa233b;
+            --text: #f5f5f7;
+            --text-sub: #86868b;
+        }
+
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+            font-family: "SF Pro Display", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+            -webkit-font-smoothing: antialiased;
+        }
+
+        body {
+            background-color: var(--bg);
+            color: var(--text);
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            min-height: 100vh;
+            padding: 40px 20px;
+        }
+
+        .card {
+            background: var(--surface);
+            border: 1px solid var(--surface-border);
+            backdrop-filter: blur(40px);
+            -webkit-backdrop-filter: blur(40px);
+            border-radius: 24px;
+            max-width: 580px;
+            width: 100%;
+            padding: 40px;
+            box-shadow: 0 30px 60px rgba(0, 0, 0, 0.4);
+        }
+
+        .header {
+            display: flex;
+            align-items: center;
+            gap: 16px;
+            margin-bottom: 24px;
+        }
+
+        .logo {
+            width: 48px;
+            height: 48px;
+            border-radius: 12px;
+            object-fit: contain;
+        }
+
+        h1 {
+            font-size: 26px;
+            font-weight: 600;
+            letter-spacing: -0.5px;
+        }
+
+        p.desc {
+            font-size: 16px;
+            color: var(--text-sub);
+            line-height: 1.5;
+            margin-bottom: 32px;
+        }
+
+        .divider {
+            height: 1px;
+            background: var(--surface-border);
+            margin: 28px 0;
+        }
+
+        h2 {
+            font-size: 18px;
+            font-weight: 600;
+            margin-bottom: 16px;
+            color: var(--text);
+        }
+
+        ul.points {
+            list-style: none;
+            display: flex;
+            flex-direction: column;
+            gap: 12px;
+            margin-bottom: 32px;
+        }
+
+        ul.points li {
+            font-size: 14px;
+            color: var(--text-sub);
+            display: flex;
+            align-items: flex-start;
+            gap: 10px;
+            line-height: 1.4;
+        }
+
+        ul.points li span.icon {
+            color: var(--accent);
+            font-size: 16px;
+            line-height: 1;
+        }
+
+        .footer-links {
+            display: flex;
+            gap: 16px;
+        }
+
+        .btn {
+            display: inline-block;
+            padding: 10px 20px;
+            border-radius: 999px;
+            font-size: 14px;
+            font-weight: 500;
+            text-decoration: none;
+            transition: opacity 0.2s;
+        }
+
+        .btn-accent {
+            background: var(--accent);
+            color: #fff;
+        }
+
+        .btn-secondary {
+            background: rgba(255, 255, 255, 0.1);
+            color: var(--text);
+        }
+
+        .btn:hover {
+            opacity: 0.85;
+        }
+    </style>
+</head>
+<body>
+
+    <div class="card">
+        <div class="header">
+            <img src="icons/icon128.png" alt="NewSync Logo" class="logo">
+            <div>
+                <h1>NewSync</h1>
+                <span style="font-size: 13px; color: var(--text-sub);">Synchronized Lyrics Extension</span>
+            </div>
+        </div>
+
+        <p class="desc">
+            Brings Apple Music-style synchronized lyrics, word-by-word timing, and animated album artwork to YouTube Music and supported web players.
+        </p>
+
+        <div class="divider"></div>
+
+        <div id="privacy">
+            <h2>Privacy Policy</h2>
+            <ul class="points">
+                <li><span class="icon">✓</span> <span><strong>No Data Collection:</strong> NewSync does not collect, track, or share any personal information, listening history, or browser telemetry.</span></li>
+                <li><span class="icon">✓</span> <span><strong>Local Processing:</strong> All preferences, custom CSS, and cached lyrics remain strictly saved on your own device (`storage.local` / `IndexedDB`).</span></li>
+                <li><span class="icon">✓</span> <span><strong>Direct Requests:</strong> Network requests are only made directly to public lyrics APIs to fetch lyrics for the playing track. No analytics or tracking tags attached.</span></li>
+            </ul>
+        </div>
+
+        <div class="footer-links">
+            <a href="https://github.com/ban-heesoo/NewSync" class="btn btn-accent" target="_blank">GitHub Repository</a>
+        </div>
+    </div>
+
+</body>
+</html>

@@ -26,7 +26,7 @@ NewSync is a browser extension that brings synchronized lyrics to YouTube Music 
 ## Installation
 
 ### Install from Source
-
+ <img src="https://img.shields.io/github/v/release/ban-heesoo/NewSync?color=blue&label=Latest%20Release" alt="Edge Version">
 <details>
 <summary><b>For Chrome Users, Developers & Advanced Users</b></summary>
 
@@ -62,7 +62,7 @@ NewSync is a browser extension that brings synchronized lyrics to YouTube Music 
 </details>
 
 
-### Install from Add-ons Stores (not yet updated, wait)
+### Install from Add-ons Stores
 
 Safe, easy, and get auto updates. Install NewSync directly from your browser's web store.
 
@@ -70,7 +70,7 @@ Safe, easy, and get auto updates. Install NewSync directly from your browser's w
 Microsoft Edge (Recommended):<br>
 <a href="https://microsoftedge.microsoft.com/addons/detail/newsync/abdllbamaomfdbfiipnpljdiljojmnoe" target="_blank"><img src="https://hivicode.github.io/newsync/edge.svg" alt="Microsoft Edge Add-ons" height="60"/></a><br>
 Firefox (a bit lag):<br>
-<a href="https://addons.mozilla.org/en-US/firefox/addon/newsync/" target="_blank"><img src="https://hivicode.github.io/newsync/firefox.svg" alt="Firefox Add-ons" height="60"/></a>
+<a href="https://addons.mozilla.org/en-US/firefox/addon/newsync/" target="_blank"><img src="https://hivicode.github.io/newsync/firefox.svg" alt="Firefox Add-ons" height="60"/></a><br> <img src="https://img.shields.io/amo/v/newsync?color=orange&label=Store%20Version" alt="Mozilla Add-on Version">
 </p>
 
 ## Updating

@@ -40,7 +40,7 @@
   },
   "browser_specific_settings": {
     "gecko": {
-      "id": "{00a6e1f0-4808-45e7-b66d-3a5aa6527a0e}",
+      "id": "@newsync-zen",
       "strict_min_version": "122.0",
       "data_collection_permissions": {
         "required": [
