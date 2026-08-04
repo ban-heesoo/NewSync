@@ -91,7 +91,7 @@ Once installed, simply open [YouTube Music](https://music.youtube.com/) and play
 
 This project is inspired by and built upon the work of talented developers:
 
-- **Base Project:** NewSync is based on the work by [@ibratabian17](https://github.com/ibratabian17). Special thanks for the foundation and inspiration.
-- **Popup Style:** The popup style is inspired by the work of [@boidushya](https://github.com/boidushya), known for creating the Better Lyrics extension for YouTube Music.
+- NewSync is based on the work by [@ibratabian17](https://github.com/ibratabian17). Special thanks for the foundation and inspiration.
+- The popup & settings style is inspired by the work of [@boidushya](https://github.com/boidushya), known for creating the Better Lyrics extension for YouTube Music. Also the animated album art feature uses his API.
 
 We are grateful for their contributions to the open-source community.
