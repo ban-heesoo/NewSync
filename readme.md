@@ -85,7 +85,7 @@ If you have installed the extension with cloned repository, you can simply updat
 Once installed, simply open [YouTube Music](https://music.youtube.com/) and play any song. The lyrics panel will automatically be enhanced by NewSync with custom lyrics, no external API setup required (except for Gemini AI features).
 
 -   **Quick Settings:** Access quick toggles by clicking the NewSync icon in your browser's toolbar.
--   **Full Settings:** For comprehensive customization, click **"More Settings"** from the popup to open the dedicated settings page.
+-   **Full Settings:** Click **"More Settings"** from the popup (Desktop only, not supported on Edge Mobile).
 
 ## Acknowledgments
 
