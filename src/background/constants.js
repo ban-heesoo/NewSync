@@ -43,7 +43,8 @@ export const PROVIDERS = {
   GEMINI: 'gemini',
   GOOGLE: 'google',
   OPENROUTER: 'openrouter',
-  DEEPL: 'deepl'
+  DEEPL: 'deepl',
+  DEEPL_KEYLESS: 'deeplKeyless'
 };
 
 export const MESSAGE_TYPES = {

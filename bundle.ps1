@@ -78,58 +78,57 @@ function Create-ZipArchive {
     }
 }
 
-# --- Bundle for Chrome/Edge (Manifest V3, no browser_specific_settings, no background.scripts) ---
-Write-Host "Creating youlyplus-v${VERSION}-chrome-edge.zip..."
-$TEMP_DIR = "temp_chrome_edge"
+# --- Bundle for Chromium (Chrome / Edge / Brave) ---
+Write-Host "Creating newsync-v${VERSION}-chromium.zip..."
+$TEMP_DIR = "temp_chromium"
 if (Test-Path -Path $TEMP_DIR -PathType Container) {
     Remove-Item -Path $TEMP_DIR -Recurse -Force | Out-Null
 }
 New-Item -Path $TEMP_DIR -ItemType Directory | Out-Null
 
-# Copy common files
 foreach ($file in $COMMON_FILES) {
     if (Test-Path -Path $file) {
         Copy-Item -Path $file -Destination $TEMP_DIR -Recurse -Force | Out-Null
     }
 }
 
-# Modify manifest.json for Chrome/Edge
-$manifestChromeEdge = $manifest | ConvertTo-Json -Depth 100
-$manifestChromeEdge = $manifestChromeEdge | ConvertFrom-Json
-$manifestChromeEdge.PSObject.Properties.Remove("browser_specific_settings")
-if ($manifestChromeEdge.background -and $manifestChromeEdge.background.scripts) {
-    $manifestChromeEdge.background.PSObject.Properties.Remove("scripts")
+$manifestChromium = $manifest | ConvertTo-Json -Depth 100 | ConvertFrom-Json
+if ($manifestChromium.PSObject.Properties['browser_specific_settings']) {
+    $manifestChromium.PSObject.Properties.Remove("browser_specific_settings")
 }
-$manifestChromeEdge | ConvertTo-Json -Depth 100 | Set-Content -Path "$TEMP_DIR/manifest.json" -Force
+$manifestChromium.background = [pscustomobject]@{
+    service_worker = "src/background/lyricsHandler.js"
+    type = "module"
+}
+$manifestChromium | ConvertTo-Json -Depth 100 | Set-Content -Path "$TEMP_DIR/manifest.json" -Force
 
-# Create zip archive
-Create-ZipArchive -SourceDir $TEMP_DIR -DestinationZip "dist/youlyplus-v${VERSION}-chrome-edge.zip"
-
-# Clean up temporary directory
+Create-ZipArchive -SourceDir $TEMP_DIR -DestinationZip "dist/newsync-v${VERSION}-chromium.zip"
 Remove-Item -Path $TEMP_DIR -Recurse -Force | Out-Null
-Write-Host "Finished youlyplus-v${VERSION}-chrome-edge.zip"
+Write-Host "Finished newsync-v${VERSION}-chromium.zip"
 
-# --- Bundle for Chrome/Firefox (Manifest V3, with browser_specific_settings) ---
-Write-Host "Creating youlyplus-v${VERSION}-chrome-firefox.zip..."
-$TEMP_DIR = "temp_chrome_firefox"
+# --- Bundle for Gecko (Firefox / Zen Browser) ---
+Write-Host "Creating newsync-v${VERSION}-gecko.zip..."
+$TEMP_DIR = "temp_gecko"
 if (Test-Path -Path $TEMP_DIR -PathType Container) {
     Remove-Item -Path $TEMP_DIR -Recurse -Force | Out-Null
 }
 New-Item -Path $TEMP_DIR -ItemType Directory | Out-Null
 
-# Copy common files and original manifest.json
 foreach ($file in $COMMON_FILES) {
     if (Test-Path -Path $file) {
         Copy-Item -Path $file -Destination $TEMP_DIR -Recurse -Force | Out-Null
     }
 }
-Copy-Item -Path "manifest.json" -Destination "$TEMP_DIR/manifest.json" -Force | Out-Null
 
-# Create zip archive
-Create-ZipArchive -SourceDir $TEMP_DIR -DestinationZip "dist/youlyplus-v${VERSION}-chrome-firefox.zip"
+$manifestGecko = $manifest | ConvertTo-Json -Depth 100 | ConvertFrom-Json
+$manifestGecko.background = [pscustomobject]@{
+    scripts = @("src/background/lyricsHandler.js")
+    type = "module"
+}
+$manifestGecko | ConvertTo-Json -Depth 100 | Set-Content -Path "$TEMP_DIR/manifest.json" -Force
 
-# Clean up temporary directory
+Create-ZipArchive -SourceDir $TEMP_DIR -DestinationZip "dist/newsync-v${VERSION}-gecko.zip"
 Remove-Item -Path $TEMP_DIR -Recurse -Force | Out-Null
-Write-Host "Finished youlyplus-v${VERSION}-chrome-firefox.zip"
+Write-Host "Finished newsync-v${VERSION}-gecko.zip"
 
 Write-Host "Bundling complete. Output files are in the 'dist' directory."

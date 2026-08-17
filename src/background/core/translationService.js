@@ -13,21 +13,20 @@ import { GoogleProvider } from '../services/translation/providers/GoogleProvider
 import { GeminiProvider } from '../services/translation/providers/GeminiProvider.js';
 import { OpenRouterProvider } from '../services/translation/providers/OpenRouterProvider.js';
 import { DeepLProvider } from '../services/translation/providers/DeepLProvider.js';
+import { DeepLKeylessProvider } from '../services/translation/providers/DeepLKeylessProvider.js';
 
 export class TranslationService {
-  static createCacheKey(songInfo, action, targetLang) {
+  static createCacheKey(songInfo, action, targetLang, providerName = '') {
     const baseLyricsCacheKey = LyricsService.createCacheKey(songInfo);
-    return `${baseLyricsCacheKey} - ${action} - ${targetLang}`;
+    return `${baseLyricsCacheKey} - ${action} - ${targetLang} - ${providerName}`;
   }
 
   static async getOrFetch(songInfo, action, targetLang, forceReload = false) {
     const settings = await SettingsManager.getTranslationSettings();
-    const resolvedTargetLang = targetLang || settings.customTranslateTarget || 'en';
-    const actualTargetLang = settings.overrideTranslateTarget && settings.customTranslateTarget
-      ? settings.customTranslateTarget
-      : resolvedTargetLang;
+    const customLang = settings.customTranslateTarget ? settings.customTranslateTarget.trim() : '';
+    const actualTargetLang = customLang || targetLang || 'en';
 
-    const translatedKey = this.createCacheKey(songInfo, action, actualTargetLang);
+    const translatedKey = this.createCacheKey(songInfo, action, actualTargetLang, settings.translationProvider);
 
     const { lyrics: originalLyrics, version: originalVersion } =
       await LyricsService.getOrFetch(songInfo, forceReload);
@@ -98,6 +97,8 @@ export class TranslationService {
         return new OpenRouterProvider(settings);
       case PROVIDERS.DEEPL:
         return new DeepLProvider(settings);
+      case PROVIDERS.DEEPL_KEYLESS:
+        return new DeepLKeylessProvider(settings);
       case PROVIDERS.GOOGLE:
       default:
         return new GoogleProvider(settings);
