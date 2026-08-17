@@ -18,38 +18,40 @@ mkdir -p dist
 # Define common files/directories to bundle
 COMMON_FILES="LICENSE icons src readme.md _locales"
 
-# --- Bundle for Chrome/Edge (Manifest V3, no browser_specific_settings, no background.scripts) ---
-echo "Creating youlyplus-v${VERSION}-chrome-edge.zip..."
-TEMP_DIR="temp_chrome_edge"
+# --- Bundle for Chromium (Chrome / Edge / Brave) ---
+echo "Creating newsync-v${VERSION}-chromium.zip..."
+TEMP_DIR="temp_chromium"
 mkdir -p "$TEMP_DIR"
 
 # Copy common files
 cp -r $COMMON_FILES "$TEMP_DIR/"
 
-# Modify manifest.json for Chrome/Edge
-jq 'del(.browser_specific_settings) | del(.background.scripts)' manifest.json > "$TEMP_DIR/manifest.json"
+# Modify manifest.json for Chromium
+jq 'del(.browser_specific_settings) | .background = {"service_worker": "src/background/lyricsHandler.js", "type": "module"}' manifest.json > "$TEMP_DIR/manifest.json"
 
 # Create zip archive
-(cd "$TEMP_DIR" && zip -r "../dist/youlyplus-v${VERSION}-chrome-edge.zip" .)
+(cd "$TEMP_DIR" && zip -r "../dist/newsync-v${VERSION}-chromium.zip" .)
 
 # Clean up temporary directory
 rm -rf "$TEMP_DIR"
-echo "Finished youlyplus-v${VERSION}-chrome-edge.zip"
+echo "Finished newsync-v${VERSION}-chromium.zip"
 
-# --- Bundle for Chrome/Firefox (Manifest V3, with browser_specific_settings) ---
-echo "Creating youlyplus-v${VERSION}-chrome-firefox.zip..."
-TEMP_DIR="temp_chrome_firefox"
+# --- Bundle for Gecko (Firefox / Zen Browser) ---
+echo "Creating newsync-v${VERSION}-gecko.zip..."
+TEMP_DIR="temp_gecko"
 mkdir -p "$TEMP_DIR"
 
-# Copy common files and original manifest.json
+# Copy common files
 cp -r $COMMON_FILES "$TEMP_DIR/"
-cp manifest.json "$TEMP_DIR/manifest.json"
+
+# Modify manifest.json for Gecko
+jq '.background = {"scripts": ["src/background/lyricsHandler.js"], "type": "module"}' manifest.json > "$TEMP_DIR/manifest.json"
 
 # Create zip archive
-(cd "$TEMP_DIR" && zip -r "../dist/youlyplus-v${VERSION}-chrome-firefox.zip" .)
+(cd "$TEMP_DIR" && zip -r "../dist/newsync-v${VERSION}-gecko.zip" .)
 
 # Clean up temporary directory
 rm -rf "$TEMP_DIR"
-echo "Finished youlyplus-v${VERSION}-chrome-firefox.zip"
+echo "Finished newsync-v${VERSION}-gecko.zip"
 
 echo "Bundling complete. Output files are in the 'dist' directory."

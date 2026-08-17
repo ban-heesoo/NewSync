@@ -9,12 +9,16 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     const lyricsProviderSelect = document.getElementById('lyricsProvider');
+    const customTranslateTargetInput = document.getElementById('customTranslateTarget');
     const wordByWordSwitchInput = document.getElementById('wordByWord');
     const lightweightSwitchInput = document.getElementById('lightweight');
     const lyEnabledSwitchInput = document.getElementById('lyEnabled');
     const sponsorBlockSwitchInput = document.getElementById('sponsorblock');
     const largerTextModeSelect = document.getElementById('largerTextMode');
+    const hidePhoneticDupSwitchInput = document.getElementById('hidePhoneticDup');
+    const blurInactiveSwitchInput = document.getElementById('blurInactive');
     const dynamicPlayerSwitchInput = document.getElementById('dynamicPlayer');
+    const audioBeatSyncSwitchInput = document.getElementById('audioBeatSync');
     const animatedAlbumArtSwitchInput = document.getElementById('animatedAlbumArt');
 
     const clearCacheButton = document.getElementById('clearCache');
@@ -102,13 +106,25 @@ document.addEventListener('DOMContentLoaded', () => {
 
     function loadSettingsUI() {
         lyricsProviderSelect.value = currentSettings.lyricsProvider;
+        if (customTranslateTargetInput) {
+            customTranslateTargetInput.value = currentSettings.customTranslateTarget || '';
+        }
         updateCurrentProviderDisplay();
         wordByWordSwitchInput.checked = currentSettings.wordByWord;
         lightweightSwitchInput.checked = currentSettings.lightweight;
         lyEnabledSwitchInput.checked = currentSettings.isEnabled;
         sponsorBlockSwitchInput.checked = currentSettings.useSponsorBlock;
         largerTextModeSelect.value = currentSettings.largerTextMode || 'lyrics';
+        if (hidePhoneticDupSwitchInput) {
+            hidePhoneticDupSwitchInput.checked = currentSettings.hidePhoneticDup || false;
+        }
+        if (blurInactiveSwitchInput) {
+            blurInactiveSwitchInput.checked = currentSettings.blurInactive || false;
+        }
         dynamicPlayerSwitchInput.checked = currentSettings.dynamicPlayer || false;
+        if (audioBeatSyncSwitchInput) {
+            audioBeatSyncSwitchInput.checked = currentSettings.audioBeatSync || false;
+        }
         if (animatedAlbumArtSwitchInput) {
             animatedAlbumArtSwitchInput.checked = currentSettings.animatedAlbumArt !== false;
         }
@@ -129,19 +145,25 @@ document.addEventListener('DOMContentLoaded', () => {
     async function saveAndApplySettings() {
         const newSettings = {
             lyricsProvider: lyricsProviderSelect.value,
+            translationProvider: 'google',
+            customTranslateTarget: customTranslateTargetInput ? customTranslateTargetInput.value.trim() : currentSettings.customTranslateTarget,
+            overrideTranslateTarget: customTranslateTargetInput && customTranslateTargetInput.value.trim() !== '',
             wordByWord: wordByWordSwitchInput.checked,
             lightweight: lightweightSwitchInput.checked,
             isEnabled: lyEnabledSwitchInput.checked,
             useSponsorBlock: sponsorBlockSwitchInput.checked,
             largerTextMode: largerTextModeSelect.value,
+            hidePhoneticDup: hidePhoneticDupSwitchInput ? hidePhoneticDupSwitchInput.checked : false,
+            blurInactive: blurInactiveSwitchInput ? blurInactiveSwitchInput.checked : false,
             dynamicPlayer: dynamicPlayerSwitchInput.checked,
+            audioBeatSync: audioBeatSyncSwitchInput ? audioBeatSyncSwitchInput.checked : false,
             animatedAlbumArt: animatedAlbumArtSwitchInput ? animatedAlbumArtSwitchInput.checked : true,
         };
         currentSettings = { ...currentSettings, ...newSettings };
 
         try {
             await storageLocalSet(currentSettings);
-            showStatus('Settings saved! Reload YouTube pages for changes.');
+            showStatus('Settings saved!');
             notifyContentScripts(currentSettings);
         } catch (error) {
             console.error("YouLy+: Error saving settings:", error);
@@ -153,8 +175,22 @@ document.addEventListener('DOMContentLoaded', () => {
         updateCurrentProviderDisplay();
         saveAndApplySettings();
     });
+    if (customTranslateTargetInput) {
+        customTranslateTargetInput.addEventListener('change', saveAndApplySettings);
+        customTranslateTargetInput.addEventListener('blur', saveAndApplySettings);
+    }
     largerTextModeSelect.addEventListener('change', saveAndApplySettings);
-    [wordByWordSwitchInput, lightweightSwitchInput, lyEnabledSwitchInput, sponsorBlockSwitchInput, dynamicPlayerSwitchInput, animatedAlbumArtSwitchInput].forEach(input => {
+    [
+        wordByWordSwitchInput,
+        lightweightSwitchInput,
+        lyEnabledSwitchInput,
+        sponsorBlockSwitchInput,
+        hidePhoneticDupSwitchInput,
+        blurInactiveSwitchInput,
+        dynamicPlayerSwitchInput,
+        audioBeatSyncSwitchInput,
+        animatedAlbumArtSwitchInput
+    ].forEach(input => {
         if (input) input.addEventListener('change', saveAndApplySettings);
     });
 
@@ -172,13 +208,13 @@ document.addEventListener('DOMContentLoaded', () => {
 
     function notifyContentScripts(settings) {
         if (typeof pBrowser !== 'undefined' && pBrowser.tabs && pBrowser.tabs.query) {
-            pBrowser.tabs.query({ url: "*://*.youtube.com/*" }, (tabs) => {
+            pBrowser.tabs.query({}, (tabs) => {
                 if (pBrowser.runtime.lastError) {
                     console.warn("YouLy+: Error querying tabs:", pBrowser.runtime.lastError.message);
                     return;
                 }
                 tabs.forEach(tab => {
-                    if (tab.id) {
+                    if (tab.id && tab.url && (tab.url.includes("music.youtube.com") || tab.url.includes("music.apple.com") || tab.url.includes("tidal.com"))) {
                         pBrowser.tabs.sendMessage(tab.id, {
                             type: 'YOUPLUS_SETTINGS_UPDATED',
                             settings: settings

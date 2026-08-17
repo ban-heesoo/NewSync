@@ -2,7 +2,7 @@
   "manifest_version": 3,
   "name": "NewSync",
   "default_locale": "en",
-  "version": "2.6.3",
+  "version": "2.6.4",
   "description": "__MSG_extensionDescription__",
   "permissions": [
     "storage"
@@ -141,9 +141,10 @@
     }
   ],
   "background": {
+    "service_worker": "src/background/lyricsHandler.js",
+    "type": "module",
     "scripts": [
       "src/background/lyricsHandler.js"
-    ],
-    "type": "module"
+    ]
   }
 }

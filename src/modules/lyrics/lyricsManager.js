@@ -20,7 +20,7 @@ let lastRequestedSongKey = null;
 const DEBOUNCE_TIME_MS = 200;
 
 // Settings keys that affect which cached responses to invalidate
-const TRANSLATION_SETTING_KEYS = ['translationProvider', 'geminiApiKey', 'geminiModel', 'openRouterApiKey', 'openRouterModel', 'targetLang'];
+const TRANSLATION_SETTING_KEYS = ['translationProvider', 'geminiApiKey', 'geminiModel', 'openRouterApiKey', 'openRouterModel', 'targetLang', 'customTranslateTarget', 'overrideTranslateTarget'];
 const ROMANIZATION_SETTING_KEYS = ['romanizationProvider', 'geminiRomanizationModel'];
 const RESTART_REQUIRED_KEYS = ['isEnabled', 'dynamicPlayer'];
 const LYRICS_SOURCE_KEYS = ['lyricsProvider', 'lyricsSourceOrder', 'customKpoeUrl', 'appleMusicTTMLBypass'];
@@ -436,14 +436,15 @@ window.addEventListener('YOUPLUS_SETTINGS_UPDATED', ({ detail }) => {
   const { changedKeys } = detail;
   if (!changedKeys) return;
 
-  if (changedKeys.some(k => TRANSLATION_SETTING_KEYS.includes(k))) lastTranslationResponse = null;
+  const translationChanged = changedKeys.some(k => TRANSLATION_SETTING_KEYS.includes(k));
+  if (translationChanged) lastTranslationResponse = null;
   if (changedKeys.some(k => ROMANIZATION_SETTING_KEYS.includes(k))) lastRomanizationResponse = null;
 
   lastProcessedDisplayMode = 'none';
 
   if (!lastKnownSongInfo) return;
 
-  const nonRenderingKeys = [...TRANSLATION_SETTING_KEYS, ...ROMANIZATION_SETTING_KEYS, ...RESTART_REQUIRED_KEYS];
+  const nonRenderingKeys = [...RESTART_REQUIRED_KEYS];
   const shouldRender = changedKeys.some(k => !nonRenderingKeys.includes(k));
 
   if (shouldRender) {

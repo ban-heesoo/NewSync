@@ -43,7 +43,7 @@
         <div class="tab-content active" id="general-content">
             <div class="settings-group">
                 <h2>Core Features</h2>
-                <p>Essential settings for NewSync functionality.</p>
+                <p>Main extension settings.</p>
                 <div class="container">
                     <span>Enable NewSync</span>
                     <label>
@@ -58,12 +58,11 @@
                         <span class="checkmark"></span>
                     </label>
                 </div>
-
             </div>
 
             <div class="settings-group">
                 <h2>Lyrics Provider</h2>
-                <p>Current: <span id="currentProviderDisplay">Lyrics+ (KPoe)</span></p>
+                <p>Select lyric source.</p>
                 <div class="container">
                     <span>Switch Provider</span>
                     <div class="select">
@@ -87,7 +86,7 @@
         <div class="tab-content" id="appearance-content">
             <div class="settings-group">
                 <h2>Display Settings</h2>
-                <p>Customize how lyrics appear.</p>
+                <p>Text & font options.</p>
                 <div class="container">
                     <span>Larger Text</span>
                     <div class="select">
@@ -108,11 +107,18 @@
 
             <div class="settings-group">
                 <h2>Dynamic Background & Media</h2>
-                <p>Animated backgrounds and album art.</p>
+                <p>Visual & artwork effects.</p>
                 <div class="container">
                     <span>Enable on Player Page</span>
                     <label>
                         <input type="checkbox" id="dynamicPlayer" />
+                        <span class="checkmark"></span>
+                    </label>
+                </div>
+                <div class="container">
+                    <span>Beat Pulse</span>
+                    <label>
+                        <input type="checkbox" id="audioBeatSync" />
                         <span class="checkmark"></span>
                     </label>
                 </div>
@@ -128,8 +134,31 @@
 
         <div class="tab-content" id="advanced-content">
             <div class="settings-group">
+                <h2>Advanced Options</h2>
+                <p>Translation & extra filters.</p>
+                <div class="container">
+                    <span>Google Translate</span>
+                    <input type="text" id="customTranslateTarget" class="text-input" placeholder="id / en / jp" title="Target Language Code (e.g. id, en, ja, ko)" />
+                </div>
+                <div class="container">
+                    <span>Hide Latin Pronunciation</span>
+                    <label>
+                        <input type="checkbox" id="hidePhoneticDup" />
+                        <span class="checkmark"></span>
+                    </label>
+                </div>
+                <div class="container">
+                    <span>Blur Inactive Lines</span>
+                    <label>
+                        <input type="checkbox" id="blurInactive" />
+                        <span class="checkmark"></span>
+                    </label>
+                </div>
+            </div>
+
+            <div class="settings-group">
                 <h2>Data Management</h2>
-                <p>Manage cached lyrics and storage.</p>
+                <p>Storage & cache control.</p>
                 <div class="text-group">
                     <p>
                         <span class="text-group__title">Lyrics Cache Size</span>
