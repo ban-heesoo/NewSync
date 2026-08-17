@@ -71,7 +71,7 @@ Microsoft Edge (Recommended):<br>
 <a href="https://microsoftedge.microsoft.com/addons/detail/newsync/abdllbamaomfdbfiipnpljdiljojmnoe" target="_blank"><img src="https://hivicode.github.io/newsync/edge.svg" alt="Microsoft Edge Add-ons" height="60"/></a><br><br>
 Firefox (a bit lag):<br>
 <a href="https://addons.mozilla.org/en-US/firefox/addon/newsync/" target="_blank"><img src="https://hivicode.github.io/newsync/firefox.svg" alt="Firefox Add-ons" height="60"/></a><br>
-<img src="https://img.shields.io/amo/v/newsync?color=2771d8&label=Store%20Version" alt="Mozilla Add-on Version"> <img src="https://img.shields.io/badge/status-latest-brightgreen" alt="Status">
+<img src="https://img.shields.io/amo/v/newsync?color=2771d8&label=Store%20Version" alt="Mozilla Add-on Version"> <img src="https://img.shields.io/badge/status-Not%20Yet%20Updated-orange" alt="Status">
 </p>
 
 ## Updating
