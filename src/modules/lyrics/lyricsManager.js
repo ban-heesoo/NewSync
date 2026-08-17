@@ -8,6 +8,14 @@ let currentFetchMediaId = null;
 let currentDisplayMode = 'none';     // User's intended display mode ('none', 'translate', 'romanize', 'both')
 let lastProcessedDisplayMode = 'none'; // The mode that was actually rendered
 
+if (typeof storageLocalGet === 'function') {
+  storageLocalGet({ lastDisplayMode: null }).then(items => {
+    if (items && items.lastDisplayMode) {
+      currentDisplayMode = items.lastDisplayMode;
+    }
+  }).catch(e => console.warn('Failed to load lastDisplayMode:', e));
+}
+
 let lastKnownSongInfo = null;
 let lastFetchedLyrics = null;
 let lastBaseLyrics = null;
@@ -144,10 +152,10 @@ function shouldFetchLyrics(songKey, forceReload) {
 
 /**
  * Resolves which display mode should actually be used for this fetch cycle.
- * For new songs with no prior state, the mode is derived from current settings;
- * otherwise the user's existing selection is preserved.
+ * Keeps the user's explicit selection, fallbacking to settings or remembered mode for new songs/tabs.
  */
 function resolveEffectiveMode(isNewSong) {
+  if (currentDisplayMode !== 'none') return currentDisplayMode;
   if (!isNewSong || lastKnownSongInfo) return currentDisplayMode;
 
   const { translationEnabled, romanizationEnabled } = currentSettings;
@@ -416,6 +424,9 @@ async function fetchAndDisplayLyrics(currentSong, isNewSong = false, forceReload
 
 function setCurrentDisplayModeAndRender(mode, overrideSongInfo) {
   currentDisplayMode = mode;
+  if (typeof storageLocalSet === 'function') {
+    storageLocalSet({ lastDisplayMode: mode }).catch(e => console.warn('Failed to save lastDisplayMode:', e));
+  }
   const song = overrideSongInfo || lastKnownSongInfo;
 
   if (song) {
