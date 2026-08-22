@@ -3444,7 +3444,7 @@ class LyricsPlusRenderer {
 
     if (songInfo.album && songInfo.album.trim() !== "") {
       if (artistElement.childNodes.length > 0) {
-        artistElement.appendChild(document.createTextNode(" - "));
+        artistElement.appendChild(document.createTextNode(" — "));
       }
 
       if (songInfo.albumUrl) {

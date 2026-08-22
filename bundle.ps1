@@ -72,8 +72,19 @@ function Create-ZipArchive {
         }
     }
 
+    # Fallback to built-in .NET ZipFile (Fast, reliable, avoids file lock bugs in Compress-Archive)
     if (-not $zipToolFound) {
-        Write-Error "Error: Neither '7z.exe' (in PATH or default install location) nor 'zip.exe' found or failed to execute. Please install one of them and ensure it's in your PATH, or 7-Zip is in its default location."
+        try {
+            Add-Type -AssemblyName "System.IO.Compression.FileSystem"
+            [System.IO.Compression.ZipFile]::CreateFromDirectory((Resolve-Path $SourceDir).Path, $absoluteDestinationZip)
+            $zipToolFound = $true
+        } catch {
+            Write-Warning "Error using System.IO.Compression.ZipFile: $($_.Exception.Message)"
+        }
+    }
+
+    if (-not $zipToolFound) {
+        Write-Error "Error: Failed to create zip archive."
         exit 1
     }
 }
