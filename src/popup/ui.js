@@ -92,7 +92,12 @@ document.addEventListener('DOMContentLoaded', () => {
     const providerNameMap = {
         'kpoe': 'Lyrics+ (KPoe)',
         'customKpoe': 'Custom KPoe Server',
-        'lrclib': 'LRCLIB'
+        'lrcred': 'LRC.red',
+        'unison': 'Unison',
+        'kugou': 'KuGou (Legato)',
+        'lrclib': 'LRCLIB',
+        'ytmusic': 'YouTube Music (Captions)',
+        'ytlyrics': 'YouTube Native Lyrics'
     };
 
     function updateCurrentProviderDisplay() {
@@ -105,7 +110,9 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     function loadSettingsUI() {
-        lyricsProviderSelect.value = currentSettings.lyricsProvider;
+        const rawProvider = currentSettings.lyricsProvider;
+        const normalizedProvider = (rawProvider === 'biniLyrics' || rawProvider === 'binilyrics') ? 'lrcred' : rawProvider;
+        lyricsProviderSelect.value = providerNameMap[normalizedProvider] ? normalizedProvider : 'kpoe';
         if (customTranslateTargetInput) {
             customTranslateTargetInput.value = currentSettings.customTranslateTarget || '';
         }

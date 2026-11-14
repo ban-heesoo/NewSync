@@ -5,84 +5,587 @@
 const audioCtx = new AudioContext();
 
 let currentFetchMediaId = null;
+let fetchSessionCounter = 0;
 let currentDisplayMode = 'none';     // User's intended display mode ('none', 'translate', 'romanize', 'both')
 let lastProcessedDisplayMode = 'none'; // The mode that was actually rendered
+let savedDisplayModeLoaded = false;
 
 if (typeof storageLocalGet === 'function') {
   storageLocalGet({ lastDisplayMode: null }).then(items => {
     if (items && items.lastDisplayMode) {
       currentDisplayMode = items.lastDisplayMode;
+      savedDisplayModeLoaded = true;
     }
   }).catch(e => console.warn('Failed to load lastDisplayMode:', e));
 }
+let lastRenderedHasTranslation = false;
+let lastRenderedHasRomanization = false;
+let forceNextRender = false;
 
 let lastKnownSongInfo = null;
-let lastFetchedLyrics = null;
 let lastBaseLyrics = null;
+let lastLyricsNotFound = false;
 let lastTranslationResponse = null;
 let lastRomanizationResponse = null;
+
+let userOffsetMs = 0;
+let baseSongOffsetMs = 0;
+let pinnedProvider = null;
+let saveOffsetTimeout = null;
+let userSelectedProvider = null;
+const availableProviders = new Set();
+const notFoundProviders = new Set();
 
 // Debouncing to prevent rapid-fire requests
 let lyricsFetchDebounceTimer = null;
 let lastRequestedSongKey = null;
 const DEBOUNCE_TIME_MS = 200;
 
-// Settings keys that affect which cached responses to invalidate
-const TRANSLATION_SETTING_KEYS = ['translationProvider', 'geminiApiKey', 'geminiModel', 'openRouterApiKey', 'openRouterModel', 'targetLang', 'customTranslateTarget', 'overrideTranslateTarget'];
-const ROMANIZATION_SETTING_KEYS = ['romanizationProvider', 'geminiRomanizationModel'];
-const RESTART_REQUIRED_KEYS = ['isEnabled', 'dynamicPlayer'];
-const LYRICS_SOURCE_KEYS = ['lyricsProvider', 'lyricsSourceOrder', 'customKpoeUrl', 'appleMusicTTMLBypass'];
+// Microtask coalescing for concurrent translation + romanization completions
+let pendingCombinedRenderFetchId = null;
 
+// Settings keys that affect which cached responses to invalidate
+const TRANSLATION_SETTING_KEYS = [
+  'translationProvider',
+  'geminiApiKey',
+  'geminiModel',
+  'openRouterApiKey',
+  'openRouterModel',
+  'deeplApiKey',
+  'overrideTranslateTarget',
+  'customTranslateTarget',
+  'targetLang',
+  'overrideGeminiPrompt',
+  'customGeminiPrompt'
+];
+const ROMANIZATION_SETTING_KEYS = [
+  'romanizationProvider',
+  'geminiRomanizationModel',
+  'transliterationTargetScript',
+  'overrideGeminiRomanizePrompt',
+  'customGeminiRomanizePrompt'
+];
+const OFFSET_SETTING_KEYS = ['globalLyricOffset', 'richsyncOffsetTrim', 'lineOffsetTrim'];
+const RESTART_REQUIRED_KEYS = ['isEnabled', 'YTSongInfo', 'YTSongInfoDisableSeekbar', 'dynamicPlayer'];
+
+const TRANSLATION_SETTING_SET = new Set(TRANSLATION_SETTING_KEYS);
+const ROMANIZATION_SETTING_SET = new Set(ROMANIZATION_SETTING_KEYS);
+const OFFSET_SETTING_SET = new Set(OFFSET_SETTING_KEYS);
+const NON_RENDERING_KEY_SET = new Set([
+  ...TRANSLATION_SETTING_KEYS,
+  ...ROMANIZATION_SETTING_KEYS,
+  ...OFFSET_SETTING_KEYS,
+  ...RESTART_REQUIRED_KEYS
+]);
+
+const KNOWN_LYRICS_SOURCES = [
+  'lyrics+', 'apple', 'apple music', 'qq',
+  'unison', 'kugou', 'legato', 'lrclib', 'lrcred', 'lrc.red', 'lrc-red', 'binilyrics',
+  'subtitles', 'youtube captions', 'youtube subtitles', 'ytlyrics', 'yt lyrics', 'youtube lyrics',
+  'local', 'local lyrics', 'kpoe', 'customkpoe', 'lyricfind'
+];
+let _cachedSourceKey = null;
+let _cachedValidSources = null;
+
+
+/* =================================================================
+   LANGUAGE, SCRIPT & EMBEDDED DATA RESOLUTION
+   ================================================================= */
+
+function getPrimaryLanguageCode(code) {
+  if (!code || typeof code !== 'string') return '';
+  const trimmed = code.trim();
+  if (!trimmed) return '';
+  return trimmed.split(/[-_]/)[0] || '';
+}
+
+function getLanguageScript(tag) {
+  if (!tag || typeof tag !== 'string') return '';
+  const lower = tag.toLowerCase().replace(/_/g, '-');
+  if (lower.includes('hant') || lower === 'zh-tw' || lower === 'zh-hk' || lower === 'zh-mo') return 'Hant';
+  if (lower.includes('hans') || lower === 'zh-cn' || lower === 'zh-sg') return 'Hans';
+  const parts = lower.split('-');
+  if (parts.length > 1 && parts[1].length === 4) {
+    return parts[1].charAt(0).toUpperCase() + parts[1].slice(1).toLowerCase();
+  }
+  return '';
+}
+
+function findFallbackLanguage(availableLanguages, requestedLanguage) {
+  if (!Array.isArray(availableLanguages) || availableLanguages.length === 0 || !requestedLanguage) {
+    return '';
+  }
+
+  const reqList = Array.isArray(requestedLanguage)
+    ? requestedLanguage
+    : [requestedLanguage];
+
+  for (const req of reqList) {
+    if (!req) continue;
+    const reqTrimmed = String(req).trim();
+    if (!reqTrimmed) continue;
+
+    const exactIdx = availableLanguages.indexOf(reqTrimmed);
+    if (exactIdx !== -1) return availableLanguages[exactIdx];
+
+    const reqLower = reqTrimmed.toLowerCase();
+    for (const candidate of availableLanguages) {
+      if (String(candidate).toLowerCase() === reqLower) {
+        return candidate;
+      }
+    }
+
+    const reqScript = getLanguageScript(reqTrimmed);
+    const primaryReq = getPrimaryLanguageCode(reqTrimmed).toLowerCase();
+
+    if (reqScript && primaryReq) {
+      for (const candidate of availableLanguages) {
+        if (getPrimaryLanguageCode(candidate).toLowerCase() === primaryReq) {
+          const candidateScript = getLanguageScript(candidate);
+          if (candidateScript && candidateScript === reqScript) {
+            return candidate;
+          }
+        }
+      }
+    }
+
+    if (primaryReq) {
+      for (const candidate of availableLanguages) {
+        if (getPrimaryLanguageCode(candidate).toLowerCase() === primaryReq) {
+          const candidateScript = getLanguageScript(candidate);
+          if (!reqScript || !candidateScript || reqScript === candidateScript) {
+            return candidate;
+          }
+        }
+      }
+    }
+  }
+
+  return '';
+}
+
+/**
+ * Resolves the user's intended target language without using web native language.
+ * Checks user settings override (customTranslateTarget) first,
+ * then falls back to user system/browser languages (navigator.languages || navigator.language).
+ */
+function getResolvedLyricsLanguage(settings = currentSettings) {
+  if (settings?.overrideTranslateTarget && settings?.customTranslateTarget?.trim()) {
+    return settings.customTranslateTarget.trim();
+  }
+  if (typeof navigator !== 'undefined') {
+    if (Array.isArray(navigator.languages) && navigator.languages.length > 0) {
+      return navigator.languages;
+    }
+    if (navigator.language) {
+      return navigator.language;
+    }
+  }
+  return 'en';
+}
+
+function getPrimaryTargetLanguage(settings = currentSettings) {
+  const resolved = getResolvedLyricsLanguage(settings);
+  if (Array.isArray(resolved)) {
+    return resolved[0] || 'en';
+  }
+  return resolved || 'en';
+}
+
+function applyScriptToLine(line, scriptEntry, lang = '') {
+  if (!line || !scriptEntry) return;
+
+  if (!line.original) {
+    line.original = {
+      text: line.text,
+      mainText: line.mainText,
+      htmlText: line.htmlText,
+      words: line.words ? line.words.slice() : [],
+      syllabus: line.syllabus ? line.syllabus.slice() : [],
+      backgroundText: line.backgroundText,
+      htmlBackgroundText: line.htmlBackgroundText,
+      backgroundWords: line.backgroundWords ? line.backgroundWords.slice() : undefined,
+      keepParenthesis: line.keepParenthesis
+    };
+  }
+
+  const hasTimedSpans = (Array.isArray(scriptEntry.words) && scriptEntry.words.length > 0) ||
+                        (Array.isArray(scriptEntry.syllabus) && scriptEntry.syllabus.length > 0);
+
+  if (hasTimedSpans) {
+    line.words = scriptEntry.words ? scriptEntry.words.slice() : [];
+    line.syllabus = scriptEntry.syllabus ? scriptEntry.syllabus.slice() : [];
+    line.mainText = (scriptEntry.text || '').trim();
+    line.htmlText = (scriptEntry.htmlText || scriptEntry.text || '').trim();
+
+    if (scriptEntry.backgroundText) {
+      line.backgroundText = scriptEntry.backgroundText.trim();
+      line.htmlBackgroundText = (scriptEntry.htmlBackgroundText || scriptEntry.backgroundText).trim();
+      line.text = line.syllabus.length > 0
+        ? line.syllabus.map(s => s.text).join('').trim()
+        : `${line.mainText} (${line.backgroundText})`;
+    } else {
+      delete line.backgroundText;
+      delete line.htmlBackgroundText;
+      line.text = line.syllabus.length > 0
+        ? line.syllabus.map(s => s.text).join('').trim()
+        : line.mainText;
+    }
+
+    if (scriptEntry.backgroundWords && scriptEntry.backgroundWords.length > 0) {
+      line.backgroundWords = scriptEntry.backgroundWords.slice();
+    } else {
+      delete line.backgroundWords;
+    }
+
+    if (scriptEntry.keepParenthesis !== undefined) {
+      line.keepParenthesis = scriptEntry.keepParenthesis;
+    }
+  } else {
+    // Plain text replacement without spans
+    line.mainText = (scriptEntry.text || '').trim();
+    line.htmlText = (scriptEntry.htmlText || scriptEntry.text || '').trim();
+    line.words = [];
+    line.syllabus = [];
+
+    if (scriptEntry.backgroundText) {
+      line.backgroundText = scriptEntry.backgroundText.trim();
+      line.htmlBackgroundText = (scriptEntry.htmlBackgroundText || scriptEntry.backgroundText).trim();
+      line.text = `${line.mainText} (${line.backgroundText})`;
+    } else {
+      delete line.backgroundText;
+      delete line.htmlBackgroundText;
+      line.text = line.mainText;
+    }
+
+    delete line.backgroundWords;
+    if (scriptEntry.keepParenthesis !== undefined) {
+      line.keepParenthesis = scriptEntry.keepParenthesis;
+    }
+  }
+
+  line.appliedScript = lang || scriptEntry.lang || '';
+  line.isScriptApplied = true;
+}
+
+function restoreOriginalLyrics(lyrics) {
+  if (!lyrics || !Array.isArray(lyrics.data)) return;
+  for (const line of lyrics.data) {
+    if (line.original) {
+      line.text = line.original.text;
+      line.mainText = line.original.mainText;
+      line.htmlText = line.original.htmlText;
+      line.words = line.original.words ? line.original.words.slice() : [];
+      line.syllabus = line.original.syllabus ? line.original.syllabus.slice() : [];
+      if (line.original.backgroundText) {
+        line.backgroundText = line.original.backgroundText;
+        line.htmlBackgroundText = line.original.htmlBackgroundText;
+      } else {
+        delete line.backgroundText;
+        delete line.htmlBackgroundText;
+      }
+      if (line.original.backgroundWords) {
+        line.backgroundWords = line.original.backgroundWords.slice();
+      } else {
+        delete line.backgroundWords;
+      }
+      line.keepParenthesis = line.original.keepParenthesis;
+      delete line.appliedScript;
+      delete line.isScriptApplied;
+    }
+  }
+  if (lyrics.metadata) delete lyrics.metadata.appliedScript;
+  delete lyrics.appliedScript;
+}
+
+/**
+ * Resolves and applies script replacement on baseLyrics in-place inside LyricsManager.
+ */
+function applyLyricsScript(lyrics, targetLanguage = null) {
+  if (!lyrics || !Array.isArray(lyrics.data) || lyrics.data.length === 0) return null;
+
+  const metadata = lyrics.metadata || {};
+  let scriptLanguages = metadata.scriptLanguages;
+  if (!Array.isArray(scriptLanguages) || scriptLanguages.length === 0) {
+    if (metadata.scriptsByLang && typeof metadata.scriptsByLang === 'object') {
+      scriptLanguages = Object.keys(metadata.scriptsByLang);
+    } else {
+      const set = new Set();
+      for (const line of lyrics.data) {
+        if (line.scripts && typeof line.scripts === 'object') {
+          for (const k of Object.keys(line.scripts)) set.add(k);
+        }
+      }
+      scriptLanguages = Array.from(set);
+    }
+  }
+
+  if (!scriptLanguages || scriptLanguages.length === 0) {
+    if (lyrics.appliedScript) restoreOriginalLyrics(lyrics);
+    return null;
+  }
+
+  const requested = targetLanguage || getResolvedLyricsLanguage();
+  const matchedLang = findFallbackLanguage(scriptLanguages, requested);
+  if (!matchedLang) {
+    if (lyrics.appliedScript) restoreOriginalLyrics(lyrics);
+    return null;
+  }
+
+  if (lyrics.appliedScript === matchedLang) {
+    return matchedLang;
+  }
+
+  restoreOriginalLyrics(lyrics);
+
+  let anyWords = false;
+  for (const line of lyrics.data) {
+    const key = line.lineKey || line.key;
+    const entry = line.scripts?.[matchedLang] || (key && metadata.scriptsByLang?.[matchedLang]?.[key]);
+    if (entry) {
+      applyScriptToLine(line, entry, matchedLang);
+    }
+    if (Array.isArray(line.words) && line.words.some(w => !w.isWhitespace)) {
+      anyWords = true;
+    }
+  }
+
+  metadata.appliedScript = matchedLang;
+  lyrics.appliedScript = matchedLang;
+  if (anyWords) {
+    lyrics.type = 'Word';
+  }
+
+  return matchedLang;
+}
+
+/**
+ * Resolves embedded subtitle translations directly from the lyrics file without background fetch.
+ */
+function resolveEmbeddedTranslations(baseLyrics, targetLanguage = null) {
+  if (!baseLyrics || !Array.isArray(baseLyrics.data)) return null;
+
+  const lines = baseLyrics.data;
+  const metadata = baseLyrics.metadata || {};
+
+  let availableLangs = metadata.translationLanguages;
+  if (!Array.isArray(availableLangs) || availableLangs.length === 0) {
+    if (metadata.translationsByLang && typeof metadata.translationsByLang === 'object') {
+      availableLangs = Object.keys(metadata.translationsByLang);
+    } else {
+      const set = new Set();
+      for (const l of lines) {
+        if (l.translations && typeof l.translations === 'object') {
+          for (const k of Object.keys(l.translations)) set.add(k);
+        }
+      }
+      availableLangs = Array.from(set);
+    }
+  }
+
+  const requested = targetLanguage || getResolvedLyricsLanguage();
+  let matchedLang = findFallbackLanguage(availableLangs, requested);
+
+  if (!matchedLang) {
+    const primaryReq = getPrimaryLanguageCode(Array.isArray(requested) ? requested[0] : requested).toLowerCase();
+    const hasLegacyMatch = lines.some(l => {
+      if (!l.translation?.text) return false;
+      const p = getPrimaryLanguageCode(l.translation.lang || '').toLowerCase();
+      return p && p === primaryReq;
+    });
+    if (!hasLegacyMatch) return null;
+  }
+
+  let hasAnyText = false;
+  const translatedData = lines.map(line => {
+    const key = line.lineKey || line.key;
+    const entry = (matchedLang && (line.translations?.[matchedLang] || (key && metadata.translationsByLang?.[matchedLang]?.[key])))
+      || line.translation
+      || null;
+
+    if (!entry || !entry.text) {
+      return {
+        ...line,
+        translatedText: line.text
+      };
+    }
+
+    hasAnyText = true;
+    let combinedText = entry.text;
+    if (entry.backgroundText && !combinedText.includes(entry.backgroundText)) {
+      combinedText = `${combinedText} (${entry.backgroundText})`;
+    }
+
+    return {
+      ...line,
+      translation: entry,
+      translatedText: combinedText,
+      translatedBackgroundText: entry.backgroundText,
+      translatedSyllabus: Array.isArray(entry.syllabus) ? entry.syllabus : undefined,
+      chunk: Array.isArray(entry.syllabus) ? entry.syllabus : undefined
+    };
+  });
+
+  if (!hasAnyText) return null;
+
+  return {
+    success: true,
+    data: translatedData,
+    translatedLyrics: {
+      ...baseLyrics,
+      data: translatedData
+    }
+  };
+}
+
+/**
+ * Resolves embedded transliterations/pronunciations directly from the lyrics file without background fetch.
+ */
+function resolveEmbeddedTransliterations(baseLyrics, targetLanguage = null) {
+  if (!baseLyrics || !Array.isArray(baseLyrics.data)) return null;
+
+  const lines = baseLyrics.data;
+  const metadata = baseLyrics.metadata || {};
+
+  let availableLangs = metadata.pronunciationLanguages;
+  if (!Array.isArray(availableLangs) || availableLangs.length === 0) {
+    if (metadata.pronunciationsByLang && typeof metadata.pronunciationsByLang === 'object') {
+      availableLangs = Object.keys(metadata.pronunciationsByLang);
+    } else {
+      const set = new Set();
+      for (const l of lines) {
+        if (l.transliterations && typeof l.transliterations === 'object') {
+          for (const k of Object.keys(l.transliterations)) set.add(k);
+        }
+      }
+      availableLangs = Array.from(set);
+    }
+  }
+
+  const requested = targetLanguage || getResolvedLyricsLanguage();
+  let matchedLang = '';
+  if (availableLangs && availableLangs.length > 0) {
+    matchedLang = findFallbackLanguage(availableLangs, requested) || availableLangs[0];
+  }
+
+  const hasAnyPron = matchedLang || lines.some(l => l.romanizedText || l.transliteration);
+  if (!hasAnyPron) return null;
+
+  let hasAnyText = false;
+  const romanizedData = lines.map(line => {
+    const key = line.lineKey || line.key;
+    const entry = (matchedLang && (line.transliterations?.[matchedLang] || (key && metadata.pronunciationsByLang?.[matchedLang]?.[key])))
+      || line.transliteration
+      || null;
+
+    const romText = entry?.text || line.romanizedText || line.text;
+    if (entry?.text || line.romanizedText) hasAnyText = true;
+
+    const romChunk = entry?.syllabus || (line.syllabus?.some(s => s.romanizedText) ? line.syllabus.map(s => ({ text: s.romanizedText || s.text })) : undefined);
+
+    return {
+      ...line,
+      text: romText,
+      romanizedText: romText,
+      chunk: romChunk
+    };
+  });
+
+  if (!hasAnyText) return null;
+
+  return {
+    success: true,
+    data: romanizedData,
+    translatedLyrics: {
+      ...baseLyrics,
+      data: romanizedData
+    }
+  };
+}
 
 /* =================================================================
    HELPER FUNCTIONS - DATA PROCESSING
    ================================================================= */
 
 /**
- * Merges translation and romanization data into a deep copy of the base lyrics object.
+ * Shallow-clones a lyrics object and its line array without expensive JSON serialization.
+ * @param {object} baseLyrics - The original lyrics object.
+ * @returns {object} A shallow copy with cloned line entries.
+ */
+function cloneLyricsShallow(baseLyrics) {
+  return {
+    ...baseLyrics,
+    data: Array.isArray(baseLyrics.data)
+      ? baseLyrics.data.map(line => ({ ...line }))
+      : []
+  };
+}
+
+/**
+ * Merges translation and romanization data into a copy of the base lyrics object.
  * @param {object}      baseLyrics     - The original lyrics object.
  * @param {object|null} translation    - The translation lyrics object.
  * @param {object|null} romanization   - The romanization lyrics object.
  * @returns {object} The merged lyrics object.
  */
 function combineLyricsData(baseLyrics, translation, romanization) {
-  const combined = JSON.parse(JSON.stringify(baseLyrics)); // Deep copy
-
   const translationData  = translation?.data;
   const romanizationData = romanization?.data;
 
-  combined.data = combined.data.map((line, index) => {
-    const translatedLine  = translationData?.[index];
-    const romanizedLine   = romanizationData?.[index];
-    let mergedLine = { ...line };
+  if (!translationData && !romanizationData) {
+    return cloneLyricsShallow(baseLyrics);
+  }
 
-    if (translatedLine?.translatedText) {
-      mergedLine.translatedText = translatedLine.translatedText;
-    }
+  const isWordLyrics = baseLyrics.type === "Word";
 
-    if (romanizedLine) {
-      const hasWordSyncedRomanization =
-        baseLyrics.type === "Word" &&
-        romanizedLine.chunk?.length > 0 &&
-        mergedLine.syllabus?.length > 0;
+  return {
+    ...baseLyrics,
+    data: baseLyrics.data.map((line, index) => {
+      const translatedLine = translationData?.[index];
+      const romanizedLine  = romanizationData?.[index];
 
-      if (hasWordSyncedRomanization) {
-        mergedLine.syllabus = mergedLine.syllabus.map((syllable, sylIndex) => {
-          const romanizedSyllable = romanizedLine.chunk[sylIndex];
-          return {
-            ...syllable,
-            romanizedText: romanizedSyllable?.text || syllable.text
-          };
-        });
-      } else if (romanizedLine.text) {
-        mergedLine.romanizedText = romanizedLine.text;
+      if (!translatedLine && !romanizedLine) {
+        return { ...line };
       }
-    }
 
-    return mergedLine;
-  });
+      const mergedLine = { ...line };
 
-  return combined;
+      if (translatedLine?.translatedText) {
+        mergedLine.translatedText = translatedLine.translatedText;
+      }
+      if (translatedLine?.translatedBackgroundText) {
+        mergedLine.translatedBackgroundText = translatedLine.translatedBackgroundText;
+      }
+      if (Array.isArray(translatedLine?.translatedSyllabus) && translatedLine.translatedSyllabus.length > 0) {
+        mergedLine.translatedSyllabus = translatedLine.translatedSyllabus.map(s => ({ ...s }));
+      }
+
+      if (romanizedLine) {
+        const hasWordSyncedRomanization =
+          isWordLyrics &&
+          romanizedLine.chunk?.length > 0 &&
+          mergedLine.syllabus?.length > 0;
+
+        if (hasWordSyncedRomanization) {
+          mergedLine.syllabus = mergedLine.syllabus.map((syllable, sylIndex) => {
+            const romanizedSyllable = romanizedLine.chunk[sylIndex];
+            const romSylText = (typeof romanizedSyllable === 'object' && romanizedSyllable !== null)
+              ? (romanizedSyllable.romanizedText || romanizedSyllable.text)
+              : (typeof romanizedSyllable === 'string' ? romanizedSyllable : (syllable?.text || ''));
+            return {
+              ...syllable,
+              romanizedText: romSylText || syllable?.text || ''
+            };
+          });
+        }
+        if (romanizedLine.text || romanizedLine.romanizedText) {
+          mergedLine.romanizedText = romanizedLine.text || romanizedLine.romanizedText;
+        }
+      }
+
+      return mergedLine;
+    })
+  };
 }
 
 /**
@@ -126,9 +629,11 @@ function convertWordLyricsToLine(lyrics) {
 
   return {
     type: "Line",
-    data: lyrics.data.map(line => ({ ...line, syllabus: [] })),
+    data: lyrics.data.map(line => ({ ...line, syllabus: [], replacementSyllabus: undefined, translatedSyllabus: undefined })),
     metadata: lyrics.metadata,
-    ignoreSponsorblock: lyrics.ignoreSponsorblock
+    ignoreSponsorblock: lyrics.ignoreSponsorblock,
+    provider: lyrics.provider,
+    byVideoId: lyrics.byVideoId
   };
 }
 
@@ -141,6 +646,24 @@ function convertWordLyricsToLine(lyrics) {
  * Returns false if an in-flight debounce already covers this exact request,
  * signalling that the fetch can be safely skipped.
  */
+function notifySongChanging() {
+  currentFetchMediaId = `changing__${++fetchSessionCounter}`;
+  clearTimeout(lyricsFetchDebounceTimer);
+  lyricsFetchDebounceTimer = null;
+  lastRequestedSongKey = null;
+  lastBaseLyrics = null;
+  lastKnownSongInfo = null;
+  lastLyricsNotFound = false;
+  lastTranslationResponse = null;
+  lastRomanizationResponse = null;
+  lastRenderedHasTranslation = false;
+  lastRenderedHasRomanization = false;
+  forceNextRender = true;
+  if (typeof LyricsPlusAPI !== 'undefined' && typeof LyricsPlusAPI.cleanupLyrics === 'function') {
+    LyricsPlusAPI.cleanupLyrics();
+  }
+}
+
 function shouldFetchLyrics(songKey, forceReload) {
   return !(
     lyricsFetchDebounceTimer &&
@@ -152,11 +675,11 @@ function shouldFetchLyrics(songKey, forceReload) {
 
 /**
  * Resolves which display mode should actually be used for this fetch cycle.
- * Keeps the user's explicit selection, fallbacking to settings or remembered mode for new songs/tabs.
+ * For new songs with no prior state, the mode is derived from current settings;
+ * otherwise the user's existing selection is preserved.
  */
 function resolveEffectiveMode(isNewSong) {
-  if (currentDisplayMode !== 'none') return currentDisplayMode;
-  if (!isNewSong || lastKnownSongInfo) return currentDisplayMode;
+  if (!isNewSong || lastKnownSongInfo || savedDisplayModeLoaded) return currentDisplayMode;
 
   const { translationEnabled, romanizationEnabled } = currentSettings;
   if (translationEnabled && romanizationEnabled) return 'both';
@@ -166,32 +689,57 @@ function resolveEffectiveMode(isNewSong) {
 }
 
 /**
+ * Checks if two song infos represent the same track or its Audio/Video counterpart.
+ */
+function isSameOrCounterpartSong(a, b) {
+  if (!a || !b) return false;
+  if (a.videoId && b.videoId) {
+    if (a.videoId === b.videoId) return true;
+    if (a.videoId === b.counterpartVideoId || a.counterpartVideoId === b.videoId) return true;
+    return false;
+  }
+  return a.title === b.title && a.artist === b.artist && (a.album || '') === (b.album || '');
+}
+
+/**
  * Fetches the base lyrics for the current song, using the cache when appropriate.
  * Returns null if the song changed mid-request or if the fetch failed.
  */
 async function fetchBaseLyrics(currentSong, isNewSong, forceReload, fetchId) {
   const isSameSong =
-    lastBaseLyrics &&
     lastKnownSongInfo &&
     lastKnownSongInfo.title === currentSong.title &&
     lastKnownSongInfo.artist === currentSong.artist &&
+    lastKnownSongInfo.album === currentSong.album &&
     Math.abs((lastKnownSongInfo.duration || 0) - (currentSong.duration || 0)) < 2;
 
   if (!isNewSong && !forceReload && isSameSong) {
-    if (LyricsPlusAPI.setTranslationLoading) LyricsPlusAPI.setTranslationLoading(true);
-    return lastBaseLyrics;
+    if (lastLyricsNotFound) {
+      if (LyricsPlusAPI.displaySongNotFound) LyricsPlusAPI.displaySongNotFound(currentSong);
+      return null;
+    }
+    if (lastBaseLyrics) {
+      return lastBaseLyrics;
+    }
   }
 
-  LyricsPlusAPI.cleanupLyrics();
-  lastBaseLyrics = null;
-  lastKnownSongInfo = null;
+  // Soft reload: keep existing lines on screen during same-song or A/V counterpart refetches
+  const isSoftReload = !!(lastBaseLyrics && isSameOrCounterpartSong(lastKnownSongInfo, currentSong));
+  if (!isSoftReload) {
+    LyricsPlusAPI.cleanupLyrics();
+    lastBaseLyrics = null;
+    lastKnownSongInfo = null;
+  }
   lastTranslationResponse = null;
   lastRomanizationResponse = null;
+  lastRenderedHasTranslation = false;
+  lastRenderedHasRomanization = false;
+  forceNextRender = true;
 
   const response = await pBrowser.runtime.sendMessage({
     type: 'FETCH_LYRICS',
     songInfo: currentSong,
-    forceReload
+    forceReload: forceReload
   });
 
   if (currentFetchMediaId !== fetchId) {
@@ -199,56 +747,247 @@ async function fetchBaseLyrics(currentSong, isNewSong, forceReload, fetchId) {
     return null;
   }
 
-  if (!response.success) {
-    console.warn('Failed to fetch original lyrics:', response.error);
-    if (LyricsPlusAPI.displaySongNotFound) LyricsPlusAPI.displaySongNotFound();
+  if (!response?.success) {
+    console.warn('Failed to fetch original lyrics:', response?.error || response?.err || 'Unknown error');
+    lastKnownSongInfo = currentSong;
+    lastLyricsNotFound = true;
+    lastBaseLyrics = null;
+    if (LyricsPlusAPI.displaySongNotFound) LyricsPlusAPI.displaySongNotFound(currentSong);
     return null;
   }
 
+  lastLyricsNotFound = false;
   lastBaseLyrics = response.lyrics;
+  pinnedProvider = response.pinnedProvider || null;
+  if (pinnedProvider) {
+    userSelectedProvider = pinnedProvider;
+  }
+  if (lastBaseLyrics) {
+    applyLyricsScript(lastBaseLyrics);
+  }
+  if (response.availableProviders) {
+    setAvailableProviders(response.availableProviders);
+  }
+
+  const resolvedProvider = (
+    pinnedProvider ||
+    lastBaseLyrics?.provider ||
+    lastBaseLyrics?.metadata?.provider ||
+    detectLyricsProviderFromSource(lastBaseLyrics?.metadata?.source)
+  );
+  await loadLyricsOffset(currentSong, resolvedProvider || null);
+  if (currentFetchMediaId !== fetchId) {
+    console.warn("Song changed during offset load. Aborting.", currentSong);
+    return null;
+  }
+
   return lastBaseLyrics;
 }
 
-/**
- * Returns a cached response as a resolved promise, or sends a new message to fetch it.
- * Caches the result in `cacheRef` on success.
- */
-function getCachedOrFetch(cachedResponse, messagePayload, fetchId, onSuccess) {
-  if (cachedResponse) return Promise.resolve(cachedResponse);
+let lastSponsorSegments = null;
+let lastSponsorVideoId = null;
+let lastSubtitleData = null;
+let lastSubtitleVideoId = null;
 
-  return pBrowser.runtime.sendMessage(messagePayload).then(response => {
-    if (currentFetchMediaId === fetchId && response?.success) onSuccess(response);
-    return response;
+/**
+ * Schedules a microtask-coalesced call to updateAndRenderCombinedLyrics so that
+ * when both translation and romanization settle in the same tick, the DOM is only rebuilt once.
+ */
+function scheduleCombinedLyricsRender(currentSong, fetchId) {
+  if (pendingCombinedRenderFetchId === fetchId) return;
+  pendingCombinedRenderFetchId = fetchId;
+  queueMicrotask(() => {
+    if (pendingCombinedRenderFetchId === fetchId) {
+      pendingCombinedRenderFetchId = null;
+    }
+    if (currentFetchMediaId === fetchId) {
+      updateAndRenderCombinedLyrics(currentSong, fetchId);
+    }
   });
 }
 
 /**
- * Fetches translation and romanization data in parallel, reusing cached values when available.
- * Returns a [translationResponse, romanizationResponse] tuple.
+ * Initiates translation and romanization fetches independently without blocking each other.
+ * Checks embedded translations/transliterations from the lyrics file first;
+ * falls back to background external providers only when not available in the lyrics file.
  */
-async function fetchAdditionalData(currentSong, effectiveMode, htmlLang, fetchId) {
+function fetchAdditionalData(currentSong, effectiveMode, fetchId) {
   const needsTranslation = effectiveMode === 'translate' || effectiveMode === 'both';
   const needsRomanization = effectiveMode === 'romanize' || effectiveMode === 'both' || currentSettings.largerTextMode === "romanization";
 
-  const translationPromise = needsTranslation
-    ? getCachedOrFetch(
-      lastTranslationResponse,
-      { type: 'TRANSLATE_LYRICS', action: 'translate', songInfo: currentSong, targetLang: htmlLang },
-      fetchId,
-      response => { lastTranslationResponse = response; }
-    )
-    : Promise.resolve(null);
+  if (needsTranslation && !lastTranslationResponse) {
+    const embedded = resolveEmbeddedTranslations(lastBaseLyrics);
+    if (embedded) {
+      lastTranslationResponse = embedded;
+      scheduleCombinedLyricsRender(currentSong, fetchId);
+    } else {
+      const targetLang = getPrimaryTargetLanguage();
+      pBrowser.runtime.sendMessage({
+        type: 'TRANSLATE_LYRICS',
+        action: 'translate',
+        songInfo: currentSong,
+        targetLang
+      }).then(response => {
+        if (currentFetchMediaId === fetchId) {
+          lastTranslationResponse = response || { success: false };
+          scheduleCombinedLyricsRender(currentSong, fetchId);
+        }
+      }).catch(error => {
+        console.warn("Translation request error:", error);
+        if (currentFetchMediaId === fetchId) {
+          lastTranslationResponse = { success: false, error: error.message };
+          scheduleCombinedLyricsRender(currentSong, fetchId);
+        }
+      });
+    }
+  }
 
-  const romanizationPromise = needsRomanization
-    ? getCachedOrFetch(
-      lastRomanizationResponse,
-      { type: 'TRANSLATE_LYRICS', action: 'romanize', songInfo: currentSong, targetLang: htmlLang },
-      fetchId,
-      response => { lastRomanizationResponse = response; }
-    )
-    : Promise.resolve(null);
+  if (needsRomanization && !lastRomanizationResponse) {
+    const embedded = resolveEmbeddedTransliterations(lastBaseLyrics);
+    if (embedded) {
+      lastRomanizationResponse = embedded;
+      scheduleCombinedLyricsRender(currentSong, fetchId);
+    } else {
+      const targetLang = getPrimaryTargetLanguage();
+      pBrowser.runtime.sendMessage({
+        type: 'TRANSLATE_LYRICS',
+        action: 'romanize',
+        songInfo: currentSong,
+        targetLang
+      }).then(response => {
+        if (currentFetchMediaId === fetchId) {
+          lastRomanizationResponse = response || { success: false };
+          scheduleCombinedLyricsRender(currentSong, fetchId);
+        }
+      }).catch(error => {
+        console.warn("Romanization request error:", error);
+        if (currentFetchMediaId === fetchId) {
+          lastRomanizationResponse = { success: false, error: error.message };
+          scheduleCombinedLyricsRender(currentSong, fetchId);
+        }
+      });
+    }
+  }
+}
 
-  return Promise.all([translationPromise, romanizationPromise]);
+/**
+ * Checks whether applySubtitleRetiming or applySponsorBlock will need an async IPC call,
+ * so we only do a preliminary base render when an async wait will actually occur.
+ */
+function needsAsyncTimingFetch(lyrics, currentSong) {
+  if (!currentSong?.isVideo || !currentSong?.videoId || !lyrics) return false;
+  if (shouldApplySegmentMap(lyrics, currentSong)) return false;
+
+  const isSubtitles =
+    lyrics.provider === 'subtitles' ||
+    lyrics.metadata?.provider === 'subtitles' ||
+    lyrics.metadata?.source === 'YouTube Captions' ||
+    lyrics.metadata?.source === 'YouTube Subtitles' ||
+    lyrics.metadata?.source === 'subtitles';
+
+  if (isSubtitles) return false;
+
+  const isUnison =
+    lyrics.provider === 'unison' ||
+    lyrics.metadata?.provider === 'unison' ||
+    lyrics.metadata?.source?.toLowerCase() === 'unison';
+
+  const isUnisonVideoId =
+    isUnison &&
+    (lyrics.byVideoId === true ||
+     lyrics.metadata?.byVideoId === true ||
+     (lyrics.byVideoId === undefined &&
+      lyrics.metadata?.byVideoId === undefined &&
+      currentSong.isVideo &&
+      (lyrics.ignoreSponsorblock || lyrics.metadata?.ignoreSponsorblock)));
+
+  if (!isUnisonVideoId && typeof retimeLyricsWithSubtitles === "function") {
+    if (!(lastSubtitleVideoId === currentSong.videoId && lastSubtitleData !== null)) {
+      return true;
+    }
+  }
+
+  const shouldApplySponsorBlock =
+    currentSettings.useSponsorBlock &&
+    !lyrics.ignoreSponsorblock &&
+    !lyrics.metadata?.ignoreSponsorblock;
+
+  if (shouldApplySponsorBlock && !(lastSponsorVideoId === currentSong.videoId && lastSponsorSegments !== null)) {
+    return true;
+  }
+
+  return false;
+}
+
+/**
+ * Attempts to retime lyrics using video subtitles for Music Videos.
+ * Returns retimed lyrics array on success, or null if subtitles are unavailable/cannot be aligned.
+ */
+async function applySubtitleRetiming(lyrics, currentSong, fetchId) {
+  const isSubtitles =
+    lyrics.provider === 'subtitles' ||
+    lyrics.metadata?.provider === 'subtitles' ||
+    lyrics.metadata?.source === 'YouTube Captions' ||
+    lyrics.metadata?.source === 'YouTube Subtitles' ||
+    lyrics.metadata?.source === 'subtitles';
+
+  const isUnison =
+    lyrics.provider === 'unison' ||
+    lyrics.metadata?.provider === 'unison' ||
+    lyrics.metadata?.source?.toLowerCase() === 'unison';
+
+  const isUnisonVideoId =
+    isUnison &&
+    (lyrics.byVideoId === true ||
+     lyrics.metadata?.byVideoId === true ||
+     (lyrics.byVideoId === undefined &&
+      lyrics.metadata?.byVideoId === undefined &&
+      currentSong.isVideo &&
+      (lyrics.ignoreSponsorblock || lyrics.metadata?.ignoreSponsorblock)));
+
+  const shouldApply =
+    currentSong.isVideo &&
+    currentSong.videoId &&
+    !isSubtitles &&
+    !isUnisonVideoId &&
+    typeof retimeLyricsWithSubtitles === "function";
+
+  if (!shouldApply) return null;
+
+  try {
+    let subtitles = null;
+    if (lastSubtitleVideoId === currentSong.videoId && lastSubtitleData !== null) {
+      subtitles = lastSubtitleData;
+    } else {
+      const response = await pBrowser.runtime.sendMessage({
+        type: 'FETCH_SUBTITLES',
+        songInfo: currentSong
+      });
+
+      if (currentFetchMediaId !== fetchId) {
+        console.warn("Song changed during Subtitle fetch. Aborting.", currentSong);
+        return null;
+      }
+
+      if (response?.success && (response.subtitles?.tracks?.length > 0 || response.subtitles?.data?.length > 0)) {
+        lastSubtitleVideoId = currentSong.videoId;
+        lastSubtitleData = response.subtitles;
+        subtitles = response.subtitles;
+      }
+    }
+
+    if (subtitles) {
+      const retimedData = retimeLyricsWithSubtitles(lyrics.data, subtitles, "s");
+      if (retimedData && retimedData.length > 0) {
+        console.log("Applied Subtitle Timeline retiming for Music Video:", currentSong.title);
+        return retimedData;
+      }
+    }
+  } catch (error) {
+    console.warn("Subtitle retiming failed:", error);
+  }
+
+  return null;
 }
 
 /**
@@ -257,14 +996,24 @@ async function fetchAdditionalData(currentSong, effectiveMode, htmlLang, fetchId
  * or null if the song changed mid-request.
  */
 async function applySponsorBlock(lyrics, currentSong, fetchId) {
+  const isSubtitles =
+    lyrics.provider === 'subtitles' ||
+    lyrics.metadata?.provider === 'subtitles' ||
+    lyrics.metadata?.source === 'YouTube Captions';
+
   const shouldApply =
     currentSong.isVideo &&
     currentSong.videoId &&
     currentSettings.useSponsorBlock &&
     !lyrics.ignoreSponsorblock &&
-    !lyrics.metadata.ignoreSponsorblock;
+    !lyrics.metadata?.ignoreSponsorblock &&
+    !isSubtitles;
 
   if (!shouldApply) return lyrics.data;
+
+  if (lastSponsorVideoId === currentSong.videoId && lastSponsorSegments !== null) {
+    return adjustLyricTiming(lyrics.data, lastSponsorSegments, "s");
+  }
 
   const response = await pBrowser.runtime.sendMessage({
     type: 'FETCH_SPONSOR_SEGMENTS',
@@ -277,7 +1026,8 @@ async function applySponsorBlock(lyrics, currentSong, fetchId) {
   }
 
   if (response.success) {
-    // Both Line and Word types currently use the same "s" unit for timing adjustment
+    lastSponsorVideoId = currentSong.videoId;
+    lastSponsorSegments = response.segments;
     return adjustLyricTiming(lyrics.data, response.segments, "s");
   }
 
@@ -286,8 +1036,423 @@ async function applySponsorBlock(lyrics, currentSong, fetchId) {
 
 
 /* =================================================================
-   RENDERING HELPERS
+   SEGMENT MAP & GRANULAR OFFSET HELPERS
    ================================================================= */
+
+function getGlobalAndTypeOffsetTrim(lyrics) {
+  const globalTrim = Number(currentSettings?.globalLyricOffset) || 0;
+  const typeTrim = lyrics?.type === 'Word'
+    ? (Number(currentSettings?.richsyncOffsetTrim) || 0)
+    : (lyrics?.type === 'Line' ? (Number(currentSettings?.lineOffsetTrim) || 0) : 0);
+  return globalTrim + typeTrim;
+}
+
+function shouldApplySegmentMap(lyrics, currentSong) {
+  if (!lyrics || !currentSong?.segmentMap?.segment?.length) return false;
+  const isMusicVideoSynced = !!(
+    lyrics.byVideoId ||
+    lyrics.metadata?.byVideoId ||
+    lyrics.provider === 'subtitles' ||
+    lyrics.provider === 'ytmusic' ||
+    lyrics.metadata?.provider === 'subtitles' ||
+    lyrics.metadata?.provider === 'ytmusic' ||
+    lyrics.metadata?.source === 'YouTube Captions' ||
+    lyrics.metadata?.source === 'YouTube Subtitles'
+  );
+  if (isMusicVideoSynced) return false;
+  if (currentSong.isVideo) {
+    return Array.isArray(lyrics.data) && lyrics.data.some(line => Number(line.startTime) > 0);
+  }
+  const sourceDur = Number(lyrics.metadata?.duration || 0);
+  const songDur = Number(currentSong.duration || 0);
+  const counterpartDur = Number(currentSong.counterpartDuration || 0);
+  return (
+    sourceDur > 0 &&
+    songDur > 0 &&
+    counterpartDur > 0 &&
+    Math.abs(sourceDur - songDur) >= 2 &&
+    Math.abs(sourceDur - counterpartDur) < Math.abs(sourceDur - songDur)
+  );
+}
+
+function getSegmentMapTimeShiftMs(segmentMap, timeMs) {
+  if (!segmentMap || !Array.isArray(segmentMap.segment) || segmentMap.segment.length === 0) {
+    return 0;
+  }
+  let lastTimeChange = 0;
+  for (const segment of segmentMap.segment) {
+    const counterpartStart = Number(segment.counterpartVideoStartTimeMilliseconds) || 0;
+    const primaryStart = Number(segment.primaryVideoStartTimeMilliseconds) || 0;
+    const duration = Number(segment.durationMilliseconds) || 0;
+    if (timeMs >= counterpartStart) {
+      lastTimeChange = primaryStart - counterpartStart;
+      if (timeMs <= counterpartStart + duration) {
+        break;
+      }
+    }
+  }
+  return lastTimeChange;
+}
+
+function shiftMsTimingItems(items, shiftMs) {
+  if (!Array.isArray(items) || items.length === 0) return items;
+  return items.map(item => {
+    if (!item || typeof item !== 'object') return item;
+    const next = { ...item };
+    if (typeof next.time === 'number') {
+      next.time = Math.max(0, Math.round(next.time + shiftMs));
+    }
+    return next;
+  });
+}
+
+function retimeToSegmentMap(lyricsData, segmentMap) {
+  if (!Array.isArray(lyricsData) || lyricsData.length === 0 || !segmentMap?.segment?.length) {
+    return lyricsData;
+  }
+
+  const filled = [];
+  let sungUntilSec = 0;
+
+  for (const source of lyricsData) {
+    const sourceStartSec = Number(source.startTime) || 0;
+    const sourceDurationSec = Number.isFinite(source.duration)
+      ? source.duration
+      : Math.max(0, (Number(source.endTime) || sourceStartSec) - sourceStartSec);
+    const shiftMs = getSegmentMapTimeShiftMs(segmentMap, sourceStartSec * 1000);
+    const shiftSec = shiftMs / 1000;
+
+    const nextStart = Math.max(0, sourceStartSec + shiftSec);
+    const nextEnd = Math.max(nextStart, nextStart + sourceDurationSec);
+    const line = {
+      ...source,
+      startTime: nextStart,
+      duration: sourceDurationSec,
+      endTime: nextEnd,
+      syllabus: shiftMsTimingItems(source.syllabus, shiftMs),
+      translatedSyllabus: shiftMsTimingItems(source.translatedSyllabus, shiftMs),
+      words: shiftMsTimingItems(source.words, shiftMs)
+    };
+
+    const previous = filled[filled.length - 1];
+    if (previous?.isInstrumental) {
+      previous.duration = line.startTime - previous.startTime;
+      previous.endTime = line.startTime;
+      if (previous.duration <= 0) filled.pop();
+    }
+
+    const last = filled[filled.length - 1];
+    const coveredUntil = last?.isInstrumental ? last.endTime : sungUntilSec;
+
+    if (line.isInstrumental) {
+      const end = nextEnd;
+      line.startTime = coveredUntil;
+      line.endTime = end;
+      line.duration = end - coveredUntil;
+      if (line.duration > 0) filled.push(line);
+      continue;
+    }
+
+    filled.push(line);
+    sungUntilSec = Math.max(sungUntilSec, line.endTime);
+  }
+
+  return filled;
+}
+
+
+/* =================================================================
+   PROVIDER, SOURCE & OFFSET HELPERS (NON-RENDERING)
+   ================================================================= */
+
+function detectLyricsProviderFromSource(source) {
+  if (!source) return '';
+  const s = source.toLowerCase();
+  if (s.includes('lrcred') || s.includes('lrc-red') || s.includes('lrc.red') || s.includes('bini')) return 'lrcred';
+  if (s.includes('unison')) return 'unison';
+  if (s.includes('kugou') || s.includes('legato')) return 'kugou';
+  if (s.includes('lrclib')) return 'lrclib';
+  if (s.includes('local')) return 'local';
+  if (s.includes('subtitles') || s.includes('captions')) return 'subtitles';
+  if (s.includes('ytlyrics') || s.includes('yt lyrics') || s.includes('youtube lyrics') || s.includes('youtube native')) return 'ytlyrics';
+  if (s.includes('lyricfind')) return 'ytmusic';
+  if (s.includes('youtube music') || s.includes('ytmusic')) return 'ytmusic';
+  if (s.includes('apple') || s.includes('qq') || s.includes('kpoe') || s.includes('lyrics+')) return 'kpoe';
+  return '';
+}
+
+function isValidLyricsSource(source, settings = currentSettings, lyrics = lastBaseLyrics) {
+  if (!source || typeof source !== 'string') return false;
+  const s = source.trim().toLowerCase();
+  if (!s || s === 'unknown' || s === 'undefined' || s === 'null' || s === 'none' || s === 'youtube music' || s === 'ytmusic') return false;
+
+  const sourceOrder = settings?.lyricsSourceOrder || '';
+  const providerOrder = settings?.lyricsProviderOrder || '';
+  const cacheKey = `${sourceOrder}|${providerOrder}`;
+
+  if (_cachedSourceKey !== cacheKey || !_cachedValidSources) {
+    const configuredSources = sourceOrder.toLowerCase().split(',').map(x => x.trim()).filter(Boolean);
+    const configuredProviders = providerOrder.toLowerCase().split(',').map(x => x.trim()).filter(Boolean);
+    _cachedValidSources = Array.from(new Set([...KNOWN_LYRICS_SOURCES, ...configuredSources, ...configuredProviders]));
+    _cachedSourceKey = cacheKey;
+  }
+
+  for (let i = 0; i < _cachedValidSources.length; i++) {
+    const known = _cachedValidSources[i];
+    if (s.includes(known) || known.includes(s)) return true;
+  }
+
+  if (lyrics?.provider === 'ytmusic' || lyrics?.metadata?.provider === 'ytmusic' || lyrics?.provider === 'ytlyrics') {
+    return true;
+  }
+
+  return false;
+}
+
+function getLyricsProviderContext(songInfo = lastKnownSongInfo, lyrics = lastBaseLyrics, settings = currentSettings, selectedProvider = userSelectedProvider) {
+  const providerOrderStr = settings?.lyricsProviderOrder || 'kpoe,lrcred,unison,kugou,lrclib,ytmusic,ytlyrics';
+  const providerKeys = providerOrderStr.split(',').map(s => {
+    const trimmed = s.trim();
+    return trimmed === 'binilyrics' ? 'lrcred' : trimmed;
+  }).filter(Boolean);
+
+  if (settings?.customKpoeUrl && !providerKeys.includes('customKpoe')) {
+    providerKeys.push('customKpoe');
+  }
+
+  const activeProvider = (
+    selectedProvider ||
+    lyrics?.provider ||
+    lyrics?.metadata?.provider ||
+    detectLyricsProviderFromSource(lyrics?.metadata?.source) ||
+    'kpoe'
+  ).toLowerCase();
+
+  const info = songInfo || lastKnownSongInfo;
+  if ((info?.isVideo || info?.subtitle || activeProvider === 'subtitles') && !providerKeys.includes('subtitles')) {
+    providerKeys.push('subtitles');
+  }
+  if (activeProvider === 'local' && !providerKeys.includes('local')) {
+    providerKeys.push('local');
+  }
+  if ((info?.videoId || activeProvider === 'ytmusic') && !providerKeys.includes('ytmusic')) {
+    providerKeys.push('ytmusic');
+  }
+  if ((info?.ytMusicLyrics?.lyrics?.length > 0 || activeProvider === 'ytlyrics') && !providerKeys.includes('ytlyrics')) {
+    providerKeys.push('ytlyrics');
+  }
+
+  const ytMusicDisplay = (activeProvider === 'ytmusic' ? lyrics?.metadata?.source : null)
+    || info?.ytMusicLyrics?.provider
+    || 'YouTube Music';
+  const providerDisplayNames = {
+    'auto': 'Auto (Best Match)',
+    'lrcred': 'lrc.red',
+    'binilyrics': 'lrc.red',
+    'kpoe': 'Lyrics+',
+    'customKpoe': 'Custom Lyrics+',
+    'unison': 'Unison',
+    'kugou': 'KuGou (Legato)',
+    'lrclib': 'LRCLib',
+    'ytmusic': ytMusicDisplay,
+    'ytlyrics': 'YouTube Native Lyrics',
+    'local': 'Local Lyrics',
+    'subtitles': 'YouTube Subtitles'
+  };
+  return { providerKeys, activeProvider, providerDisplayNames, pinnedProvider };
+}
+
+function resolveActiveOffsetProvider(providerOverride = null) {
+  const raw = providerOverride ||
+    userSelectedProvider ||
+    lastBaseLyrics?.provider ||
+    lastBaseLyrics?.metadata?.provider ||
+    detectLyricsProviderFromSource(lastBaseLyrics?.metadata?.source) ||
+    '';
+  const normalized = String(raw).trim().toLowerCase();
+  return normalized && normalized !== 'auto' ? normalized : null;
+}
+
+function saveLyricsOffset(songInfo, offsetMs) {
+  userOffsetMs = offsetMs;
+  baseSongOffsetMs = offsetMs - getGlobalAndTypeOffsetTrim(lastBaseLyrics);
+  const provider = resolveActiveOffsetProvider();
+  clearTimeout(saveOffsetTimeout);
+  saveOffsetTimeout = setTimeout(() => {
+    if (typeof pBrowser !== 'undefined' && pBrowser.runtime?.sendMessage) {
+      pBrowser.runtime.sendMessage({
+        type: 'SAVE_LYRICS_OFFSET',
+        songInfo,
+        offsetMs: baseSongOffsetMs,
+        provider
+      }).catch(err => console.warn('Failed to save offset:', err));
+    }
+  }, 400);
+}
+
+async function loadLyricsOffset(songInfo, providerOverride = null) {
+  if (!songInfo || typeof pBrowser === 'undefined' || !pBrowser.runtime?.sendMessage) return 0;
+  try {
+    const provider = resolveActiveOffsetProvider(providerOverride);
+    const response = await pBrowser.runtime.sendMessage({
+      type: 'GET_LYRICS_OFFSET',
+      songInfo,
+      provider
+    });
+    if (response && typeof response.offsetMs === 'number') {
+      baseSongOffsetMs = response.offsetMs;
+      const effectiveOffset = baseSongOffsetMs + getGlobalAndTypeOffsetTrim(lastBaseLyrics);
+      userOffsetMs = effectiveOffset;
+      if (LyricsPlusAPI.setUserOffset) {
+        LyricsPlusAPI.setUserOffset(effectiveOffset);
+      }
+      return effectiveOffset;
+    }
+  } catch (err) {
+    console.warn('Failed to load lyrics offset:', err);
+  }
+  return 0;
+}
+
+async function loadAvailableProviders(songInfo) {
+  if (!songInfo || typeof pBrowser === 'undefined' || !pBrowser.runtime?.sendMessage) return;
+  try {
+    const response = await pBrowser.runtime.sendMessage({
+      type: 'GET_AVAILABLE_PROVIDERS',
+      songInfo
+    });
+    if (response?.success && Array.isArray(response.availableProviders)) {
+      setAvailableProviders(response.availableProviders);
+    }
+  } catch (err) {}
+}
+
+function setAvailableProviders(providers) {
+  if (Array.isArray(providers)) {
+    providers.forEach(p => {
+      if (p && !notFoundProviders.has(p.toLowerCase())) {
+        availableProviders.add(p.toLowerCase());
+      }
+    });
+  }
+  const activeProvider = (
+    userSelectedProvider ||
+    lastBaseLyrics?.provider ||
+    lastBaseLyrics?.metadata?.provider ||
+    detectLyricsProviderFromSource(lastBaseLyrics?.metadata?.source)
+  );
+  if (activeProvider && activeProvider.toLowerCase() !== 'auto') {
+    availableProviders.add(activeProvider.toLowerCase());
+  }
+
+  if (LyricsPlusAPI.setAvailableProviders) {
+    LyricsPlusAPI.setAvailableProviders(Array.from(availableProviders));
+  }
+}
+
+function getProviderDisplayName(provider, lyrics) {
+  const map = {
+    'auto': 'Auto (Best Match)',
+    'lrcred': 'lrc.red',
+    'binilyrics': 'lrc.red',
+    'kpoe': 'Lyrics+',
+    'customKpoe': 'Custom Lyrics+',
+    'unison': 'Unison',
+    'kugou': 'KuGou (Legato)',
+    'lrclib': 'LRCLib',
+    'ytmusic': lyrics?.metadata?.source || lastKnownSongInfo?.ytMusicLyrics?.provider || 'Lyrics',
+    'ytlyrics': 'YouTube Native Lyrics',
+    'local': 'Local Lyrics',
+    'subtitles': 'YouTube Subtitles'
+  };
+  return map[provider] || (provider ? provider.charAt(0).toUpperCase() + provider.slice(1) : 'Unknown');
+}
+
+async function switchLyricsProvider(providerId) {
+  if (!lastKnownSongInfo) return false;
+  const currentSong = lastKnownSongInfo;
+  const baseId = currentSong.videoId || currentSong.appleId || currentSong.songId || `${currentSong.title}-${currentSong.artist}`;
+  const fetchId = `${baseId}__${++fetchSessionCounter}`;
+  currentFetchMediaId = fetchId;
+  const targetProvider = providerId === 'auto' ? 'auto' : providerId;
+  const providerName = getProviderDisplayName(targetProvider, lastBaseLyrics);
+
+  try {
+    const response = await pBrowser.runtime.sendMessage({
+      type: 'SWITCH_LYRICS_PROVIDER',
+      songInfo: currentSong,
+      provider: targetProvider
+    });
+
+    if (currentFetchMediaId !== fetchId) {
+      console.warn("Song changed during lyrics provider switch. Aborting.", currentSong);
+      return false;
+    }
+
+    if (response?.success && response.lyrics) {
+      if (targetProvider === 'auto') {
+        pinnedProvider = null;
+        userSelectedProvider = response.lyrics.provider || response.provider || null;
+      } else {
+        pinnedProvider = response.pinnedProvider ?? (targetProvider !== 'local' ? targetProvider : null);
+        userSelectedProvider = targetProvider;
+        availableProviders.add(targetProvider.toLowerCase());
+      }
+      if (response.availableProviders) {
+        setAvailableProviders(response.availableProviders);
+      } else if (LyricsPlusAPI.setAvailableProviders) {
+        LyricsPlusAPI.setAvailableProviders(Array.from(availableProviders));
+      }
+
+      // Clear previous translation and romanization responses as lyrics lines/timing differ
+      lastTranslationResponse = null;
+      lastRomanizationResponse = null;
+      lastRenderedHasTranslation = false;
+      lastRenderedHasRomanization = false;
+      forceNextRender = true;
+
+      lastBaseLyrics = response.lyrics;
+      if (lastBaseLyrics) {
+        applyLyricsScript(lastBaseLyrics);
+      }
+
+      await loadLyricsOffset(currentSong, userSelectedProvider || lastBaseLyrics?.provider || null);
+      if (currentFetchMediaId !== fetchId) {
+        return false;
+      }
+
+      await updateAndRenderCombinedLyrics(currentSong, fetchId);
+
+      // Re-trigger translation / romanization fetch if enabled
+      const needsTranslation = currentDisplayMode === 'translate' || currentDisplayMode === 'both';
+      const needsRomanization = currentDisplayMode === 'romanize' || currentDisplayMode === 'both' || currentSettings.largerTextMode === "romanization";
+      if (needsTranslation || needsRomanization) {
+        if (LyricsPlusAPI.setTranslationLoading) LyricsPlusAPI.setTranslationLoading(true);
+        fetchAdditionalData(currentSong, currentDisplayMode, fetchId);
+      }
+
+      if (LyricsPlusAPI.showToast) {
+        LyricsPlusAPI.showToast(`Switched lyrics to ${providerName}`);
+      }
+      return true;
+    } else if (targetProvider !== 'auto') {
+      notFoundProviders.add(targetProvider.toLowerCase());
+      availableProviders.delete(targetProvider.toLowerCase());
+      if (LyricsPlusAPI.showToast) {
+        const notFoundMsg = (typeof t === 'function' && t("sourceNotFound")) || `No lyrics found from ${providerName}`;
+        LyricsPlusAPI.showToast(notFoundMsg);
+      }
+      return false;
+    }
+    return false;
+  } catch (error) {
+    console.warn("Failed to switch lyrics provider:", error);
+    if (LyricsPlusAPI.showToast) {
+      LyricsPlusAPI.showToast("Failed to switch lyrics provider");
+    }
+    return false;
+  }
+}
 
 /**
  * Calls the LyricsPlusAPI display function with the standard argument set.
@@ -301,16 +1466,20 @@ function callDisplayLyricsAPI(lyrics, currentSong, displayMode) {
     fetchAndDisplayLyrics,
     setCurrentDisplayModeAndRender,
     currentSettings.largerTextMode,
-    audioCtx.outputLatency || 0
+    audioCtx.outputLatency || 0,
+    switchLyricsProvider,
+    saveLyricsOffset,
+    getLyricsProviderContext,
+    userOffsetMs
   );
 }
 
 /**
- * Renders the base lyrics immediately as a placeholder while additional data loads.
- * Shown only for new songs to avoid an empty state during async fetches.
+ * Renders the base lyrics immediately as a placeholder while additional async timing data loads.
+ * Uses shallow cloning instead of JSON.parse(JSON.stringify).
  */
 function renderPreliminaryBaseLyrics(baseLyrics, currentSong) {
-  let lyrics = JSON.parse(JSON.stringify(baseLyrics));
+  let lyrics = cloneLyricsShallow(baseLyrics);
 
   if (lyrics.type === "Word" && !currentSettings.wordByWord) {
     lyrics = convertWordLyricsToLine(lyrics);
@@ -325,12 +1494,92 @@ function renderPreliminaryBaseLyrics(baseLyrics, currentSong) {
  */
 function renderFinalLyrics(lyrics, currentSong, displayMode) {
   lyrics.type = normalizeLyricsType(lyrics.type);
-  lastFetchedLyrics = lyrics;
 
   if (LyricsPlusAPI.displayLyrics) {
     callDisplayLyricsAPI(lyrics, currentSong, displayMode);
   } else {
     console.error("displayLyrics is not available.");
+  }
+}
+
+/**
+ * Renders the lyrics with whatever translation and romanization data is currently available.
+ * Manages loading indicator state based on whether any required request is still pending.
+ */
+async function updateAndRenderCombinedLyrics(currentSong, fetchId, renderedPreliminary = false) {
+  if (currentFetchMediaId !== fetchId || !lastBaseLyrics) return;
+
+  const hasTranslation = !!(lastTranslationResponse?.success && lastTranslationResponse.translatedLyrics);
+  const hasRomanization = !!(lastRomanizationResponse?.success && lastRomanizationResponse.translatedLyrics);
+
+  let lyrics = combineLyricsData(
+    lastBaseLyrics,
+    hasTranslation ? lastTranslationResponse.translatedLyrics : null,
+    hasRomanization ? lastRomanizationResponse.translatedLyrics : null
+  );
+
+  const finalDisplayMode = determineFinalDisplayMode(currentDisplayMode, hasTranslation, hasRomanization);
+
+  if (lyrics.type === "Word" && !currentSettings.wordByWord) {
+    lyrics = convertWordLyricsToLine(lyrics);
+  }
+
+  const originalDataRef = lyrics.data;
+  let adjustedData;
+  if (shouldApplySegmentMap(lyrics, currentSong)) {
+    adjustedData = retimeToSegmentMap(lyrics.data, currentSong.segmentMap);
+  } else {
+    adjustedData = await applySubtitleRetiming(lyrics, currentSong, fetchId);
+    if (currentFetchMediaId !== fetchId) return; // Song changed mid-fetch
+
+    if (!adjustedData) {
+      adjustedData = await applySponsorBlock(lyrics, currentSong, fetchId);
+      if (adjustedData === null) return; // Song changed mid-fetch
+    }
+  }
+
+  const timingChanged = adjustedData !== originalDataRef;
+  lyrics.data = adjustedData;
+
+  const needsTranslation = currentDisplayMode === 'translate' || currentDisplayMode === 'both';
+  const needsRomanization = currentDisplayMode === 'romanize' || currentDisplayMode === 'both' || currentSettings.largerTextMode === "romanization";
+  const isTranslationPending = needsTranslation && !lastTranslationResponse;
+  const isRomanizationPending = needsRomanization && !lastRomanizationResponse;
+
+  const isSameSongRendered =
+    !forceNextRender &&
+    lastKnownSongInfo &&
+    lastKnownSongInfo.title === currentSong.title &&
+    lastKnownSongInfo.artist === currentSong.artist &&
+    lastKnownSongInfo.album === currentSong.album;
+
+  const modeChanged = finalDisplayMode !== lastProcessedDisplayMode;
+  const dataChanged =
+    hasTranslation !== lastRenderedHasTranslation ||
+    hasRomanization !== lastRenderedHasRomanization;
+
+  const skipRedundantPreliminary =
+    renderedPreliminary && !timingChanged && !hasTranslation && !hasRomanization && finalDisplayMode === 'none';
+  const skipWhilePendingUnchanged =
+    !renderedPreliminary && isSameSongRendered && !timingChanged && !modeChanged && !dataChanged;
+
+  if (!skipRedundantPreliminary && !skipWhilePendingUnchanged) {
+    renderFinalLyrics(lyrics, currentSong, finalDisplayMode);
+    forceNextRender = false;
+    lastRenderedHasTranslation = hasTranslation;
+    lastRenderedHasRomanization = hasRomanization;
+    lastProcessedDisplayMode = finalDisplayMode;
+  }
+
+  lastLyricsNotFound = false;
+  lastKnownSongInfo = currentSong;
+
+  if (!isTranslationPending && !isRomanizationPending) {
+    currentDisplayMode = finalDisplayMode;
+  }
+
+  if (LyricsPlusAPI.setTranslationLoading) {
+    LyricsPlusAPI.setTranslationLoading(isTranslationPending || isRomanizationPending);
   }
 }
 
@@ -340,7 +1589,7 @@ function renderFinalLyrics(lyrics, currentSong, displayMode) {
    ================================================================= */
 
 async function fetchAndDisplayLyrics(currentSong, isNewSong = false, forceReload = false) {
-  const songKey = `${currentSong.title}-${currentSong.artist}-${currentSong.album}`;
+  const songKey = `${currentSong.videoId || currentSong.appleId || currentSong.songId || ''}-${currentSong.title}-${currentSong.artist}-${currentSong.album}`;
 
   if (!shouldFetchLyrics(songKey, forceReload)) return;
 
@@ -351,12 +1600,30 @@ async function fetchAndDisplayLyrics(currentSong, isNewSong = false, forceReload
   }, DEBOUNCE_TIME_MS);
   lastRequestedSongKey = songKey;
 
-  const fetchId = currentSong.videoId || currentSong.appleId || currentSong.songId || songKey;
+  const baseId = currentSong.videoId || currentSong.appleId || currentSong.songId || songKey;
+  const fetchId = `${baseId}__${++fetchSessionCounter}`;
   currentFetchMediaId = fetchId;
 
   try {
     const effectiveMode = resolveEffectiveMode(isNewSong);
     currentDisplayMode = effectiveMode;
+
+    const isDifferentSong =
+      !lastKnownSongInfo ||
+      lastKnownSongInfo.videoId !== currentSong.videoId ||
+      lastKnownSongInfo.title !== currentSong.title ||
+      lastKnownSongInfo.artist !== currentSong.artist ||
+      (lastKnownSongInfo.album || '') !== (currentSong.album || '');
+
+    if (isNewSong || isDifferentSong) {
+      userSelectedProvider = null;
+      pinnedProvider = null;
+      availableProviders.clear();
+      notFoundProviders.clear();
+      userOffsetMs = 0;
+      baseSongOffsetMs = 0;
+      loadAvailableProviders(currentSong);
+    }
 
     const baseLyrics = await fetchBaseLyrics(currentSong, isNewSong, forceReload, fetchId);
     if (!baseLyrics) return;
@@ -364,55 +1631,41 @@ async function fetchAndDisplayLyrics(currentSong, isNewSong = false, forceReload
     const needsTranslation = effectiveMode === 'translate' || effectiveMode === 'both';
     const needsRomanization = effectiveMode === 'romanize' || effectiveMode === 'both' || currentSettings.largerTextMode === "romanization";
 
-    if ((needsTranslation || needsRomanization) && LyricsPlusAPI.displayLyrics) {
-      const isMissingData =
-        (needsTranslation && !lastTranslationResponse) ||
-        (needsRomanization && !lastRomanizationResponse);
-
-      if (isNewSong) renderPreliminaryBaseLyrics(baseLyrics, currentSong);
-      if (isMissingData && LyricsPlusAPI.setTranslationLoading) LyricsPlusAPI.setTranslationLoading(true);
+    // Eagerly resolve embedded translation / transliteration from lyrics file if available
+    if (needsTranslation && !lastTranslationResponse) {
+      const embedded = resolveEmbeddedTranslations(baseLyrics);
+      if (embedded) lastTranslationResponse = embedded;
+    }
+    if (needsRomanization && !lastRomanizationResponse) {
+      const embedded = resolveEmbeddedTransliterations(baseLyrics);
+      if (embedded) lastRomanizationResponse = embedded;
     }
 
-    const htmlLang = document.documentElement.getAttribute('lang');
-    const [translationResponse, romanizationResponse] = await fetchAdditionalData(currentSong, effectiveMode, htmlLang, fetchId);
+    const isMissingTranslation = needsTranslation && !lastTranslationResponse;
+    const isMissingRomanization = needsRomanization && !lastRomanizationResponse;
 
-    if (currentFetchMediaId !== fetchId) {
-      console.warn("Song changed during additional data fetch. Aborting.", currentSong);
-      return;
+    let renderedPreliminary = false;
+    if (isNewSong && needsAsyncTimingFetch(baseLyrics, currentSong)) {
+      renderPreliminaryBaseLyrics(baseLyrics, currentSong);
+      renderedPreliminary = true;
     }
+    await updateAndRenderCombinedLyrics(currentSong, fetchId, renderedPreliminary);
 
-    const hasTranslation = translationResponse?.success && translationResponse.translatedLyrics;
-    const hasRomanization = romanizationResponse?.success && romanizationResponse.translatedLyrics;
-
-    let lyrics = combineLyricsData(
-      baseLyrics,
-      hasTranslation ? translationResponse.translatedLyrics : null,
-      hasRomanization ? romanizationResponse.translatedLyrics : null
-    );
-
-    const finalDisplayMode = determineFinalDisplayMode(effectiveMode, hasTranslation, hasRomanization);
-
-    if (lyrics.type === "Word" && !currentSettings.wordByWord) {
-      lyrics = convertWordLyricsToLine(lyrics);
+    if (isMissingTranslation || isMissingRomanization) {
+      if (LyricsPlusAPI.setTranslationLoading) LyricsPlusAPI.setTranslationLoading(true);
+      fetchAdditionalData(currentSong, effectiveMode, fetchId);
     }
-
-    const adjustedData = await applySponsorBlock(lyrics, currentSong, fetchId);
-    if (adjustedData === null) return; // Song changed mid-fetch
-    lyrics.data = adjustedData;
-
-    renderFinalLyrics(lyrics, currentSong, finalDisplayMode);
-
-    lastKnownSongInfo = currentSong;
-    lastProcessedDisplayMode = finalDisplayMode;
 
   } catch (error) {
     console.warn('Error in fetchAndDisplayLyrics:', error);
     currentDisplayMode = 'none';
     lastProcessedDisplayMode = 'none';
+    lastKnownSongInfo = currentSong;
+    lastLyricsNotFound = true;
+    lastBaseLyrics = null;
 
-    const songMediaId = currentSong?.videoId || currentSong?.songId;
-    if (currentFetchMediaId === songMediaId) {
-      if (LyricsPlusAPI.displaySongError) LyricsPlusAPI.displaySongError();
+    if (currentFetchMediaId === fetchId) {
+      if (LyricsPlusAPI.displaySongError) LyricsPlusAPI.displaySongError(currentSong);
     }
   }
 }
@@ -424,9 +1677,12 @@ async function fetchAndDisplayLyrics(currentSong, isNewSong = false, forceReload
 
 function setCurrentDisplayModeAndRender(mode, overrideSongInfo) {
   currentDisplayMode = mode;
+  savedDisplayModeLoaded = true;
   if (typeof storageLocalSet === 'function') {
     storageLocalSet({ lastDisplayMode: mode }).catch(e => console.warn('Failed to save lastDisplayMode:', e));
   }
+  clearTimeout(lyricsFetchDebounceTimer);
+  lyricsFetchDebounceTimer = null;
   const song = overrideSongInfo || lastKnownSongInfo;
 
   if (song) {
@@ -445,18 +1701,39 @@ function setCurrentDisplayModeAndRender(mode, overrideSongInfo) {
 
 window.addEventListener('YOUPLUS_SETTINGS_UPDATED', ({ detail }) => {
   const { changedKeys } = detail;
-  if (!changedKeys) return;
+  if (!changedKeys || changedKeys.length === 0) return;
 
-  const translationChanged = changedKeys.some(k => TRANSLATION_SETTING_KEYS.includes(k));
-  if (translationChanged) lastTranslationResponse = null;
-  if (changedKeys.some(k => ROMANIZATION_SETTING_KEYS.includes(k))) lastRomanizationResponse = null;
+  const translationInvalidated = changedKeys.some(k => TRANSLATION_SETTING_SET.has(k));
+  const romanizationInvalidated = changedKeys.some(k => ROMANIZATION_SETTING_SET.has(k));
+  const offsetInvalidated = changedKeys.some(k => OFFSET_SETTING_SET.has(k));
+  if (offsetInvalidated) {
+    const effectiveOffset = baseSongOffsetMs + getGlobalAndTypeOffsetTrim(lastBaseLyrics);
+    userOffsetMs = effectiveOffset;
+    if (LyricsPlusAPI.setUserOffset) {
+      LyricsPlusAPI.setUserOffset(effectiveOffset);
+    }
+  }
+  if (translationInvalidated) {
+    lastTranslationResponse = null;
+    lastRenderedHasTranslation = false;
+    if (lastBaseLyrics) {
+      applyLyricsScript(lastBaseLyrics);
+    }
+  }
+  if (romanizationInvalidated) {
+    lastRomanizationResponse = null;
+    lastRenderedHasRomanization = false;
+  }
 
+  forceNextRender = true;
   lastProcessedDisplayMode = 'none';
 
   if (!lastKnownSongInfo) return;
 
-  const nonRenderingKeys = [...RESTART_REQUIRED_KEYS];
-  const shouldRender = changedKeys.some(k => !nonRenderingKeys.includes(k));
+  const shouldRender =
+    changedKeys.some(k => !NON_RENDERING_KEY_SET.has(k)) ||
+    (translationInvalidated && (currentDisplayMode === 'translate' || currentDisplayMode === 'both')) ||
+    (romanizationInvalidated && (currentDisplayMode === 'romanize' || currentDisplayMode === 'both' || currentSettings.largerTextMode === 'romanization'));
 
   if (shouldRender) {
     console.log("Live settings update received, re-rendering lyrics...", changedKeys);

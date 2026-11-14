@@ -24,15 +24,80 @@ body,
     --lyrics-scroll-padding-top: 36%;
 }
 
-.lyrics__container.is-lyrics-off.svelte-fix90v.svelte-fix90v:has(#lyplus-patch-container:not(.lyrics-hidden)),
-.lyrics__container.is-lyrics-off.svelte-1n2xfan.svelte-1n2xfan:has(#lyplus-patch-container:not(.lyrics-hidden)) {
+[data-testid="side-panel"].has-lyrics-sidebar,
+body.lyplus-sidebar-open [data-testid="side-panel"] {
+    display: flex !important;
+    flex-direction: column !important;
+    overflow: hidden !important;
+}
+
+[data-testid="side-panel"].has-lyrics-sidebar .side-panel-content,
+body.lyplus-sidebar-open [data-testid="side-panel"] .side-panel-content {
+    position: relative !important;
+    flex: 1 1 0% !important;
+    width: 100% !important;
+    height: 100% !important;
+    max-height: 100% !important;
+    min-height: 0 !important;
+    overflow: hidden !important;
+    display: flex !important;
+    flex-direction: column !important;
+}
+
+[data-testid="lyrics-sidebar"] {
+    --lyrics-scroll-padding-top: 25%;
+    position: relative !important;
+    flex: 1 1 0% !important;
+    width: 100% !important;
+    height: 100% !important;
+    max-height: 100% !important;
+    min-height: 0 !important;
+    overflow: hidden !important;
+    display: flex !important;
+    flex-direction: column !important;
+}
+
+[data-testid="lyrics-sidebar"] [data-testid="lyrics-buttons-container"] {
+    position: relative;
+    z-index: 5;
+    flex-shrink: 0;
+}
+
+[data-testid="now-playing-backdrop"] > canvas:not(#lyplus-webgl-canvas),
+.dt-lyrics__platter > canvas:not(#lyplus-webgl-canvas),
+article[data-testid="lyrics-fullscreen-modal"] canvas:not(#lyplus-webgl-canvas) {
+    position: absolute !important;
+    width: 1px !important;
+    height: 1px !important;
+    max-width: 1px !important;
+    max-height: 1px !important;
+    opacity: 0 !important;
+    visibility: hidden !important;
+    pointer-events: none !important;
+    contain: strict !important;
+}
+
+article[data-testid="lyrics-fullscreen-modal"] .lyplus-blur-container,
+[data-testid="now-playing-backdrop"] .lyplus-blur-container {
+    display: block !important;
+    position: fixed !important;
+    inset: 0 !important;
+    width: 100% !important;
+    height: 100% !important;
+    opacity: 1 !important;
+    z-index: 0 !important;
+    pointer-events: none !important;
+}
+
+.lyrics__container.is-lyrics-off.has-lyplus.svelte-fix90v.svelte-fix90v,
+.lyrics__container.is-lyrics-off.has-lyplus.svelte-1n2xfan.svelte-1n2xfan {
     grid-template-columns: 32vw 40vw;
     padding: 0 10vw;
 }
 
 @media (min-width: 1680px) {
-    .lyrics__container.is-lyrics-off.svelte-fix90v.svelte-fix90v:has(#lyplus-patch-container:not(.lyrics-hidden)),
-    .lyrics__container.is-lyrics-off.svelte-1n2xfan.svelte-1n2xfan:has(#lyplus-patch-container:not(.lyrics-hidden)) {
+    .lyrics__container.is-lyrics-off.has-lyplus.svelte-fix90v.svelte-fix90v,
+    .lyrics__container.is-lyrics-off.has-lyplus.svelte-1n2xfan.svelte-1n2xfan {
         grid-template-columns: 31vw 38vw !important;
         padding: 0 12vw !important;
         column-gap: 5vw;
@@ -40,25 +105,26 @@ body,
 }
 
 @media (min-width: 2000px) {
-    .lyrics__container.is-lyrics-off.svelte-fix90v.svelte-fix90v:has(#lyplus-patch-container:not(.lyrics-hidden)),
-    .lyrics__container.is-lyrics-off.svelte-1n2xfan.svelte-1n2xfan:has(#lyplus-patch-container:not(.lyrics-hidden)) {
+    .lyrics__container.is-lyrics-off.has-lyplus.svelte-fix90v.svelte-fix90v,
+    .lyrics__container.is-lyrics-off.has-lyplus.svelte-1n2xfan.svelte-1n2xfan {
         grid-template-columns: 30vw 38vw !important;
         padding: 0 13vw !important;
     }
 }
 
 @media (min-width: 2561px) {
-    .lyrics__container.is-lyrics-off.svelte-fix90v.svelte-fix90v:has(#lyplus-patch-container:not(.lyrics-hidden)),
-    .lyrics__container.is-lyrics-off.svelte-1n2xfan.svelte-1n2xfan:has(#lyplus-patch-container:not(.lyrics-hidden)) {
+    .lyrics__container.is-lyrics-off.has-lyplus.svelte-fix90v.svelte-fix90v,
+    .lyrics__container.is-lyrics-off.has-lyplus.svelte-1n2xfan.svelte-1n2xfan {
         grid-template-columns: calc(30% + 199.68px) calc(38% + 252.928px) !important;
         padding: 0 13% !important;
     }
 }
 
-
-body:has([data-testid="modal"]) main {
-    display: none;
-    /* optimize shit, so lyrics changes not heavy*/
+body.lyplus-fullscreen-modal-open main,
+body.lyplus-fullscreen-modal-open #scrollable-page,
+body.has-modal main {
+    display: none !important;
+    content-visibility: hidden !important;
 }
 
 [data-testid="modal"] #lyrics-plus-container {
@@ -67,19 +133,80 @@ body:has([data-testid="modal"]) main {
     padding-top: calc(1em + 36vh);
     font-size: var(--lyrics-line-font-size);
     line-height: var(--lyrics-line-line-height);
+    contain: layout style;
 }
 
-[data-testid="modal"] #lyrics-plus-buttons-wrapper {
+[data-testid="lyrics-sidebar"] #lyrics-plus-container {
+    position: relative;
+    display: block !important;
+    padding: 0 16px;
+    padding-top: calc(1em + 25vh);
+    --lyplus-font-size-base: 22px;
+    line-height: 1.3;
+    contain: layout style;
+    --lyplus-lyrics-pallete: var(--bodyTextColor, var(--systemPrimary));
+    --lyplus-text-primary: var(--bodyTextColor, var(--systemPrimary));
+    --lyplus-text-secondary: color-mix(in srgb, var(--bodyTextColor, var(--systemPrimary)) 35%, transparent);
+}
+
+[data-testid="lyrics-sidebar"] #lyplus-patch-container {
+    --lyrics-scroll-padding-top: 25%;
+    position: absolute !important;
+    inset: 0 !important;
+    grid-area: unset !important;
+    width: 100% !important;
+    height: 100% !important;
+    max-height: 100% !important;
+    min-height: 0 !important;
+    overflow-y: scroll !important;
+    overflow-x: hidden !important;
+    scroll-padding-top: 25%;
+    scroll-padding-block-start: 25%;
+    overflow-anchor: none;
+    scrollbar-width: none;
+    will-change: scroll-position;
+    scroll-snap-type: y proximity;
+    contain: strict !important;
+    mask-image: linear-gradient(to bottom, transparent 0%, black 12%, black 82%, transparent 100%);
+    -webkit-mask-image: linear-gradient(to bottom, transparent 0%, black 12%, black 82%, transparent 100%);
+    mix-blend-mode: normal;
+}
+
+[data-testid="lyrics-sidebar"] #lyrics-plus-container .lyrics-line:not(.lyrics-gap) .lyrics-line-container {
+    transform: scale3d(1, 1, 1);
+    transition: transform 0.3s ease, background-color 0.7s, color 0.7s;
+}
+
+[data-testid="lyrics-sidebar"] #lyrics-plus-container:not(.not-focused) .lyrics-line:not(.lyrics-gap):not(.active).past-line,
+[data-testid="lyrics-sidebar"] #lyrics-plus-container:not(.not-focused) .lyrics-line:not(.lyrics-gap):not(.active).post-active-line,
+[data-testid="lyrics-sidebar"] #lyrics-plus-container:not(.not-focused) .lyrics-line:not(.lyrics-gap):not(.active)[class*="prev-"] {
+    opacity: 0.8 !important;
+}
+
+[data-testid="modal"] #lyrics-plus-buttons-wrapper,
+[data-testid="lyrics-sidebar"] #lyrics-plus-buttons-wrapper {
     display: flex;
     justify-content: flex-start;
     flex-direction: row-reverse;
 }
 
-[data-testid="modal"] #lyrics-plus-reload-button {
+[data-testid="lyrics-sidebar"] #lyrics-plus-buttons-wrapper {
+    bottom: 16px;
+    right: 16px;
+    width: auto;
+}
+
+[data-testid="lyrics-sidebar"] #lyrics-plus-show-hide-btn {
+    display: none !important;
+}
+
+[data-testid="modal"] #lyrics-plus-reload-button,
+[data-testid="lyrics-sidebar"] #lyrics-plus-reload-button {
     display: none;
 }
 
 #lyplus-patch-container {
+    --lyrics-scroll-padding-top: 36%;
     opacity: 1;
     width: 100%;
     height: 100%;
@@ -93,15 +220,15 @@ body:has([data-testid="modal"]) main {
     overflow: scroll;
     scroll-padding-top: 36%;
     scroll-padding-block-start: 36%;
-    overflow-anchor: auto;
+    overflow-anchor: none;
     scrollbar-width: none;
     will-change: scroll-position;
     scroll-snap-type: y proximity;
+    contain: strict;
 }
 
 #lyplus-patch-container.lyrics-hidden {
     display: none;
-
 }
 
 #lyrics-plus-container::-webkit-scrollbar {
@@ -114,8 +241,10 @@ body:has([data-testid="modal"]) main {
 
 /* --- Hiding ONLY Native Lyrics Text --- */
 article[data-testid="lyrics-fullscreen-modal"] .lyrics__lyrics,
+[data-testid="lyrics-sidebar"] amp-lyrics,
 .toggle-button.toggle-button--lyrics.lyrics-button,
-[data-testid="modal"] span.lyrics-source-provider {
+[data-testid="modal"] span.lyrics-source-provider,
+[data-testid="lyrics-sidebar"] span.lyrics-source-provider {
     display: none !important;
 }
 
@@ -144,11 +273,12 @@ article[data-testid="lyrics-fullscreen-modal"] .lyrics__lyrics,
     transition: all 0.2s ease;
 }
 
-[data-testid="modal"] #lyrics-plus-translation-dropdown {
+[data-testid="modal"] #lyrics-plus-translation-dropdown,
+[data-testid="lyrics-sidebar"] #lyrics-plus-translation-dropdown {
     border-radius: 6px;
     backdrop-filter: blur(60px) saturate(220%);
     top: -7em;
-    left: 74.5%;
+    right: 0.5%;
     background-color: transparent;
     border: 0px solid transparent;
     box-shadow: 0 0 35px #00000059;
@@ -183,23 +313,33 @@ article[data-testid="lyrics-fullscreen-modal"] .lyrics__lyrics,
     }
 }
 
-[data-testid="modal"] .dropdown-option:not(:first-of-type) {
+[data-testid="modal"] .dropdown-option:not(:first-of-type),
+[data-testid="lyrics-sidebar"] .dropdown-option:not(:first-of-type) {
     border-top: 0.5px solid var(--labelDivider);
 }
 
-
-#lyrics-plus-container:not(.not-focused) .lyrics-line:has(~ .lyrics-line.lyrics-activest) .background-vocal-container,
-#lyrics-plus-container:not(.not-focused) .lyrics-line:has(~ .lyrics-plus-metadata.lyrics-activest) .background-vocal-container {
-    max-height: 10em;
-}
-
-#lyrics-plus-container:not(.not-focused) .lyrics-line:not(.lyrics-gap):has(~ .lyrics-line.lyrics-activest),
-#lyrics-plus-container:not(.not-focused) .lyrics-line:not(.lyrics-gap):has(~ .lyrics-plus-metadata.lyrics-activest) {
+[data-testid="modal"] #lyrics-plus-container:not(.not-focused) .lyrics-line:not(.lyrics-gap).past-line,
+[data-testid="modal"] #lyrics-plus-container:not(.not-focused) .lyrics-line:not(.lyrics-gap).post-active-line,
+[data-testid="modal"] #lyrics-plus-container:not(.not-focused) .lyrics-line:not(.lyrics-gap)[class*="prev-"],
+article[data-testid="lyrics-fullscreen-modal"] #lyrics-plus-container:not(.not-focused) .lyrics-line:not(.lyrics-gap).past-line,
+article[data-testid="lyrics-fullscreen-modal"] #lyrics-plus-container:not(.not-focused) .lyrics-line:not(.lyrics-gap).post-active-line,
+article[data-testid="lyrics-fullscreen-modal"] #lyrics-plus-container:not(.not-focused) .lyrics-line:not(.lyrics-gap)[class*="prev-"],
+body.lyplus-fullscreen-modal-open #lyrics-plus-container:not(.not-focused) .lyrics-line:not(.lyrics-gap).past-line,
+body.lyplus-fullscreen-modal-open #lyrics-plus-container:not(.not-focused) .lyrics-line:not(.lyrics-gap).post-active-line,
+body.lyplus-fullscreen-modal-open #lyrics-plus-container:not(.not-focused) .lyrics-line:not(.lyrics-gap)[class*="prev-"] {
     opacity: 0;
     transition: opacity 0.3s ease 0.3s, transform 0.4s ease var(--lyrics-line-delay, 0ms), filter 0.3s ease;
 }
 
-#lyrics-plus-container:not(.not-focused) .lyrics-line:not(.lyrics-gap):has(~ .lyrics-line.prev-2) {
+[data-testid="modal"] #lyrics-plus-container:not(.not-focused) .lyrics-line:not(.lyrics-gap).past-line:not(.post-active-line):not(.prev-2),
+[data-testid="modal"] #lyrics-plus-container:not(.not-focused) .lyrics-line:not(.lyrics-gap).prev-3,
+[data-testid="modal"] #lyrics-plus-container:not(.not-focused) .lyrics-line:not(.lyrics-gap).prev-4,
+article[data-testid="lyrics-fullscreen-modal"] #lyrics-plus-container:not(.not-focused) .lyrics-line:not(.lyrics-gap).past-line:not(.post-active-line):not(.prev-2),
+article[data-testid="lyrics-fullscreen-modal"] #lyrics-plus-container:not(.not-focused) .lyrics-line:not(.lyrics-gap).prev-3,
+article[data-testid="lyrics-fullscreen-modal"] #lyrics-plus-container:not(.not-focused) .lyrics-line:not(.lyrics-gap).prev-4,
+body.lyplus-fullscreen-modal-open #lyrics-plus-container:not(.not-focused) .lyrics-line:not(.lyrics-gap).past-line:not(.post-active-line):not(.prev-2),
+body.lyplus-fullscreen-modal-open #lyrics-plus-container:not(.not-focused) .lyrics-line:not(.lyrics-gap).prev-3,
+body.lyplus-fullscreen-modal-open #lyrics-plus-container:not(.not-focused) .lyrics-line:not(.lyrics-gap).prev-4 {
     filter: none;
 }
 
@@ -221,6 +361,6 @@ article[data-testid="lyrics-fullscreen-modal"] .lyrics__lyrics,
     border-color: transparent;
 }
 
-#lyrics-plus-buttons-wrapper:has(#lyrics-plus-show-hide-btn:not(.active)) #lyrics-plus-translate-button {
+#lyrics-plus-buttons-wrapper.has-inactive-show-hide #lyrics-plus-translate-button {
     opacity: 0;
 }

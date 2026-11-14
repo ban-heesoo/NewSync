@@ -3,7 +3,7 @@ if (typeof LYPLUS_setBgConfig === 'function') {
         dynamicPlayerSelectors: ['#wimp'],
         blurContainerParentSelector: '#wimp [data-test="new-now-playing"]',
         mutationObserverRootSelector: '#wimp',
-        artworkSelector: '[data-test="current-media-imagery"] img'
+        artworkSelector: '[data-test="now-playing-artwork"], [data-test="current-media-imagery"] img'
     });
 }
 
@@ -13,11 +13,16 @@ let pendingCheckCount = 0;
 
 const LyricsPlusAPI = {
     displayLyrics: (...args) => lyricsRendererInstance?.displayLyrics(...args),
-    displaySongNotFound: () => lyricsRendererInstance?.displaySongNotFound(),
-    displaySongError: () => lyricsRendererInstance?.displaySongError(),
+    displaySongNotFound: (...args) => lyricsRendererInstance?.displaySongNotFound(...args),
+    displaySongError: (...args) => lyricsRendererInstance?.displaySongError(...args),
     cleanupLyrics: () => lyricsRendererInstance?.cleanupLyrics(),
     updateDisplayMode: (...args) => lyricsRendererInstance?.updateDisplayMode(...args),
-    setTranslationLoading: (...args) => lyricsRendererInstance?.setTranslationLoading(...args)
+    updateCurrentTick: (...args) => lyricsRendererInstance?.updateCurrentTick(...args),
+    setPlaybackState: (...args) => lyricsRendererInstance?.setPlaybackState(...args),
+    setTranslationLoading: (...args) => lyricsRendererInstance?.setTranslationLoading(...args),
+    showToast: (...args) => lyricsRendererInstance?.showToast(...args),
+    setUserOffset: (...args) => lyricsRendererInstance?.setUserOffset(...args),
+    setAvailableProviders: (...args) => lyricsRendererInstance?.setAvailableProviders(...args)
 };
 
 function injectPlatformCSS() {
@@ -61,8 +66,8 @@ function isNewUI() {
 // NEW UI (2024+)
 //
 // Tidal has TWO structurally identical now-playing panels:
-//   1. Sidebar  — [data-test="new-now-playing"]
-//   2. Fullscreen — #nowPlaying
+//   1. Fullscreen — section[class*="_fullscreen_"] [data-test="new-now-playing"]#nowPlaying
+//   2. Non-fullscreen — section[class*="_nowPlayingContainer_"][data-test="new-now-playing"]#nowPlaying
 // Both have their own [data-test="toggle-lyrics"] and
 // [data-test="now-playing-lyrics"]. All helpers are scoped to
 // a `root` element so both instances work independently.
@@ -70,6 +75,27 @@ function isNewUI() {
 
 function getNowPlayingRoot(btn) {
     return btn.closest('#nowPlaying, [data-test="new-now-playing"]');
+}
+
+function getActiveNowPlayingRoot() {
+    const list = document.querySelectorAll('#wimp [data-test="new-now-playing"]');
+    for (const el of list) {
+        if (el.querySelector(':scope > header, :scope > [class*="_content_"]') || !el.closest('[class*="_fullscreen_"]')) {
+            return el;
+        }
+    }
+    return document.querySelector('#wimp [data-test="new-now-playing"]');
+}
+
+function syncBlurContainerToActiveRoot() {
+    const targetRoot = getActiveNowPlayingRoot();
+    if (!targetRoot) return;
+
+    const blurContainer = document.querySelector('.lyplus-blur-container');
+    if (blurContainer && blurContainer.parentElement !== targetRoot) {
+        targetRoot.prepend(blurContainer);
+    }
+    targetRoot.classList.add('has-blur-container');
 }
 
 function hideTidalLyricsIn(root) {
@@ -148,6 +174,8 @@ function syncCustomButtonState(nativeLyricsBtn, buttonsContainer) {
 function ensureLyricsPatchContainer(root) {
     if (!root) return;
 
+    syncBlurContainerToActiveRoot();
+
     const lyricsPanel = root.querySelector('[data-test="now-playing-lyrics"]');
     if (!lyricsPanel) return;
 
@@ -176,6 +204,10 @@ function ensureLyricsPatchContainer(root) {
             patchParent: '#lyplus-active-patch',
             selectors: ['#lyplus-active-patch'],
             buttonParent: '[data-lyplus-btn-parent]',
+            isPlaying: () => {
+                const v = document.querySelector('video#video-one') || document.querySelector('video, audio');
+                return v ? (!v.paused && !v.ended) : false;
+            },
         });
     }
 
@@ -184,7 +216,8 @@ function ensureLyricsPatchContainer(root) {
             lyricsRendererInstance.lastKnownSongInfo &&
             LYPLUS_currentSong &&
             lyricsRendererInstance.lastKnownSongInfo.title === LYPLUS_currentSong.title &&
-            lyricsRendererInstance.lastKnownSongInfo.artist === LYPLUS_currentSong.artist;
+            lyricsRendererInstance.lastKnownSongInfo.artist === LYPLUS_currentSong.artist &&
+            lyricsRendererInstance.lastKnownSongInfo.album === LYPLUS_currentSong.album;
 
         if (canReuse && !patchWrapper.contains(lyricsRendererInstance.lyricsContainer)) {
             patchWrapper.appendChild(lyricsRendererInstance.lyricsContainer);
@@ -233,6 +266,7 @@ function setupNowPlayingInstance(nativeLyricsBtn) {
 
 function ensureLyricsNewUI() {
     document.querySelectorAll('[data-test="toggle-lyrics"]').forEach(setupNowPlayingInstance);
+    syncBlurContainerToActiveRoot();
 }
 
 
@@ -328,6 +362,10 @@ function ensureLyricsTab() {
                     patchParent: '#lyplus-patch-container',
                     selectors: ['#lyplus-patch-container', '#lyrics-plus-panel'],
                     buttonParent: '#lyrics-plus-panel',
+                    isPlaying: () => {
+                        const v = document.querySelector('video#video-one') || document.querySelector('video, audio');
+                        return v ? (!v.paused && !v.ended) : false;
+                    },
                 });
             }
         } else {
@@ -335,7 +373,8 @@ function ensureLyricsTab() {
                 lyricsRendererInstance.lastKnownSongInfo &&
                 LYPLUS_currentSong &&
                 lyricsRendererInstance.lastKnownSongInfo.title === LYPLUS_currentSong.title &&
-                lyricsRendererInstance.lastKnownSongInfo.artist === LYPLUS_currentSong.artist;
+                lyricsRendererInstance.lastKnownSongInfo.artist === LYPLUS_currentSong.artist &&
+                lyricsRendererInstance.lastKnownSongInfo.album === LYPLUS_currentSong.album;
 
             if (canReuse) {
                 patchWrapper.appendChild(lyricsRendererInstance.lyricsContainer);
@@ -423,12 +462,24 @@ function ensureLyricsUI() {
 
 const uiObserver = new MutationObserver((mutations) => {
     let shouldCheckUI = false;
+    let shouldSyncBg = false;
     const panelRoots = new Set();
 
     mutations.forEach(mutation => {
         if (mutation.type !== 'childList') return;
         Array.from(mutation.addedNodes).forEach(node => {
             if (node.nodeType !== 1) return;
+
+            // Ignore our own injected nodes to prevent observer loops
+            if (
+                node.classList?.contains('lyplus-blur-container') ||
+                node.hasAttribute?.('data-lyplus-patch') ||
+                node.hasAttribute?.('data-lyplus-custom-btn') ||
+                node.id === 'lyrics-plus-container' ||
+                node.closest?.('[data-lyplus-patch], .lyplus-blur-container')
+            ) {
+                return;
+            }
 
             if (
                 node.querySelector?.('[data-test="toggle-lyrics"]') ||
@@ -437,6 +488,13 @@ const uiObserver = new MutationObserver((mutations) => {
                 node.matches?.('[role="tablist"]')
             ) {
                 shouldCheckUI = true;
+            }
+
+            if (
+                node.matches?.('[data-test="new-now-playing"], header, [class*="_content_"]') ||
+                node.querySelector?.('[data-test="new-now-playing"]')
+            ) {
+                shouldSyncBg = true;
             }
 
             const lyricsPanelNode = node.matches?.('[data-test="now-playing-lyrics"]')
@@ -451,15 +509,30 @@ const uiObserver = new MutationObserver((mutations) => {
         });
     });
 
+    syncWimpState();
     if (shouldCheckUI) setTimeout(ensureLyricsUI, 50);
+    if (shouldSyncBg) setTimeout(syncBlurContainerToActiveRoot, 50);
     panelRoots.forEach(root => setTimeout(() => ensureLyricsPatchContainer(root), 50));
 });
+
+function syncWimpState() {
+    const wimp = document.getElementById('wimp');
+    if (!wimp) return;
+    const np = document.getElementById('nowPlaying');
+    const isHidden = np && (np.classList.contains('_nowPlayingHidden_7e74506') || Array.from(np.classList).some(c => c.includes('_nowPlayingHidden_')));
+    wimp.classList.toggle('has-hidden-now-playing', !!isHidden);
+    const nnp = document.querySelector('#wimp [data-test="new-now-playing"]');
+    if (nnp) {
+        nnp.classList.toggle('has-blur-container', !!nnp.querySelector('.lyplus-blur-container'));
+    }
+}
 
 function startUiObserver() {
     const appRoot = document.getElementById('wimp') || document.body;
     if (appRoot) {
-        uiObserver.observe(appRoot, { childList: true, subtree: true });
+        uiObserver.observe(appRoot, { childList: true, subtree: true, attributes: true, attributeFilter: ['class'] });
         setTimeout(ensureLyricsUI, 500);
+        syncWimpState();
     } else {
         setTimeout(startUiObserver, 1000);
     }
@@ -481,6 +554,8 @@ window.addEventListener('message', (event) => {
     if (event.source !== window || !event.data) return;
     if (event.data.type === 'LYPLUS_SONG_CHANGED') {
         LYPLUS_currentSong = event.data.songInfo;
+
+        syncBlurContainerToActiveRoot();
 
         document.querySelectorAll('[data-test="toggle-lyrics"][aria-pressed="true"]').forEach(btn => {
             const root = getNowPlayingRoot(btn) || btn.parentElement?.parentElement;

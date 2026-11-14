@@ -33,7 +33,6 @@ body,
 }
 
 /* New UI */
-#nowPlaying [data-test="now-playing-lyrics"]:has(~ #lyplus-patch-container),
 #nowPlaying.lyplus-active [data-test="now-playing-lyrics"] {
     display: none !important;
 }
@@ -101,11 +100,11 @@ body,
 
 #lyrics-plus-panel #lyrics-plus-container {
     display: block;
-    min-height: 70svh;
+    min-height: 60svh;
 }
 
 #lyrics-plus-panel #lyplus-patch-container {
-    max-height: 56svh;
+    max-height: 50svh;
 }
 
 /* Legacy tab */
@@ -118,30 +117,32 @@ body,
     height: min-content;
 }
 
-.react-tabs #lyrics-plus-translation-dropdown {
+.react-tabs #lyrics-plus-translation-dropdown,
+.react-tabs #lyrics-plus-options-dropdown {
     top: 4em;
     left: 80%;
 }
 
 .lyplus-blur-container {
-        display: block;
-        z-index: -1;
-        position: absolute;
-        height: 100vh;
-        width: 100vw;
-    }
-    #lyrics-plus-container {
-        display:block!important;
-        padding-top: 50%;
-        padding-bottom: 100%!important;
-        --lyplus-font-size-base: 35px!important;
-    }
-    ._scrollArea_200f837 [data-overlayscrollbars-contents]{
-        display: none;
-    }
-    #lyplus-active-patch {
+    display: block;
+    z-index: -1;
+    position: absolute;
+    height: 100vh;
+    width: 100vw;
+}
+#lyrics-plus-container {
+    display: block !important;
+    padding-top: 50%;
+    padding-bottom: 100% !important;
+    --lyplus-font-size-base: 35px !important;
+}
+._scrollArea_200f837 [data-overlayscrollbars-contents],
+[data-test="now-playing-lyrics"] > [data-overlayscrollbars-contents] {
+    display: none;
+}
+#lyplus-active-patch {
     scrollbar-width: none;
-    }
+}
 
 /* =====================================================
    Lyrics+ control buttons
@@ -164,13 +165,37 @@ body,
 /* =====================================================
    Dynamic player background
    ===================================================== */
-#wimp.dynamic-player [data-test="new-now-playing"] .lyplus-blur-container {
+#wimp.dynamic-player [data-test="new-now-playing"] .lyplus-blur-container,
+[class*="_fullscreen_"] [data-test="new-now-playing"] .lyplus-blur-container {
     display: block;
     position: fixed;
+    inset: 0;
+    width: 100vw;
+    height: 100vh;
     opacity: 1;
+    z-index: 1;
 }
 
-#wimp.dynamic-player:has(#nowPlaying._nowPlayingHidden_7e74506) ._player_8c80ae6._notFullscreen_60c5a14 {
+#wimp.dynamic-player [data-test="new-now-playing"][class*="_nowPlayingHidden_"] .lyplus-blur-container {
+    display: none;
+    opacity: 0;
+}
+
+#wimp.dynamic-player [data-test="new-now-playing"].has-blur-container > [class*="_background_"],
+[class*="_fullscreen_"] [data-test="new-now-playing"].has-blur-container > [class*="_background_"] {
+    background-color: transparent !important;
+}
+
+#wimp.dynamic-player [data-test="new-now-playing"] > header,
+#wimp.dynamic-player [data-test="new-now-playing"] > [class*="_content_"],
+[class*="_fullscreen_"] [data-test="new-now-playing"] > header,
+[class*="_fullscreen_"] [data-test="new-now-playing"] > [class*="_content_"] {
+    position: relative;
+    z-index: 2;
+}
+
+#wimp.dynamic-player.has-hidden-now-playing ._player_8c80ae6._notFullscreen_60c5a14,
+#wimp.dynamic-player.has-hidden-now-playing [data-test="footer-player"][class*="_notFullscreen_"] {
     background-color: #0000004d;
     backdrop-filter: blur(23px);
     box-shadow: 0 -6px 24px #0000003d;

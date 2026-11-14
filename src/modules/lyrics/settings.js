@@ -4,8 +4,8 @@ const pBrowser = typeof browser !== 'undefined'
 
 const defaultSettings = {
     lyricsProvider: 'kpoe',
-    lyricsProviderOrder: 'kpoe,unison,binilyrics,lrclib',
-    lyricsSourceOrder: 'apple,lyricsplus,qq,musixmatch,musixmatch-word',
+    lyricsProviderOrder: 'kpoe,lrcred,unison,kugou,lrclib,ytmusic,ytlyrics',
+    lyricsSourceOrder: 'apple,qq',
     wordByWord: true,
     lightweight: false,
     isEnabled: true,
@@ -17,6 +17,7 @@ const defaultSettings = {
     blurInactive: false,
     dynamicPlayer: false,
     audioBeatSync: false,
+    relaxScroll: false,
     customCSS: '',
     translationProvider: 'google',
     geminiApiKey: '',
@@ -28,6 +29,7 @@ const defaultSettings = {
     overrideGeminiRomanizePrompt: false,
     customGeminiRomanizePrompt: '',
     romanizationProvider: 'google',
+    transliterationTargetScript: 'latin',
     geminiRomanizationModel: 'gemini-flash-latest',
     useSongPaletteFullscreen: false,
     useSongPaletteAllModes: false,
@@ -41,10 +43,40 @@ const defaultSettings = {
     openRouterApiKey: '',
     openRouterModel: 'google/gemma-3n-e2b-it:free',
     deeplApiKey: '',
-    lyricOffset: 0
+    preferUnisonVideo: false,
+    lyricOffset: 0,
+    globalLyricOffset: 0,
+    richsyncOffsetTrim: 0,
+    lineOffsetTrim: 0
 };
 
 let currentSettings = { ...defaultSettings };
+let _lastAppliedDynamicPlayer = null;
+let _lastInjectedCustomCSS = null;
+let _cachedCustomStyleTag = null;
+
+function sanitizeSettingsInPlace(settings) {
+    if (!settings || typeof settings !== 'object') return;
+    if (typeof settings.lyricsSourceOrder === 'string') {
+        const sources = settings.lyricsSourceOrder.split(',')
+            .map(source => source.trim())
+            .filter(source => ['apple', 'qq'].includes(source));
+        settings.lyricsSourceOrder = sources.length ? [...new Set(sources)].join(',') : 'apple,qq';
+    }
+    if (typeof settings.lyricsProviderOrder === 'string') {
+        const providers = settings.lyricsProviderOrder.split(',')
+            .map(p => p.trim())
+            .map(p => (p === 'biniLyrics' || p === 'binilyrics' ? 'lrcred' : p))
+            .filter(Boolean);
+        settings.lyricsProviderOrder = providers.length ? [...new Set(providers)].join(',') : 'kpoe,lrcred,unison,kugou,lrclib,ytmusic,ytlyrics';
+    }
+    if (settings.translationProvider === 'deeplKeyless') {
+        settings.translationProvider = 'deepl-keyless';
+    }
+    if (settings.romanizationProvider === 'offline') {
+        settings.romanizationProvider = 'google';
+    }
+}
 
 window.addEventListener('message', (event) => {
     if (event.source !== window || !event.data || event.data.type !== 'UPDATE_SETTINGS') return;
@@ -56,24 +88,41 @@ window.addEventListener('message', (event) => {
 function loadSettings(callback) {
     storageLocalGet(defaultSettings).then((items) => {
         currentSettings = items;
+        sanitizeSettingsInPlace(currentSettings);
         console.log(currentSettings);
+        applyDynamicPlayerClass(true);
         injectCustomCSS(currentSettings.customCSS);
         if (callback) callback();
     });
 }
 
 function updateSettings(newSettings) {
-    currentSettings = { ...currentSettings, ...newSettings };
+    if (!newSettings || typeof newSettings !== 'object') return;
+    const sanitized = { ...newSettings };
+    sanitizeSettingsInPlace(sanitized);
 
-    applyDynamicPlayerClass();
-    if (newSettings.customCSS !== undefined) {
+    const changedKeys = [];
+    for (const key of Object.keys(sanitized)) {
+        if (currentSettings[key] !== sanitized[key]) {
+            changedKeys.push(key);
+        }
+    }
+
+    currentSettings = { ...currentSettings, ...sanitized };
+
+    if (sanitized.dynamicPlayer !== undefined) {
+        applyDynamicPlayerClass(false);
+    }
+    if (sanitized.customCSS !== undefined) {
         injectCustomCSS(currentSettings.customCSS);
     }
+
+    if (changedKeys.length === 0) return;
 
     window.dispatchEvent(new CustomEvent('YOUPLUS_SETTINGS_UPDATED', {
         detail: {
             settings: currentSettings,
-            changedKeys: Object.keys(newSettings)
+            changedKeys
         }
     }));
 }
@@ -91,18 +140,46 @@ if (pBrowser && pBrowser.storage) {
     });
 }
 
-function applyDynamicPlayerClass() {
-    const layoutElement = document.getElementById('layout');
-    if (!layoutElement) return;
+function applyDynamicPlayerClass(force = false) {
+    const enabled = !!currentSettings.dynamicPlayer;
+    if (!force && _lastAppliedDynamicPlayer === enabled) return;
+    _lastAppliedDynamicPlayer = enabled;
 
-    layoutElement.classList.toggle('dynamic-player', currentSettings.dynamicPlayer);
+    const layoutElement = document.getElementById('layout');
+    if (layoutElement && layoutElement.classList.contains('dynamic-player') !== enabled) {
+        layoutElement.classList.toggle('dynamic-player', enabled);
+    }
+    if (typeof LYPLUS_bgConfig !== 'undefined' && Array.isArray(LYPLUS_bgConfig.dynamicPlayerSelectors)) {
+        for (let i = 0; i < LYPLUS_bgConfig.dynamicPlayerSelectors.length; i++) {
+            const el = document.querySelector(LYPLUS_bgConfig.dynamicPlayerSelectors[i]);
+            if (el && el.classList.contains('dynamic-player') !== enabled) {
+                el.classList.toggle('dynamic-player', enabled);
+            }
+        }
+    }
 }
+
 function injectCustomCSS(customCSS) {
-    let styleTag = document.getElementById('lyrics-plus-custom-css');
+    const nextCSS = customCSS || '';
+    if (_lastInjectedCustomCSS === nextCSS) return;
+
+    let styleTag = (_cachedCustomStyleTag && _cachedCustomStyleTag.isConnected)
+        ? _cachedCustomStyleTag
+        : document.getElementById('lyrics-plus-custom-css');
+
     if (!styleTag) {
+        if (!nextCSS) {
+            _lastInjectedCustomCSS = '';
+            return;
+        }
         styleTag = document.createElement('style');
         styleTag.id = 'lyrics-plus-custom-css';
         document.head.appendChild(styleTag);
     }
-    styleTag.textContent = customCSS || '';
+
+    _cachedCustomStyleTag = styleTag;
+    _lastInjectedCustomCSS = nextCSS;
+    if (styleTag.textContent !== nextCSS) {
+        styleTag.textContent = nextCSS;
+    }
 }

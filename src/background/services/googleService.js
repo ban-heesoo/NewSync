@@ -18,7 +18,13 @@ export class GoogleService {
     return data?.[0]?.map(segment => segment?.[0]).join('') || text;
   }
 
-  static async romanize(originalLyrics) {
+  static async romanize(originalLyrics, targetLang, songInfo = {}, targetScript) {
+    if (targetScript && targetScript !== 'latin') {
+      throw new Error(
+        `Google Translate only supports Latin (romaji) transliteration. Select Gemini or OpenRouter for "${targetScript}" script transliteration.`
+      );
+    }
+
     let processedData;
 
     if (originalLyrics.type === "Word") {
@@ -48,8 +54,8 @@ export class GoogleService {
      * Full lines ensure correct phonetic context and spacing from the engine.
      */
     const [fullLineResults, isolatedResults] = await Promise.all([
-      this.romanizeTexts(allLines),
-      this.romanizeTexts(allSyllables)
+      this.romanizeTexts(allLines, allLines),
+      this.romanizeTexts(allSyllables, allLines)
     ]);
 
     let globalSyllableIndex = 0;
@@ -197,12 +203,13 @@ export class GoogleService {
     }));
   }
 
-  static async romanizeTexts(texts) {
+  static async romanizeTexts(texts, contextLines = null) {
+    const classifier = Utilities.createScriptClassifier(Array.isArray(contextLines) ? contextLines : texts);
     const validIndices = [];
     const textsToFetch = [];
 
     texts.forEach((text, index) => {
-      if (text && !Utilities.isPurelyLatinScript(text)) {
+      if (text && classifier.hasNonLatinScript(text)) {
         validIndices.push(index);
         textsToFetch.push(text);
       }

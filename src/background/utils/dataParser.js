@@ -5,6 +5,95 @@
 import { parseSyncedLyrics, parseAppleTTML } from '../../lib/parser.js';
 
 export class DataParser {
+  static alignTransliterationSyllabus(syllabus, transliteration) {
+    if (!Array.isArray(syllabus) || syllabus.length === 0 || !transliteration) {
+      return undefined;
+    }
+
+    const translitSyls = Array.isArray(transliteration.syllabus) ? transliteration.syllabus : [];
+    const translitFgSyls = Array.isArray(transliteration.foregroundSyllabus)
+      ? transliteration.foregroundSyllabus
+      : translitSyls.filter(s => !s.isBackground);
+    const translitBgSyls = Array.isArray(transliteration.backgroundSyllabus)
+      ? transliteration.backgroundSyllabus
+      : translitSyls.filter(s => s.isBackground);
+
+    if (translitSyls.length === 0 && translitFgSyls.length === 0 && translitBgSyls.length === 0) {
+      return undefined;
+    }
+
+    if (translitSyls.length === syllabus.length) {
+      return syllabus.map((syl, index) => ({
+        ...syl,
+        romanizedText: translitSyls[index]?.text || syl.text
+      }));
+    }
+
+    const mainFgIndices = [];
+    const mainBgIndices = [];
+    syllabus.forEach((syl, idx) => {
+      if (syl.isBackground) mainBgIndices.push(idx);
+      else mainFgIndices.push(idx);
+    });
+
+    if (
+      (mainFgIndices.length > 0 && translitFgSyls.length === mainFgIndices.length) ||
+      (mainBgIndices.length > 0 && translitBgSyls.length === mainBgIndices.length)
+    ) {
+      const result = syllabus.map(syl => ({ ...syl }));
+      if (translitFgSyls.length === mainFgIndices.length) {
+        mainFgIndices.forEach((sylIdx, fgIdx) => {
+          result[sylIdx].romanizedText = translitFgSyls[fgIdx]?.text || result[sylIdx].text;
+        });
+      }
+      if (translitBgSyls.length === mainBgIndices.length) {
+        mainBgIndices.forEach((sylIdx, bgIdx) => {
+          result[sylIdx].romanizedText = translitBgSyls[bgIdx]?.text || result[sylIdx].text;
+        });
+      }
+      return result;
+    }
+
+    if (translitSyls.length > 0) {
+      const assigned = new Array(syllabus.length).fill('');
+      let anyMatched = false;
+
+      for (const ts of translitSyls) {
+        if (!ts || !ts.text) continue;
+        const tsStart = Number(ts.time || 0);
+        const tsEnd = tsStart + Math.max(1, Number(ts.duration || 0));
+        let bestIdx = -1;
+        let bestOverlap = -1;
+
+        for (let i = 0; i < syllabus.length; i++) {
+          const s = syllabus[i];
+          if (Boolean(s.isBackground) !== Boolean(ts.isBackground)) continue;
+          const sStart = Number(s.time || 0);
+          const sEnd = sStart + Math.max(1, Number(s.duration || 0));
+          const overlap = Math.min(tsEnd, sEnd) - Math.max(tsStart, sStart);
+          if (overlap > bestOverlap) {
+            bestOverlap = overlap;
+            bestIdx = i;
+          }
+        }
+
+        if (bestIdx !== -1) {
+          assigned[bestIdx] += ts.text;
+          anyMatched = true;
+        }
+      }
+
+      if (anyMatched) {
+        return syllabus.map((syl, idx) => ({
+          ...syl,
+          romanizedText: assigned[idx] || syl.text
+        }));
+      }
+    }
+
+    return undefined;
+  }
+
   static parseKPoeFormat(data) {
     if (!data?.lyrics || !Array.isArray(data.lyrics) || data.lyrics.length === 0) {
       return null;
@@ -12,35 +101,40 @@ export class DataParser {
 
     return {
       type: data.type,
-      data: data.lyrics.map(item => {
+      data: data.lyrics.map((item, idx) => {
         const startTime = Number(item.time || 0) / 1000;
         const duration = Number(item.duration || 0) / 1000;
 
-        const syllabus = (item.syllabus || []).map(syl => ({
-          text: syl.text || '',
-          time: Number(syl.time || 0),
-          duration: Number(syl.duration || 0),
-          isBackground: syl.isBackground || false
-        }));
+        const syllabus = (item.syllabus || []).map(syl => {
+          const mappedSyl = {
+            text: syl.text || '',
+            time: Number(syl.time || 0),
+            duration: Number(syl.duration || 0),
+            isBackground: syl.isBackground || false
+          };
+          if (syl.htmlText !== undefined) mappedSyl.htmlText = syl.htmlText;
+          if (syl.keepParenthesis !== undefined) mappedSyl.keepParenthesis = syl.keepParenthesis;
+          if (syl.agent !== undefined) mappedSyl.agent = syl.agent;
+          if (syl.singer !== undefined) mappedSyl.singer = syl.singer;
+          if (syl.wordIndex !== undefined) mappedSyl.wordIndex = syl.wordIndex;
+          if (syl.isWhitespace !== undefined) mappedSyl.isWhitespace = syl.isWhitespace;
+          if (syl.romanizedText !== undefined) mappedSyl.romanizedText = syl.romanizedText;
+          return mappedSyl;
+        });
 
         let lineRomanizedText = undefined;
         let romanizedSyllabus = undefined;
 
         if (item.transliteration) {
-          if (Array.isArray(item.transliteration.syllabus) &&
-            item.transliteration.syllabus.length === syllabus.length &&
-            syllabus.length > 0) {
-            romanizedSyllabus = syllabus.map((syl, index) => ({
-              ...syl,
-              romanizedText: item.transliteration.syllabus[index].text || syl.text
-            }));
-            lineRomanizedText = item.transliteration.text || item.text;
-          } else if (item.transliteration.text) {
+          romanizedSyllabus = this.alignTransliterationSyllabus(syllabus, item.transliteration);
+          if (item.transliteration.text) {
             lineRomanizedText = item.transliteration.text;
+          } else if (romanizedSyllabus) {
+            lineRomanizedText = romanizedSyllabus.map(s => s.romanizedText || s.text).join('');
           }
         }
 
-        return {
+        const parsedLine = {
           text: item.text || '',
           startTime,
           duration,
@@ -50,6 +144,26 @@ export class DataParser {
           romanizedText: lineRomanizedText,
           translation: item.translation || null
         };
+
+        if (item.lineId !== undefined) parsedLine.lineId = item.lineId;
+        else parsedLine.lineId = idx;
+        if (item.mainText !== undefined) parsedLine.mainText = item.mainText;
+        if (item.htmlText !== undefined) parsedLine.htmlText = item.htmlText;
+        if (item.backgroundText !== undefined) parsedLine.backgroundText = item.backgroundText;
+        if (item.htmlBackgroundText !== undefined) parsedLine.htmlBackgroundText = item.htmlBackgroundText;
+        if (item.keepParenthesis !== undefined) parsedLine.keepParenthesis = item.keepParenthesis;
+        if (item.words !== undefined) parsedLine.words = item.words;
+        if (item.backgroundWords !== undefined) parsedLine.backgroundWords = item.backgroundWords;
+        if (item.translations !== undefined) parsedLine.translations = item.translations;
+        if (item.transliteration !== undefined) parsedLine.transliteration = item.transliteration;
+        if (item.transliterations !== undefined) parsedLine.transliterations = item.transliterations;
+        if (item.scripts !== undefined) parsedLine.scripts = item.scripts;
+        if (item.appliedScript !== undefined) parsedLine.appliedScript = item.appliedScript;
+        if (item.isScriptApplied !== undefined) parsedLine.isScriptApplied = item.isScriptApplied;
+        if (item.original !== undefined) parsedLine.original = item.original;
+        if (item.validationWarnings !== undefined) parsedLine.validationWarnings = item.validationWarnings;
+
+        return parsedLine;
       }),
       metadata: {
         ...data.metadata,
@@ -91,15 +205,21 @@ export class DataParser {
       })
       .filter(line => line.text.trim() !== "♪" && line.text.trim() !== "");
 
+    const sourceUrl = data.id ? `https://lrclib.net/tracks/${encodeURIComponent(data.id)}` : 'https://lrclib.net/';
+
     return {
       type: 'Line',
       data: parsedLines,
       metadata: {
+        id: data.id,
+        trackId: data.id,
         title: data.trackName,
         artist: data.artistName,
         album: data.albumName,
         duration: data.duration,
-        source: "LRCLIB"
+        source: "LRCLIB",
+        sourceUrl,
+        provider: "lrclib"
       }
     };
   }
@@ -107,74 +227,216 @@ export class DataParser {
   static parseYouTubeSubtitles(data, songInfo) {
     if (!data?.events?.length) return null;
 
-    const parsedLines = data.events
-      .map(event => {
-        const text = event.segs?.map(seg => seg.utf8).join(' ').trim();
-        if (!text) return null;
+    const rawEvents = data.events;
+    const parsedLines = [];
 
-        const startTime = event.tStartMs / 1000;
-        const duration = event.dDurationMs / 1000;
+    for (let eIdx = 0; eIdx < rawEvents.length; eIdx++) {
+      const event = rawEvents[eIdx];
+      if (!event.segs?.length) continue;
 
-        return {
-          text,
-          startTime,
-          endTime: startTime + duration,
-          duration
-        };
-      })
-      .filter(Boolean);
+      const fullText = event.segs
+        .map(seg => seg.utf8 || '')
+        .join('')
+        .replace(/\r?\n/g, '')
+        .replace(/\s+/g, ' ');
+
+      if (!fullText.trim() || fullText.trim() === '♪' || fullText.trim() === '♪♪') continue;
+
+      const eventStartMs = typeof event.tStartMs === 'number' ? event.tStartMs : 0;
+      let eventDurationMs = typeof event.dDurationMs === 'number' ? event.dDurationMs : 0;
+
+      if (eventDurationMs <= 0) {
+        const nextEvent = rawEvents.slice(eIdx + 1).find(ev => ev.segs?.length && typeof ev.tStartMs === 'number' && ev.tStartMs > eventStartMs);
+        if (nextEvent && nextEvent.tStartMs > eventStartMs) {
+          eventDurationMs = nextEvent.tStartMs - eventStartMs;
+        } else {
+          eventDurationMs = 3000;
+        }
+      }
+
+      const startTime = eventStartMs / 1000;
+      const duration = eventDurationMs / 1000;
+      const endTime = startTime + duration;
+
+      const validSegs = [];
+      let accumulatedOffset = 0;
+
+      for (let sIdx = 0; sIdx < event.segs.length; sIdx++) {
+        const seg = event.segs[sIdx];
+        if (!seg.utf8 || seg.utf8 === '\n' || seg.utf8 === '\r\n') continue;
+
+        let cleanText = seg.utf8.replace(/\r?\n/g, '');
+        if (!cleanText) continue;
+
+        if (/^\s/.test(cleanText) && validSegs.length > 0) {
+          if (!/\s$/.test(validSegs[validSegs.length - 1].text)) {
+            validSegs[validSegs.length - 1].text += ' ';
+          }
+          cleanText = cleanText.trimStart();
+        }
+
+        const offsetMs = typeof seg.tOffsetMs === 'number' ? seg.tOffsetMs : accumulatedOffset;
+        validSegs.push({
+          text: cleanText,
+          offsetMs
+        });
+
+        accumulatedOffset = offsetMs + 200;
+      }
+
+      const hasDistinctOffsets = validSegs.some(s => s.offsetMs > 0);
+      const syllables = [];
+
+      if (validSegs.length > 1 && hasDistinctOffsets) {
+        for (let i = 0; i < validSegs.length; i++) {
+          const cur = validSegs[i];
+          const sylStartMs = eventStartMs + cur.offsetMs;
+          let sylDurationMs = 0;
+
+          if (i < validSegs.length - 1) {
+            const nextSylStartMs = eventStartMs + validSegs[i + 1].offsetMs;
+            sylDurationMs = nextSylStartMs - sylStartMs;
+          } else {
+            const lineEndMs = eventStartMs + eventDurationMs;
+            sylDurationMs = lineEndMs - sylStartMs;
+          }
+
+          if (sylDurationMs <= 0) sylDurationMs = 200;
+
+          syllables.push({
+            text: cur.text,
+            time: sylStartMs,
+            duration: sylDurationMs,
+            isBackground: false
+          });
+        }
+      }
+
+      parsedLines.push({
+        text: fullText,
+        startTime,
+        endTime,
+        duration,
+        time: eventStartMs,
+        syllabus: syllables.length > 1 ? syllables : [],
+        element: {},
+        romanizedText: undefined,
+        translation: null
+      });
+    }
 
     if (parsedLines.length === 0) return null;
 
     return {
-      type: 'Line',
+      type: parsedLines.some(l => l.syllabus && l.syllabus.length > 1) ? 'Word' : 'Line',
       data: parsedLines,
       metadata: {
         ...songInfo,
-        source: "YouTube Captions"
-      }
+        source: "YouTube Captions",
+        ignoreSponsorblock: true
+      },
+      ignoreSponsorblock: true
     };
   }
 
-  static parseUnisonFormat(data) {
+  static parseUnisonFormat(data, songInfo = {}) {
     if (!data?.lyrics) return null;
 
     const format = (data.format || '').toLowerCase();
     const syncType = (data.syncType || 'plain').toLowerCase();
 
     // Map Unison syncType to internal type
-    const typeMap = { richsync: 'Word', linesync: 'Line', plain: 'Plain' };
+    const typeMap = { richsync: 'Word', linesync: 'Line', plain: 'None' };
     const internalType = typeMap[syncType] || 'Line';
 
+    const videoId = data.videoId || songInfo?.videoId || null;
+    const unisonId = data.id || null;
+    const submitter = data.submitter || null;
+
+    let sourceUrl = 'https://unison.betterlyrics.org/';
+    if (videoId) {
+      sourceUrl = `https://unison.betterlyrics.org/song/${encodeURIComponent(videoId)}${unisonId ? `?variantId=${encodeURIComponent(unisonId)}` : ''}`;
+    } else if (unisonId) {
+      sourceUrl = `https://unison.betterlyrics.org/song/?variantId=${encodeURIComponent(unisonId)}`;
+    }
+
+    const curator = typeof submitter === 'object' && submitter
+      ? (submitter.displayName || submitter.name || null)
+      : (typeof submitter === 'string' ? submitter : null);
+
+    const curatorUrl = typeof submitter === 'object' && submitter?.keyId
+      ? `https://unison.betterlyrics.org/curator/${encodeURIComponent(submitter.keyId)}`
+      : null;
+
     const metadata = {
-      title: data.song || '',
-      artist: data.artist || '',
-      album: data.album || '',
+      title: data.song || songInfo?.title || '',
+      artist: data.artist || songInfo?.artist || '',
+      album: data.album || songInfo?.album || '',
       language: data.language || '',
-      source: 'Unison'
+      source: 'Unison',
+      sourceUrl,
+      curator,
+      curatorUrl,
+      provider: 'unison',
+      videoId,
+      unisonId,
+      submitter
     };
 
     if (format === 'ttml') {
       const kpoeData = parseAppleTTML(data.lyrics);
       if (!kpoeData?.lyrics?.length) return null;
 
-      kpoeData.metadata.source = 'Unison';
-      return this.parseKPoeFormat(kpoeData);
+      kpoeData.metadata = {
+        ...(kpoeData.metadata || {}),
+        ...metadata,
+        source: 'Unison',
+        provider: 'unison'
+      };
+      const parsed = this.parseKPoeFormat(kpoeData);
+      if (parsed) {
+        parsed.provider = 'unison';
+        parsed.metadata = {
+          ...(parsed.metadata || {}),
+          ...metadata,
+          source: 'Unison',
+          provider: 'unison',
+          songWriters: parsed.metadata?.songWriters || kpoeData.metadata?.songWriters || []
+        };
+      }
+      return parsed;
     }
 
     if (format === 'lrc') {
       const kpoeData = parseSyncedLyrics(data.lyrics);
       if (!kpoeData?.lyrics?.length) return null;
 
-      kpoeData.metadata.source = 'Unison';
-      return this.parseKPoeFormat(kpoeData);
+      kpoeData.metadata = {
+        ...(kpoeData.metadata || {}),
+        ...metadata,
+        source: 'Unison',
+        provider: 'unison'
+      };
+      const parsed = this.parseKPoeFormat(kpoeData);
+      if (parsed) {
+        parsed.provider = 'unison';
+        parsed.metadata = {
+          ...(parsed.metadata || {}),
+          ...metadata,
+          source: 'Unison',
+          provider: 'unison',
+          songWriters: parsed.metadata?.songWriters || kpoeData.metadata?.songWriters || []
+        };
+      }
+      return parsed;
     }
 
     const lines = data.lyrics.split('\n').filter(l => l.trim());
     if (lines.length === 0) return null;
 
     return {
-      type: 'Plain',
+      type: 'None',
+      provider: 'unison',
       data: lines.map(text => ({
         text: text.trim(),
         startTime: 0,
@@ -184,5 +446,143 @@ export class DataParser {
       metadata
     };
   }
-}
 
+  static parseYTMusicFormat(ytData, songInfo = {}) {
+    if (!ytData) return null;
+
+    const { timed, plain, synced, provider, trackId, videoId, songWriters } = ytData;
+    const title = ytData.title || songInfo.title || '';
+    const artist = ytData.author || songInfo.artist || '';
+    const album = songInfo.album || '';
+    const duration = songInfo.duration || 0;
+    const sourceName = provider || null;
+    const writers = songWriters || songInfo.songWriters || [];
+
+    const metadata = {
+      title,
+      artist,
+      album,
+      duration,
+      source: sourceName,
+      provider: 'ytmusic',
+      songWriters: Array.isArray(writers) ? writers : [],
+      trackId: trackId || null,
+      videoId: videoId || songInfo.videoId || null
+    };
+
+    // If synced lines exist and synced is true, parse timed lines
+    if (synced && Array.isArray(timed) && timed.length > 0) {
+      const parsedLines = [];
+
+      for (let idx = 0; idx < timed.length; idx++) {
+        const line = timed[idx];
+        if (!line || typeof line.text !== 'string') continue;
+
+        const rawText = line.text.trim();
+        const isMusicalSymbol = rawText === '♪' || rawText === '♪♪' || rawText === '♫' || rawText === '♫♫';
+
+        const startTime = (line.start || 0) / 1000;
+        let endTime = (line.end || 0) / 1000;
+
+        if (endTime <= startTime) {
+          const next = timed.slice(idx + 1).find(nl => nl && nl.start > line.start);
+          if (next) {
+            endTime = next.start / 1000;
+          } else {
+            endTime = startTime + 4;
+          }
+        }
+
+        if (rawText.length > 0 && !isMusicalSymbol) {
+          const lineDuration = Math.max(0, endTime - startTime);
+          parsedLines.push({
+            text: rawText,
+            startTime,
+            endTime,
+            duration: lineDuration,
+            syllabus: [],
+            element: {},
+            romanizedText: undefined,
+            translation: null
+          });
+        }
+      }
+
+      if (parsedLines.length > 0) {
+        return {
+          type: 'Line',
+          provider: 'ytmusic',
+          data: parsedLines,
+          metadata
+        };
+      }
+    }
+
+    // For plain text, prefer web remix plain text
+    if (plain && typeof plain === 'string') {
+      const normalized = plain.replace(/\r\n/g, '\n').replace(/\r/g, '\n').trim();
+      const parts = normalized.split(/\n{2,}/);
+      const data = [];
+      let songPartIndex = 0;
+
+      for (const part of parts) {
+        const lines = part
+          .split('\n')
+          .map(l => l.trim())
+          .filter(l => l.length > 0 && l !== '♪' && l !== '♪♪');
+
+        if (lines.length > 0) {
+          for (const text of lines) {
+            data.push({
+              text,
+              startTime: 0,
+              endTime: 0,
+              duration: 0,
+              syllabus: [],
+              element: { songPartIndex },
+              romanizedText: undefined,
+              translation: null
+            });
+          }
+          songPartIndex++;
+        }
+      }
+
+      if (data.length > 0) {
+        return {
+          type: 'None',
+          provider: 'ytmusic',
+          data,
+          metadata
+        };
+      }
+    }
+
+    // Fallback if not synced and timed array was provided without plain text
+    if (Array.isArray(timed) && timed.length > 0) {
+      const filteredTimed = timed.filter(
+        line => line && typeof line.text === 'string' && line.text.trim().length > 0 && line.text.trim() !== '♪' && line.text.trim() !== '♪♪'
+      );
+
+      if (filteredTimed.length > 0) {
+        return {
+          type: 'None',
+          provider: 'ytmusic',
+          data: filteredTimed.map(line => ({
+            text: line.text.trim(),
+            startTime: 0,
+            endTime: 0,
+            duration: 0,
+            syllabus: [],
+            element: { songPartIndex: 0 },
+            romanizedText: undefined,
+            translation: null
+          })),
+          metadata
+        };
+      }
+    }
+
+    return null;
+  }
+}

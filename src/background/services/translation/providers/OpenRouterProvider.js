@@ -65,12 +65,12 @@ Do not wrap in Markdown code blocks. Just the raw JSON string.`;
         return this.parseResponse(rawContent, texts.length);
     }
 
-    async romanize(originalLyrics, targetLang, songInfo = {}) {
+    async romanize(originalLyrics, targetLang, songInfo = {}, targetScript = 'latin') {
         if (!this.apiKey) {
             throw new Error('OpenRouter API Key is missing. Please set it in Settings.');
         }
 
-        const { lyricsForApi, reconstructionPlan } = this.prepareLyrics(originalLyrics);
+        const { lyricsForApi, reconstructionPlan } = this.prepareLyrics(originalLyrics, targetScript);
         const hasAnyChunks = lyricsForApi.some(line => line.chunk && line.chunk.length > 0);
 
         if (lyricsForApi.length === 0) {
@@ -84,57 +84,195 @@ Do not wrap in Markdown code blocks. Just the raw JSON string.`;
                 : '';
             prompt = songContext + this.settings.customGeminiRomanizePrompt;
         } else {
-            prompt = createRomanizationPrompt(lyricsForApi, hasAnyChunks, songInfo, targetLang);
+            prompt = createRomanizationPrompt(lyricsForApi, hasAnyChunks, songInfo, targetLang, targetScript);
         }
 
         // Add specific instruction for OpenRouter
         const refinedPrompt = prompt + `\n\nIMPORTANT: Return PURE JSON only. No markdown formatting.`;
 
-        const response = await fetch("https://openrouter.ai/api/v1/chat/completions", {
-            method: "POST",
-            headers: {
-                "Authorization": `Bearer ${this.apiKey}`,
-                "Content-Type": "application/json",
-                "HTTP-Referer": "https://github.com/ibratabian17/youlyplus",
-                "X-Title": "YouLy+"
+        const messages = [
+            {
+                "role": "system",
+                "content": "You are a helpful assistant that provides phonetic romanization for song lyrics. YOU MUST RETURN VALID JSON."
             },
-            body: JSON.stringify({
-                "model": this.model,
-                "messages": [
-                    {
-                        "role": "system",
-                        "content": "You are a helpful assistant that provides phonetic romanization for song lyrics. YOU MUST RETURN VALID JSON."
+            {
+                "role": "user",
+                "content": refinedPrompt
+            }
+        ];
+
+        const validResultsMap = new Map();
+        let lastError = null;
+        const maxAttempts = 3;
+
+        let lastBrokenIndices = [];
+
+        for (let attempt = 1; attempt <= maxAttempts; attempt++) {
+            try {
+                const response = await fetch("https://openrouter.ai/api/v1/chat/completions", {
+                    method: "POST",
+                    headers: {
+                        "Authorization": `Bearer ${this.apiKey}`,
+                        "Content-Type": "application/json",
+                        "HTTP-Referer": "https://github.com/ibratabian17/youlyplus",
+                        "X-Title": "YouLy+"
                     },
-                    {
-                        "role": "user",
-                        "content": refinedPrompt
+                    body: JSON.stringify({
+                        "model": this.model,
+                        "messages": messages,
+                        "response_format": { "type": "json_object" }
+                    })
+                });
+
+                if (!response.ok) {
+                    const errorData = await response.json().catch(() => ({}));
+                    throw new Error(`OpenRouter Romanization API Error: ${response.status} ${errorData.error?.message || response.statusText}`);
+                }
+
+                const data = await response.json();
+                const rawContent = data.choices[0]?.message?.content;
+                const cleanedText = this.cleanJsonOutput(rawContent);
+
+                let parsedJson;
+                try {
+                    parsedJson = JSON.parse(cleanedText);
+                } catch (jsonErr) {
+                    if (attempt < maxAttempts) {
+                        messages.push({ role: "assistant", content: rawContent || "" });
+                        messages.push({
+                            role: "user",
+                            content: `Your previous response was not valid JSON. Please provide valid JSON adhering to the schema. Error: ${jsonErr.message}`
+                        });
+                        continue;
+                    } else {
+                        throw jsonErr;
                     }
-                ],
-                "response_format": { "type": "json_object" }
-            })
+                }
+
+                const returnedLines = Array.isArray(parsedJson)
+                    ? parsedJson
+                    : (parsedJson?.romanized_lyrics || parsedJson?.fixed_lines || []);
+
+                if (Array.isArray(returnedLines)) {
+                    returnedLines.forEach((retLine, i) => {
+                        if (!retLine) return;
+                        let lineIndex = -1;
+                        if (typeof retLine.original_line_index === 'number') {
+                            lineIndex = retLine.original_line_index;
+                        } else if (returnedLines.length === lyricsForApi.length) {
+                            lineIndex = i;
+                        } else if (lastBrokenIndices.length > 0 && returnedLines.length === lastBrokenIndices.length) {
+                            lineIndex = lastBrokenIndices[i];
+                        }
+
+                        if (lineIndex >= 0 && lineIndex < lyricsForApi.length) {
+                            const origLine = lyricsForApi[lineIndex];
+                            if (this.isLineValid(origLine, retLine, targetScript)) {
+                                validResultsMap.set(lineIndex, {
+                                    ...retLine,
+                                    original_line_index: lineIndex
+                                });
+                            }
+                        }
+                    });
+                }
+
+                const brokenLineIndices = [];
+                lyricsForApi.forEach((origLine, index) => {
+                    if (!validResultsMap.has(index)) {
+                        brokenLineIndices.push(index);
+                    }
+                });
+                lastBrokenIndices = brokenLineIndices;
+
+                if (brokenLineIndices.length === 0) {
+                    console.log(`OpenRouter romanization completed successfully on attempt ${attempt}`);
+                    break;
+                }
+
+                if (attempt < maxAttempts) {
+                    console.warn(`OpenRouter romanization attempt ${attempt}: ${brokenLineIndices.length} broken/missing line(s) [indices: ${brokenLineIndices.join(', ')}]. Sending targeted repair user prompt.`);
+
+                    const brokenLinesForApi = brokenLineIndices.map(idx => lyricsForApi[idx]);
+
+                    messages.push({ role: "assistant", content: rawContent || "" });
+                    messages.push({
+                        role: "user",
+                        content: `Your previous response was missing, incomplete, or contained text that was not fully transliterated into the target script for line index(es): [${brokenLineIndices.join(', ')}].
+
+Please fix and return ONLY the transliteration for these broken line(s) below in a JSON object with a "romanized_lyrics" array:
+
+${JSON.stringify(brokenLinesForApi, null, 2)}
+
+Requirements:
+1. Include ONLY the broken line(s) requested above. Do NOT include previously valid lines.
+2. Every item MUST include its correct "original_line_index" matching the input (${brokenLineIndices.join(', ')}).
+3. The "text" field (and "chunk" text fields if chunks were provided) MUST be fully transliterated into the target script ("${targetScript}"). Do NOT leave source-script text.`
+                    });
+                } else {
+                    console.warn(`OpenRouter romanization reached max attempts (${maxAttempts}). Proceeding with best-effort results.`);
+                }
+
+            } catch (e) {
+                console.warn(`OpenRouter API attempt ${attempt} failed:`, e.message);
+                lastError = e;
+                if (attempt === maxAttempts && validResultsMap.size === 0) {
+                    throw e;
+                }
+            }
+        }
+
+        if (validResultsMap.size === 0 && lastError) {
+            throw new Error(`OpenRouter romanization failed: ${lastError.message}`);
+        }
+
+        const assembledLines = lyricsForApi.map((origLine, index) => {
+            const retLine = validResultsMap.get(index);
+            if (retLine) return retLine;
+            return { text: origLine.text, original_line_index: index };
         });
 
-        if (!response.ok) {
-            const errorData = await response.json().catch(() => ({}));
-            throw new Error(`OpenRouter Romanization API Error: ${response.status} ${errorData.error?.message || response.statusText}`);
+        return this.reconstructLyrics(assembledLines, reconstructionPlan, hasAnyChunks);
+    }
+
+    isLineValid(origLine, retLine, targetScript = 'latin') {
+        if (!retLine || typeof retLine !== 'object') return false;
+
+        if (!retLine.text || typeof retLine.text !== 'string' || retLine.text.trim() === '') {
+            return false;
         }
 
-        const data = await response.json();
-        const rawContent = data.choices[0].message.content;
-
-        const cleanedText = this.cleanJsonOutput(rawContent);
-        let parsedJson;
-        try {
-            parsedJson = JSON.parse(cleanedText);
-        } catch (e) {
-            throw new Error("Failed to parse OpenRouter romanization response as JSON: " + e.message);
+        if (targetScript === 'latin') {
+            if (!Utilities.isPurelyLatinScript(retLine.text)) {
+                return false;
+            }
+            if (retLine.text.trim() === origLine.text.trim()) {
+                return false;
+            }
+        } else {
+            if (!Utilities.containsScript(retLine.text, targetScript)) {
+                return false;
+            }
+            if (retLine.text.trim() === origLine.text.trim()) {
+                return false;
+            }
         }
 
-        if (!parsedJson.romanized_lyrics || !Array.isArray(parsedJson.romanized_lyrics)) {
-            throw new Error("Invalid response conformation: missing 'romanized_lyrics' array");
+        if (origLine.chunk && Array.isArray(origLine.chunk) && origLine.chunk.length > 0) {
+            if (!Array.isArray(retLine.chunk) || retLine.chunk.length === 0) {
+                return false;
+            }
+            for (const c of retLine.chunk) {
+                if (!c || typeof c.text !== 'string' || c.text.trim() === '') return false;
+                if (targetScript === 'latin') {
+                    if (!Utilities.isPurelyLatinScript(c.text)) return false;
+                } else {
+                    if (!Utilities.containsScript(c.text, targetScript)) return false;
+                }
+            }
         }
 
-        return this.reconstructLyrics(parsedJson.romanized_lyrics, reconstructionPlan, hasAnyChunks);
+        return true;
     }
 
     parseResponse(rawText, expectedLength) {
@@ -167,7 +305,7 @@ Do not wrap in Markdown code blocks. Just the raw JSON string.`;
             .replace(/\s*```$/, "");
     }
 
-    prepareLyrics(originalLyrics) {
+    prepareLyrics(originalLyrics, targetScript = 'latin') {
         const lyricsForApi = [];
         const reconstructionPlan = [];
         const contentToApiIndexMap = new Map();
@@ -176,7 +314,8 @@ Do not wrap in Markdown code blocks. Just the raw JSON string.`;
         const lines = originalLyrics.data || [];
 
         lines.forEach((line, originalIndex) => {
-            if (Utilities.isPurelyLatinScript(line.text)) {
+            // Lines already written in the requested target script are passed through unchanged.
+            if (Utilities.isInTargetScript(line.text, targetScript)) {
                 reconstructionPlan.push({ type: 'latin', data: line, originalIndex });
                 return;
             }

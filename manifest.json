@@ -2,7 +2,7 @@
   "manifest_version": 3,
   "name": "NewSync",
   "default_locale": "en",
-  "version": "2.6.5",
+  "version": "2.6.6",
   "description": "__MSG_extensionDescription__",
   "permissions": [
     "storage"
@@ -19,10 +19,14 @@
     "https://openrouter.ai/api/*",
     "https://artwork.boidu.dev/*",
     "https://mvod.itunes.apple.com/*",
-    "https://lyrics-api.binimum.org/*",
+    "https://lrc.red/*",
     "https://lyrics-storage.binimum.org/*",
     "https://lyricsplus.atomix.one/*",
-    "https://lyricsplus-seven.vercel.app/*"
+    "https://lyricsplus-seven.vercel.app/*",
+    "https://unison.betterlyrics.org/*",
+    "https://unison.boidu.dev/*",
+    "https://*.kugou.com/*",
+    "http://*.kugou.com/*"
   ],
   "action": {
     "default_popup": "src/popup/ui.html",
@@ -57,6 +61,7 @@
       ],
       "js": [
         "src/lib/sponsorblock.js",
+        "src/lib/subtitleRetimer.js",
         "src/lib/polyfill.js",
         "src/lib/colorTunes.js",
         "src/localization.js",
@@ -75,12 +80,14 @@
         "*://*.music.apple.com/*"
       ],
       "js": [
+        "src/lib/subtitleRetimer.js",
         "src/lib/polyfill.js",
         "src/localization.js",
         "src/modules/lyrics/settings.js",
         "src/modules/lyrics/lyricsManager.js",
         "src/modules/lyrics/lyricsRenderer.js",
         "src/modules/lyrics/dynamicBkg.js",
+        "src/modules/applemusic/appleUIOptimizer.js",
         "src/modules/applemusic/index.js",
         "src/content.js"
       ]
@@ -90,6 +97,7 @@
         "*://*.tidal.com/*"
       ],
       "js": [
+        "src/lib/subtitleRetimer.js",
         "src/lib/polyfill.js",
         "src/localization.js",
         "src/modules/lyrics/settings.js",
@@ -110,6 +118,7 @@
         "src/lib/parser.js",
         "src/modules/applemusic/style.css",
         "src/inject/applemusic/songTracker.js",
+        "src/modules/applemusic/appleUIOptimizer.js",
         "src/assets/loading.gif"
       ],
       "matches": [
@@ -133,6 +142,7 @@
       "resources": [
         "src/modules/lyrics/lyrics.css",
         "src/modules/applemusic/style.css",
+        "src/modules/applemusic/appleUIOptimizer.js",
         "src/assets/loading.gif"
       ],
       "matches": [

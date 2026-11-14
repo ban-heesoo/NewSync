@@ -50,6 +50,9 @@ function initializeLyricsPlus() {
     injectDOMScript();
 
     // Listen for messages from the injected script
+    let prefetchDebounceTimer = null;
+    let lastPrefetchedVideoId = null;
+
     window.addEventListener('message', function (event) {
         // Only accept messages from the same frame
         if (event.source !== window) return;
@@ -57,7 +60,13 @@ function initializeLyricsPlus() {
         // Check if the message has our prefix
         if (event.data.type && event.data.type.startsWith('LYPLUS_')) {
             // Handle song info updates
-            if (event.data.type === 'LYPLUS_SONG_CHANGED') {
+            if (event.data.type === 'LYPLUS_SONG_CHANGING') {
+                if (typeof notifySongChanging === 'function') {
+                    notifySongChanging();
+                } else if (typeof LyricsPlusAPI !== 'undefined' && typeof LyricsPlusAPI.cleanupLyrics === 'function') {
+                    LyricsPlusAPI.cleanupLyrics();
+                }
+            } else if (event.data.type === 'LYPLUS_SONG_CHANGED') {
                 const songInfo = event.data.songInfo;
                 console.log('Song changed (received in extension):', songInfo);
 
@@ -69,6 +78,27 @@ function initializeLyricsPlus() {
 
                 // Call the lyrics fetching function with the new song info and new song flag
                 fetchAndDisplayLyrics(songInfo, true);
+            } else if (event.data.type === 'LYPLUS_PREFETCH_NEXT') {
+                const nextSong = event.data.nextSong;
+                if (!nextSong?.videoId || !nextSong?.title?.trim() || !nextSong?.artist?.trim()) return;
+                if (nextSong.videoId === lastPrefetchedVideoId) return;
+
+                clearTimeout(prefetchDebounceTimer);
+                prefetchDebounceTimer = setTimeout(() => {
+                    lastPrefetchedVideoId = nextSong.videoId;
+                    if (lyricsPlusBrowserApi?.runtime?.sendMessage) {
+                        try {
+                            lyricsPlusBrowserApi.runtime.sendMessage({
+                                type: 'PREFETCH_LYRICS',
+                                songInfo: nextSong
+                            }, () => {
+                                void lyricsPlusBrowserApi.runtime?.lastError;
+                            });
+                        } catch (e) {
+                            // Ignore background wakeup errors during prefetch
+                        }
+                    }
+                }, 1500);
             }
         }
     });

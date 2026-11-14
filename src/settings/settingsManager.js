@@ -24,6 +24,43 @@ export function loadSettings(callback) {
     storageLocalGet(defaultSettings).then((items) => {
         console.log("Items retrieved from storage:", items);
         currentSettings = { ...defaultSettings, ...items };
+
+        const allowedSources = ['apple', 'qq'];
+        const cleanSources = typeof currentSettings.lyricsSourceOrder === 'string'
+            ? currentSettings.lyricsSourceOrder.split(',').map(s => s.trim()).filter(s => allowedSources.includes(s))
+            : [];
+        currentSettings.lyricsSourceOrder = cleanSources.length ? cleanSources.join(',') : 'apple,qq';
+
+        const allowedProviders = ['kpoe', 'customKpoe', 'lrcred', 'unison', 'kugou', 'lrclib', 'ytmusic', 'ytlyrics', 'local'];
+        let cleanProviders = typeof currentSettings.lyricsProviderOrder === 'string'
+            ? currentSettings.lyricsProviderOrder
+                .split(',')
+                .map(p => (p.trim() === 'biniLyrics' || p.trim() === 'binilyrics' ? 'lrcred' : p.trim()))
+                .filter((p, idx, arr) => allowedProviders.includes(p) && arr.indexOf(p) === idx)
+            : [];
+        if (cleanProviders.length === 0) {
+            cleanProviders = ['kpoe', 'lrcred', 'unison', 'kugou', 'lrclib', 'ytmusic', 'ytlyrics'];
+        } else if (!cleanProviders.includes('ytmusic')) {
+            cleanProviders.push('ytmusic');
+        }
+        currentSettings.lyricsProviderOrder = cleanProviders.join(',');
+
+        if (currentSettings.translationProvider === 'deeplKeyless') {
+            currentSettings.translationProvider = 'deepl-keyless';
+        }
+        if (currentSettings.romanizationProvider === 'offline') {
+            currentSettings.romanizationProvider = 'google';
+        }
+
+        const needsSave =
+            currentSettings.lyricsSourceOrder !== items.lyricsSourceOrder ||
+            currentSettings.lyricsProviderOrder !== items.lyricsProviderOrder ||
+            currentSettings.translationProvider !== items.translationProvider ||
+            currentSettings.romanizationProvider !== items.romanizationProvider;
+        if (needsSave) {
+            saveSettings();
+        }
+
         console.log("Loaded settings:", currentSettings);
         injectCustomCSS(currentSettings.customCSS);
         if (callback) callback(currentSettings);
