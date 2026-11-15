@@ -5,6 +5,8 @@
     let timeUpdateFrame = null;
     let debounceTimer = null;
     let playerInstance = null;
+    let lastDomTitle = '';
+    let checkToken = 0;
     const videoMetaDataMap = new Map();
 
     const timeUpdateMsg = { type: 'LYPLUS_TIME_UPDATE', currentTime: 0 };
@@ -12,12 +14,16 @@
 
     console.log('LYPLUS: Tracker injected.');
 
+    function safeCheck() {
+        checkForSongChange().catch(e => console.error('LYPLUS: song check failed', e));
+    }
+
     function init() {
         setupNextResponseSniffer();
         setupMutationObserver();
         setupPlayerListeners();
         setupSeekListener();
-        checkForSongChange();
+        safeCheck();
     }
 
     function parseDurationTextToSec(text) {
@@ -213,7 +219,10 @@
             || document.querySelector('ytmusic-miniplayer .ytMusicMiniPlayerLeftSection')
             || document.querySelector('[slot="player-bar"] .ytmusicTrackInfoContentInfoWrapper')
             || document.querySelector('[slot="player-bar"] .content-info-wrapper')
-            || document.querySelector('[slot="player-bar"]');
+            || document.querySelector('[slot="player-bar"]')
+            || document.querySelector('ytmusic-player-bar')
+            || document.querySelector('ytmusic-wiz-player-controls')
+            || document.querySelector('ytmusic-player-page');
 
         if (metadataContainer) {
             const observer = new MutationObserver(handleMutations);
@@ -232,7 +241,7 @@
 
     function scheduleSongCheck(delayMs = 80) {
         clearTimeout(debounceTimer);
-        debounceTimer = setTimeout(checkForSongChange, delayMs);
+        debounceTimer = setTimeout(safeCheck, delayMs);
     }
 
     function handleMutations() {
@@ -250,6 +259,7 @@
                 if (typeof player.addEventListener === 'function') {
                     try {
                         player.addEventListener('onStateChange', () => scheduleSongCheck(40));
+                        player.addEventListener('onVideoDataChange', () => scheduleSongCheck(40));
                     } catch (e) {}
                 }
             }
@@ -260,6 +270,7 @@
                 video.addEventListener('loadedmetadata', onVideoChange);
                 video.addEventListener('durationchange', onVideoChange);
                 video.addEventListener('play', onVideoChange);
+                video.addEventListener('playing', onVideoChange);
                 video.addEventListener('emptied', onVideoChange);
             }
         };
@@ -338,7 +349,7 @@
     }
 
     function getMetadataFromDOM() {
-        const bar = document.querySelector('ytmusic-player-bar, ytmusic-miniplayer, [slot="player-bar"]');
+        const bar = document.querySelector('ytmusic-player-bar, ytmusic-miniplayer, [slot="player-bar"], ytmusic-wiz-player-controls');
         if (!bar) return null;
 
         const titleEl = bar.querySelector('.ytmusicTrackInfoTitle') || bar.querySelector('.title');
@@ -769,8 +780,9 @@
             return;
         }
 
+        const domTitle = domInfo?.title || '';
         const isVideoIdChanged = videoId !== currentSong.videoId;
-        const isDomTitleChanged = !!(domInfo?.title && currentSong.title && domInfo.title !== currentSong.title);
+        const isDomTitleChanged = !!(domTitle && lastDomTitle && domTitle !== lastDomTitle);
 
         // If the DOM title already changed to the next song, but movie_player.getVideoData().video_id
         // is still the previous song's videoId, wait briefly for movie_player to update so we don't
@@ -787,6 +799,7 @@
         if (isVideoIdChanged || isDomTitleChanged) {
             if (activeFetchVideoId === videoId) return;
             activeFetchVideoId = videoId;
+            const myToken = ++checkToken;
 
             const prevQueueMeta = videoMetaDataMap.get(videoId) || null;
             const isCounterpartSwitch = !!(
@@ -812,6 +825,8 @@
                     activeFetchVideoId = null;
                 }
             }
+
+            if (myToken !== checkToken) return;
 
             // Verify that movie_player is still on the same videoId after the async network calls!
             try {
@@ -847,6 +862,12 @@
             if (!finalDuration || !finalTitle) {
                 scheduleSongCheck(200);
                 return;
+            }
+
+            if (freshDomInfo?.title) {
+                lastDomTitle = freshDomInfo.title;
+            } else if (domTitle) {
+                lastDomTitle = domTitle;
             }
 
             const finalAlbum = queueMeta?.album || apiData?.album || freshDomInfo?.album || "";
