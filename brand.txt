@@ -1,0 +1,34 @@
+# ==========================================
+# NEWSYNC BRAND IDENTITY (brand.txt)
+# ==========================================
+
+Brand Name: NewSync
+Accent Color (Hex): #FA233B
+Secondary Accent (Hex): #FF344C
+Dark Background (Hex): #1F1F1F
+Pure Black Surface (Hex): #000000
+Text Primary (Hex): #F5F5F7
+Text Secondary (Hex): #86868B
+Typography: SF Pro Display, Satoshi, Inter, sans-serif
+
+# ------------------------------------------
+# TAGLINE
+# ------------------------------------------
+[ID]
+Rasakan Setiap Kata, Selaras dengan Irama — Lirik Tersinkronisasi bergaya Apple Music untuk YouTube Music, Apple Music & Tidal.
+
+[EN]
+Feel Every Word, In Perfect Sync — Apple Music-inspired synchronized lyrics, word-by-word timing, and animated artwork for YouTube Music, Apple Music & Tidal.
+
+# ------------------------------------------
+# TEKS PENUTUP (CLOSING / OUTRO TEXT)
+# ------------------------------------------
+[ID]
+Mendengarkan musik seharusnya menjadi pengalaman yang imersif, bukan sekadar suara latar. NewSync hadir secara gratis dan open-source untuk mengubah setiap sesi mendengarkan musikmu menjadi lebih hidup, indah, dan menyenangkan.
+Unduh & berkontribusi di: https://github.com/ban-heesoo/NewSync
+© 2026 NewSync. Haerin imut <3
+
+[EN]
+Listening to music should be an immersive experience, not just a background activity. Proudly open-source, NewSync is built to make your music sessions more beautiful, engaging, and fun.
+Download & contribute at: https://github.com/ban-heesoo/NewSync
+© 2026 NewSync. Haerin imut <3

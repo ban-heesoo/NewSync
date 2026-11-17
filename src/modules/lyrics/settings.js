@@ -16,6 +16,7 @@ const defaultSettings = {
     hideOffscreen: true,
     blurInactive: false,
     dynamicPlayer: false,
+    dynamicBgStyle: 'android', // 'ipad' or 'android'
     audioBeatSync: false,
     relaxScroll: false,
     customCSS: '',

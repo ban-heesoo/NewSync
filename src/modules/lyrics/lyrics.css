@@ -1447,8 +1447,12 @@ ytmusic-player-page[player-fullscreened] body .lyrics-song-info {
     pointer-events: none;
     content-visibility: auto;
     contain-intrinsic-size: 100% 100%;
-    --webgl-post-process: saturate(2.5) black-scrim(0.5) white-scrim(0.051) brightness(1) contrast(1);
+    --webgl-post-process: saturate(2.5) black-scrim(0.5) white-scrim(0.051) brightness(0.75) contrast(1);
     --webgl-post-process-tick: 0;
+}
+
+.lyplus-blur-container.lyplus-bg-ipad {
+    --webgl-post-process: saturate(1.5) brightness(0.85l) contrast(1.1);
 }
 
 .lyplus-blur-container::after {
